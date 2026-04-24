@@ -1,0 +1,329 @@
+/* patient-dashboard.css */
+.patient-dashboard {
+  --primary: #6366f1;
+  --primary-dark: #4f46e5;
+  --primary-light: #e0e7ff;
+  --secondary: #ec4899;
+  --text-dark: #1f2937;
+  --text-medium: #6b7280;
+  --text-light: #9ca3af;
+  --bg-light: #f9fafb;
+  --bg-white: #ffffff;
+  --border: #e5e7eb;
+  --success: #10b981;
+  --warning: #f59e0b;
+}
+
+.patient-dashboard .welcome-section {
+  background: linear-gradient(135deg, var(--primary) 0%, #5a67d8 100%);
+  color: white;
+  padding: 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.patient-dashboard .welcome-text h2 {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.patient-dashboard .welcome-text p {
+  opacity: 0.9;
+}
+
+.patient-dashboard .quick-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.patient-dashboard .btn-primary {
+  background: white;
+  color: var(--primary);
+}
+.patient-dashboard .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.patient-dashboard .btn-secondary-white {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid white;
+}
+.patient-dashboard .btn-secondary-white:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.patient-dashboard .stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.patient-dashboard .stat-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.patient-dashboard .stat-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.patient-dashboard .stat-icon {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.patient-dashboard .stat-label {
+  color: var(--text-medium);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.patient-dashboard .stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  font-family: var(--font-mono);
+}
+
+.patient-dashboard .stat-change {
+  font-size: 0.8rem;
+  color: var(--success);
+  margin-top: 0.5rem;
+}
+
+.patient-dashboard .content-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.patient-dashboard .appointments-section,
+.patient-dashboard .prescription-card,
+.patient-dashboard .notification-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.patient-dashboard .section-title {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-dark);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.patient-dashboard .section-title a {
+  font-size: 0.85rem;
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.patient-dashboard .appointment-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.patient-dashboard .appointment-item:hover {
+  border-color: var(--primary);
+  background: var(--bg-light);
+}
+
+.patient-dashboard .appointment-item:last-child {
+  margin-bottom: 0;
+}
+
+.patient-dashboard .doctor-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.patient-dashboard .appointment-info {
+  flex: 1;
+}
+
+.patient-dashboard .doctor-name {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.3rem;
+}
+
+.patient-dashboard .doctor-specialty {
+  font-size: 0.85rem;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.patient-dashboard .appointment-details {
+  font-size: 0.85rem;
+  color: var(--text-medium);
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.patient-dashboard .appointment-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+.patient-dashboard .status-badge {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.patient-dashboard .status-scheduled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.patient-dashboard .status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.patient-dashboard .appointment-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.patient-dashboard .action-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.patient-dashboard .action-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.patient-dashboard .sidebar-widgets {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.patient-dashboard .prescription-item {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.patient-dashboard .prescription-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.patient-dashboard .prescription-date {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-bottom: 0.3rem;
+  font-family: var(--font-mono);
+}
+
+.patient-dashboard .prescription-doctor {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.5rem;
+}
+
+.patient-dashboard .notification-item {
+  padding: 1rem;
+  background: var(--bg-light);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border-left: 3px solid var(--primary);
+}
+
+.patient-dashboard .notification-item:last-child {
+  margin-bottom: 0;
+}
+
+.patient-dashboard .notification-title {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.patient-dashboard .notification-message {
+  font-size: 0.85rem;
+  color: var(--text-medium);
+  line-height: 1.5;
+}
+
+.patient-dashboard .notification-time {
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 1024px) {
+  .patient-dashboard .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .patient-dashboard .welcome-section {
+    flex-direction: column;
+    text-align: center;
+    gap: 1.5rem;
+  }
+
+  .patient-dashboard .quick-actions {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .patient-dashboard .welcome-text h2 {
+    font-size: 1.3rem;
+  }
+
+  .patient-dashboard .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

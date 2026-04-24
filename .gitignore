@@ -34,3 +34,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+
+# .md files
+*.md
+
+# planningFolder ignore  entirely not any files inside it
+planningFolder/
