@@ -2,21 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-
-/* @import '@fortawesome/fontawesome-free/css/all.min.css'; */
-
 :root {
   /* Brand Colors */
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --primary-soft: #eff6ff;
-
   --secondary: #64748b;
   --secondary-hover: #475569;
-
   --accent: #f59e0b;
   --accent-hover: #d97706;
-
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
@@ -50,6 +44,8 @@
   --font-display: var(--font-jakarta), system-ui, sans-serif;
   --font-mono: var(--font-mono), 'Courier New', monospace;
 }
+
+
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -89,30 +85,359 @@ h6 {
   letter-spacing: -0.025em;
 }
 
-code,
-kbd,
-.mono {
-  font-family: var(--font-mono);
+/* --- Layout Structure --- */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-/* Panel-level font context */
-[data-panel="admin"] {
-  font-family: var(--font-display);
+/*   app shell       */
+.shell-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-[data-panel="doctor"] {
-  font-family: var(--font-display);
+
+
+/* Sidebar - Reduced Size (240px) */
+.dashboard-sidebar {
+  width: 255px;
+  /* background-color: #0f172a; */
+  background-color: #2e2e63;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, left 0.3s ease;
+  position: fixed;
+  height: 100vh;
+  z-index: 100;
 }
 
-[data-panel="patient"] {
-  font-family: var(--font-sans);
+.sidebar-logo-area {
+  padding: 18px 20px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-[data-panel="public"] {
-  font-family: var(--font-sans);
+.sidebar-nav {
+  flex: 1;
+  padding: 15px 0;
+  overflow-y: auto;
 }
 
-/* Animations */
+.nav-section {
+  margin-bottom: 20px;
+}
+
+.nav-label {
+  padding: 0 20px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  color: #94a3b8;
+  text-decoration: none;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.nav-item i {
+  width: 20px;
+  font-size: 0.9rem;
+}
+
+.nav-item.active {
+  background-color: #1e293b;
+  color: #6366f1;
+  border-left: 4px solid #6366f1;
+}
+
+.sidebar-user {
+  padding: 15px;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-user-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.sidebar-user-role {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+/* Main Content Area */
+.dashboard-main {
+  flex: 1;
+  /* margin-left: 240px; */
+  margin-left: 255px;
+  /* Must match Sidebar width */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--background);
+}
+
+/*   app shell       */
+.shell-main {
+  flex: 1;
+  /* margin-left: 240px; */
+  margin-left: 255px;
+  /* Must match Sidebar width */
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--background);
+}
+
+
+
+
+
+.dashboard-topbar {
+  /* height: 70px; */
+  height: 80px;
+  background: #ffffff;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* padding: 0 30px; */
+  padding: 0 40px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  width: 100%;
+}
+
+
+
+
+.dashboard-content {
+  /* padding: 25px 40px; */
+  padding: 40px;
+  background-color: #e9eef1;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  width: 100%;
+  /* Ensure it takes full available width */
+  box-sizing: border-box;
+  /* Crucial: ensures padding doesn't add to width */
+}
+
+/* app shell */
+.shell-content {
+  /* padding: 25px 40px; */
+  padding: 40px;
+  background-color: #e9eef1;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  width: 100%;
+  /* Ensure it takes full available width */
+  box-sizing: border-box;
+  /* Crucial: ensures padding doesn't add to width */
+}
+
+
+
+/* --- Topbar Elements --- */
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.topbar-page-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+
+.topbar-search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.topbar-search-input {
+  width: 300px;
+  padding: 8px 15px 8px 40px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.search-icon {
+  position: absolute;
+  left: 15px;
+  color: #a0aec0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.topbar-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 15px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.topbar-avatar {
+  width: 38px;
+  height: 38px;
+  background-color: #6366f1;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+/* --- Dashboard Specifics (Banner/Grids) --- */
+.welcome-banner {
+  background: #6366f1;
+  border-radius: 20px;
+  padding: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  min-height: 200px;
+}
+
+.banner-action-card {
+  background: white;
+  /* padding: 25px 40px; */
+  padding: 40px 60px;
+  /* border-radius: 16px; */
+  border-radius: 20x;
+  box-shadow: var(--shadow-md);
+}
+
+.book-apt-btn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qa-grid-custom,
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 25px;
+}
+
+/* --- MOBILE & ICON LOGIC --- */
+
+/* Hide mobile-only buttons on Desktop */
+.topbar-menu-btn,
+.sidebar-close-btn {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .dashboard-sidebar {
+    /* left: -240px; */
+    left: -255px;
+    /* Hide offscreen */
+  }
+
+  .dashboard-sidebar.open {
+    left: 0;
+    transform: translateX(0);
+  }
+
+  .dashboard-main {
+    margin-left: 0 !important;
+  }
+
+  /* app shell */
+  .shell-main {
+    margin-left: 0 !important;
+  }
+
+
+  .topbar-menu-btn,
+  .sidebar-close-btn {
+    display: flex !important;
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  .topbar-menu-btn {
+    font-size: 1.2rem;
+    color: #64748b;
+    margin-right: 15px;
+  }
+
+  .sidebar-close-btn {
+    color: white;
+    font-size: 1.2rem;
+    margin-left: auto;
+  }
+
+  .topbar-page-title {
+    display: none;
+  }
+
+  /* Hide title on small screens to fit search */
+  .dashboard-content {
+    padding: 20px;
+  }
+
+  /* app shell */
+  .shell-content {
+    padding: 20px;
+  }
+}
+
+/* --- Utilities & Animations --- */
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -129,20 +454,124 @@ kbd,
   animation: fadeIn 0.5s ease-out forwards;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
 
-  .glass {
-    background: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
 
-  .dark .glass {
-    background: rgba(15, 23, 42, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+.dashboard-sidebar {
+  width: 255px;
+  background-color: #2e2e63;
+  /* Updated to match screenshot 2's navy/purple hue */
+  color: white;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  z-index: 100;
+}
+
+.nav-item.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  /* Subtle highlight instead of solid dark */
+  color: white;
+  border-left: 4px solid #fff;
+  /* White border instead of purple */
+}
+
+.welcome-banner {
+  background: #6366f1;
+  border-radius: 20px;
+  /* More rounded */
+  padding: 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  min-height: 200px;
+}
+
+.banner-action-card {
+  background: white;
+  padding: 40px 60px;
+  /* Increased padding for that large white area */
+  border-radius: 20px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  /* display: flex;
+  align-items: center;
+  justify-content: center; */
+}
+
+.book-apt-btn {
+  color: #6366f1;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1rem;
+}
+
+.dashboard-topbar {
+  height: 80px;
+  /* Slightly taller */
+  background: #ffffff;
+  padding: 0 40px;
+}
+
+.topbar-search-input {
+  width: 350px;
+  background: #f1f5f9;
+  padding: 10px 15px 10px 40px;
+  border: none;
+  border-radius: 12px;
+  outline: none;
+}
+
+.topbar-icon-btn {
+  background: #f1f5f9;
+  /* Light gray background for icons */
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.topbar-profile {
+  background: #f1f5f9;
+  /* Profile section also has a gray background */
+  padding: 5px 15px 5px 5px;
+  border-radius: 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: none;
+}
+
+.sidebar-logo-icon {
+  background: white;
+  color: #6366f1;
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-logo-text span {
+  color: #f59e0b;
+  /* The 'fy' in 'Doctify' is yellow/orange */
 }

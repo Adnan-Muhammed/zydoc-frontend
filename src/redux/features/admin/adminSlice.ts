@@ -1,5 +1,7 @@
-import { createSlice } from '@reduxjs/toolkit';
-import { getSystemStats, getAllUsers, approveDoctor, getAuditLogs } from './adminThunk';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit'; // Added PayloadAction for typing
+import {
+    getSystemStats, getAllUsers, approveDoctor, getAuditLogs
+} from './adminThunk';
 import { AdminState } from './adminTypes';
 
 const initialState: AdminState = {
@@ -20,55 +22,37 @@ const adminSlice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-
-            // Stats
-            .addCase(getSystemStats.pending, (state) => {
-                state.isLoading = true;
-            })
+            // Management Features
             .addCase(getSystemStats.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.stats = action.payload;
-            })
-            .addCase(getSystemStats.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
-            })
-
-            // Users
-            .addCase(getAllUsers.pending, (state) => {
-                state.isLoading = true;
             })
             .addCase(getAllUsers.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.users = action.payload;
             })
-            .addCase(getAllUsers.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
-            })
-
-            // Approve Doctor
             .addCase(approveDoctor.fulfilled, (state, action) => {
-                // update user locally (optional optimization)
                 const updated = action.payload;
-
-                state.users = state.users.map((user: any) =>
-                    user._id === updated._id ? updated : user
-                );
-            })
-
-            // Logs
-            .addCase(getAuditLogs.pending, (state) => {
-                state.isLoading = true;
+                state.users = state.users.map((u) => u._id === updated._id ? updated : u);
             })
             .addCase(getAuditLogs.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.logs = action.payload;
             })
-            .addCase(getAuditLogs.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
-            });
+
+            // Global Loading for management tasks
+            .addMatcher(
+                (action) => action.type.endsWith('/pending') && !action.type.includes('login'),
+                (state) => { state.isLoading = true; }
+            )
+            .addMatcher(
+                (action) => action.type.endsWith('/rejected') && !action.type.includes('login'),
+                (state, action: PayloadAction<any>) => { // Explicitly type action here
+                    state.isLoading = false;
+                    // FIX: String() ensures the value is treated as a string, and || handles undefined
+                    state.error = (action.payload as string) || "An unexpected error occurred";
+                }
+            );
     },
 });
 

@@ -1,3 +1,5 @@
+
+//src/components/layout/Sidebar.tsx
 'use client';
 
 import React from 'react';
@@ -28,6 +30,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     icon: string;
     label: string;
     badge?: Badge;
+    disabled?: boolean;
   };
 
   type NavSection = {
@@ -36,6 +39,9 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   };
 
   let navSections: NavSection[] = [];
+
+
+
 
   if (role === 'admin') {
     navSections = [
@@ -59,32 +65,37 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         links: [
           { href: '/admin/support', icon: 'fas fa-headset', label: 'Support', badge: { text: '12', color: 'badge-red' } },
           { href: '/admin/transactions', icon: 'fas fa-credit-card', label: 'Transactions' },
+          // Added Profile for Admin
+          { href: '/admin/profile', icon: 'fas fa-user-gear', label: 'My Profile' },
           { href: '/admin/settings', icon: 'fas fa-gear', label: 'Settings' }
         ]
       }
     ];
   } else if (role === 'doctor') {
+    const isDoctorLocked =  user?.verificationStatus !== 'approved';
     navSections = [
       {
         label: 'Consultations',
         links: [
           { href: '/doctor/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
-          { href: '/doctor/appointments', icon: 'fas fa-calendar-check', label: 'Appointments' },
-          { href: '/doctor/schedule', icon: 'fas fa-clock', label: 'My Schedule' }
+          { href: '/doctor/appointments', icon: 'fas fa-calendar-check', label: 'Appointments', disabled: isDoctorLocked },
+          { href: '/doctor/schedule', icon: 'fas fa-clock', label: 'My Schedule', disabled: isDoctorLocked }
         ]
       },
       {
         label: 'Patients',
         links: [
-          { href: '/doctor/messages', icon: 'fas fa-comments', label: 'Messages', badge: { text: '3', color: 'badge-red' } },
-          { href: '/doctor/prescriptions', icon: 'fas fa-prescription-bottle', label: 'Prescriptions' }
+          { href: '/doctor/messages', icon: 'fas fa-comments', label: 'Messages', badge: { text: '3', color: 'badge-red' }, disabled: isDoctorLocked },
+          { href: '/doctor/prescriptions', icon: 'fas fa-prescription-bottle', label: 'Prescriptions', disabled: isDoctorLocked }
         ]
       },
       {
         label: 'Account',
         links: [
-          { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings' },
-          { href: '/doctor/settings', icon: 'fas fa-gear', label: 'Settings' }
+          { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings', disabled: isDoctorLocked },
+          // Added Profile Update here
+          { href: '/doctor/profile', icon: 'fas fa-address-card', label: 'Profile', disabled: isDoctorLocked },
+          { href: '/doctor/settings', icon: 'fas fa-gear', label: 'Settings', disabled: isDoctorLocked }
         ]
       }
     ];
@@ -108,26 +119,13 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       {
         label: 'Account',
         links: [
+          // Added Profile Update here
+          { href: '/patient/profile', icon: 'fas fa-user-pen', label: 'ProfilePatient' },
           { href: '/patient/settings', icon: 'fas fa-gear', label: 'Settings' }
         ]
       }
     ];
   }
-
-  // const handleLogout = () => {
-  //   dispatch(logoutUser())
-  //     .unwrap()
-  //     .then(() => {
-  //       router.push('/');
-
-  //     })
-  //     .catch((err) => {
-  //       console.error('Logout failed:', err);
-  //       // Still redirect as a safety measure for the UI
-  //       router.push('/');
-  //     });
-  // };
-
   const handleLogout = () => {
     dispatch(logoutUser())
       .unwrap()
@@ -161,12 +159,18 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       )}
 
       <aside className={`dashboard-sidebar ${isOpen ? 'open' : ''}`}>
+
+
         <div className="sidebar-logo-area">
           <div className="sidebar-logo-icon">
             <i className="fas fa-stethoscope"></i>
           </div>
           <div className="sidebar-logo-text">Docti<span>fy</span></div>
-          <button className="sidebar-close" onClick={onClose}><i className="fas fa-xmark"></i></button>
+          {/* <button className="sidebar-close" onClick={onClose}><i className="fas fa-xmark"></i></button> */}
+          {/* Corrected close button for mobile only */}
+          <button className="sidebar-close-btn" onClick={onClose}>
+            <i className="fas fa-times"></i>
+          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -175,6 +179,19 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
               <div className="nav-label">{section.label}</div>
               {section.links.map((link, linkIdx) => {
                 const isActive = pathname.startsWith(link.href);
+                if (link.disabled) {
+                  return (
+                    <div
+                      key={linkIdx}
+                      className="nav-item"
+                      style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                      title="Waiting for Admin Approval"
+                    >
+                      <i className={link.icon}></i> {link.label}
+                      <i className="fas fa-lock" style={{ marginLeft: 'auto', fontSize: '0.8em', opacity: 0.7 }}></i>
+                    </div>
+                  );
+                }
                 return (
                   <Link
                     href={link.href}
@@ -194,8 +211,10 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         <div className="sidebar-user">
           <div className="sidebar-avatar">{getInitials(user?.name || role)}</div>
           <div className="sidebar-user-info">
-            <div className="sidebar-user-name">{user?.name || `Demo ${role}`}</div>
-            <div className="sidebar-user-role">{user?.email || `${role}@doctify.com`}</div>
+            {/* <div className="sidebar-user-name">{user?.name || `Demo ${role}`}</div> */}
+            {/* <div className="sidebar-user-role">{user?.email || `${role}@doctify.com`}</div> */}
+            <div className="sidebar-user-name">{user?.name}</div>
+            <div className="sidebar-user-role">{user?.email}</div>
           </div>
           <button className="sidebar-logout" onClick={handleLogout} title="Logout">
             <i className="fas fa-right-from-bracket"></i>
@@ -205,3 +224,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     </>
   );
 }
+
+
+
+

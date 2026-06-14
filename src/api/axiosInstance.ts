@@ -5,9 +5,11 @@ let store: any;
 export const injectStore = (_store: any) => {
     store = _store;
 };
+// baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
 
 const axiosInstance = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
+    baseURL: process.env.NEXT_PUBLIC_API_URL + "/api",
+
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',

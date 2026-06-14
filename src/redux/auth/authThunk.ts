@@ -1,138 +1,67 @@
-// import { createAsyncThunk } from '@reduxjs/toolkit';
-// import authService from './authService';
 
-// // // Login User
-// // export const loginUser = createAsyncThunk(
-// //     'auth/loginUser',
-// //     async (credentials: any, { rejectWithValue }) => {
-// //         try {
-// //             return await authService.login(credentials);
-// //         } catch (error: any) {
-// //             return rejectWithValue(error.response?.data?.message || 'Login failed');
-// //         }
-// //     }
-// // );
-
-// // // Login Admin
-// // export const loginAdmin = createAsyncThunk(
-// //     'auth/loginAdmin',
-// //     async (credentials: any, { rejectWithValue }) => {
-// //         try {
-// //             return await authService.adminLogin(credentials);
-// //         } catch (error: any) {
-// //             return rejectWithValue(error.response?.data?.message || 'Admin login failed');
-// //         }
-// //     }
-// // );
-
-
-// // combined Login
-// export const login = createAsyncThunk(
-//     'auth/login',
-//     async (
-//         { credentials, isAdmin }: { credentials: any; isAdmin?: boolean },
-//         { rejectWithValue }
-//     ) => {
-//         try {
-//             return await authService.login(credentials, isAdmin);
-//         } catch (error: any) {
-//             return rejectWithValue(error.response?.data?.message || 'Login failed');
-//         }
-//     }
-// );
-
-
-// // Logout
-// export const logoutUser = createAsyncThunk(
-//     'auth/logoutUser',
-//     async (_, { rejectWithValue }) => {
-//         try {
-//             await authService.logout();
-//             return true;
-//         } catch (error: any) {
-//             return rejectWithValue(error.response?.data?.message || 'Logout failed');
-//         }
-//     }
-// );
-
-// // Check Auth
-// export const checkAuth = createAsyncThunk(
-//     'auth/checkAuth',
-//     async (_, { rejectWithValue }) => {
-//         try {
-//             return await authService.getCurrentUser();
-//         } catch (error: any) {
-//             return rejectWithValue(error.response?.data?.message || 'Session invalid');
-//         }
-//     }
-// );
+// src/redux/auth/authThunk.ts
 
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import authService from './authService';
 
-// ✅ FLAT LOGIN
-export const login = createAsyncThunk(
+export const loginUser = createAsyncThunk(
     'auth/login',
-    async (
-        {
-            email,
-            password,
-            isAdmin,
-        }: { email: string; password: string; isAdmin?: boolean },
-        { rejectWithValue }
-    ) => {
+    async ({ credentials, isAdmin }: { credentials: { email: string; password: string; rememberDevice?: boolean;[key: string]: any }; isAdmin?: boolean }, { rejectWithValue }) => {
         try {
-            return await authService.login(
-                { email, password },
-                isAdmin
-            );
+            return await authService.login(credentials, isAdmin);
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.message || 'Login failed'
-            );
+            return rejectWithValue(error.response?.data?.message || 'Login failed');
         }
     }
 );
 
-// ✅ Signup
 export const signupUser = createAsyncThunk(
-    'auth/signupUser',
+    'auth/signup',
     async (userData: any, { rejectWithValue }) => {
         try {
-            return await authService.signup(userData);
+            const data = await authService.signup(userData);
+            console.log('redux thunk result:', data);
+
+            return data
+
+
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.message || 'Signup failed'
-            );
+            return rejectWithValue(error.response?.data?.message || 'Signup failed');
         }
     }
 );
 
-// ✅ Logout
-export const logoutUser = createAsyncThunk(
-    'auth/logoutUser',
-    async (_, { rejectWithValue }) => {
+export const verifyOtp = createAsyncThunk(
+    'auth/verifyOtp',
+    async ({ data, isAdmin }: { data: { email: string; otpCode: string }; isAdmin?: boolean }, { rejectWithValue }) => {
         try {
-            await authService.logout();
-            return true;
+            console.log("verify)tp", data);
+
+            return await authService.verifyOtp(data, isAdmin);
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.message || 'Logout failed'
-            );
+            return rejectWithValue(error.response?.data?.message || 'Verification failed');
         }
     }
 );
 
-// ✅ Check Auth
-export const checkAuth = createAsyncThunk(
-    'auth/checkAuth',
-    async (_, { rejectWithValue }) => {
+export const resendOtp = createAsyncThunk(
+    'auth/resendOtp',
+    // async ({ data, isAdmin }: { data: { email: string }; isAdmin?: boolean }, { rejectWithValue }) => {
+    async (userData: any, { rejectWithValue }) => {
+
         try {
-            return await authService.getCurrentUser();
+            const res = await authService.resendOtp(userData);
+            return res;
         } catch (error: any) {
-            return rejectWithValue(
-                error.response?.data?.message || 'Session invalid'
-            );
+            return rejectWithValue(error.response?.data?.message || 'Failed to resend OTP');
         }
     }
 );
+
+export const logoutUser = createAsyncThunk('auth/logout', async () => {
+    await authService.logout();
+});
+
+export const checkAuth = createAsyncThunk('auth/checkAuth', async () => {
+    return await authService.getCurrentUser();
+});

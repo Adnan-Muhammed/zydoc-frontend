@@ -102,84 +102,200 @@
 
 
 
+///////////////////////////////////////
+///////////////////////////////////////
+///////////////////////////////////////
+///////////////////////////////////////
+
+
+
+// 'use client';
+
+// import React from 'react';
+// import Link from 'next/link';
+// import GuestGuard from '@/components/auth/GuestGuard';
+// import UnifiedSignupForm from '@/components/forms/UnifiedSignupForm';
+// import AuthHeader from '@/components/layout/AuthHeader';
+// import Badge from '@/components/ui/Badge';
+
+// export default function UnifiedSignupPage() {
+//     return (
+//         <GuestGuard>
+//             <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+//                 <AuthHeader />
+
+//                 {/* mt-[70px] offsets the fixed header height */}
+//                 <main className="flex-1 flex items-center justify-center w-full mt-[70px] px-6">
+//                     <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+
+//                         {/* LEFT SIDE (Text Only) */}
+//                         <div className="text-left">
+//                             <Badge variant="primary" pill className="mb-3">
+//                                 <i className="fas fa-user-plus mr-1"></i> Create an Account
+//                             </Badge>
+
+//                             <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
+//                                 Join Zydoc
+//                             </h1>
+
+//                             <p className="mt-3 text-lg text-slate-600 dark:text-slate-400 max-w-md">
+//                                 Sign up as a patient or a healthcare professional and start managing your healthcare seamlessly.
+//                             </p>
+//                         </div>
+
+//                         {/* RIGHT SIDE (Form) */}
+//                         <div className="bg-white py-6 px-12  shadow-xl shadow-slate-200/50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl">
+//                             <UnifiedSignupForm />
+
+//                             <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+//                                 <p className="mb-2">Already have an account?</p>
+
+//                                 <Link
+//                                     href="/login"
+//                                     className="font-semibold text-blue-600 hover:text-blue-500 transition-colors"
+//                                 >
+//                                     Sign in here
+//                                 </Link>
+//                             </div>
+//                         </div>
+
+//                     </div>
+//                 </main>
 
 
 
 
-'use client';
+//             </div>
+//         </GuestGuard>
+//     );
+// }
 
-import React from 'react';
+
+
+
+
+
+
+
+
+
+
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+////////////////////////////////////////
+
+
+
+
+
+
+
+
+
+
+
+
+
+// 'use client';
+
+// import React from 'react';
+// import Link from 'next/link';
+// import UnifiedSignupForm from '@/components/forms/UnifiedSignupForm';
+// import AuthHeader from '@/components/layout/AuthHeader';
+// import Badge from '@/components/ui/Badge';
+
+// export default function SignupPage() {
+//     return (
+//         <div className="min-h-screen bg-slate-50 flex flex-col">
+//             <AuthHeader />
+
+//             <main className="flex-1 flex items-center justify-center w-full mt-[70px] px-6">
+//                 <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+
+//                     <div>
+//                         <Badge variant="primary" pill className="mb-3">
+//                             <i className="fas fa-user-plus mr-1"></i> Create an Account
+//                         </Badge>
+
+//                         <h1 className="text-4xl font-bold">Join Zydoc</h1>
+
+//                         <p className="mt-3 text-lg text-slate-600">
+//                             Start managing your healthcare seamlessly.
+//                         </p>
+//                     </div>
+
+//                     <div className="bg-white py-6 px-12 shadow-xl rounded-2xl">
+//                         <UnifiedSignupForm />
+
+//                         <div className="mt-6 text-center text-sm">
+//                             <p className="mb-2">Already have an account?</p>
+
+//                             <Link href="/login" className="text-blue-600 font-semibold">
+//                                 Sign in here
+//                             </Link>
+//                         </div>
+//                     </div>
+
+//                 </div>
+//             </main>
+//         </div>
+//     );
+// }
+
+
+
+// src/app/(auth)/signup/page.tsx
+// ✅ NO 'use client' — page shell is a Server Component
+import { Metadata } from 'next';
 import Link from 'next/link';
-import GuestGuard from '@/components/auth/GuestGuard';
 import UnifiedSignupForm from '@/components/forms/UnifiedSignupForm';
-import Header from '@/components/layout/Header';
 import Badge from '@/components/ui/Badge';
 
-export default function UnifiedSignupPage() {
+export const metadata: Metadata = {
+    title: "Create Account | Zydoc",
+    description: "Join Zydoc and connect with 1000+ verified doctors. Free to sign up. Book appointments, get prescriptions, and manage your healthcare online.",
+};
+
+export default function SignupPage() {
+    console.log('unified signup page');
+
     return (
-        <GuestGuard>
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-                <Header />
 
-                {/* mt-[70px] offsets the fixed header height */}
-                <main className="flex-1 flex items-center justify-center w-full mt-[70px] px-6">
-                    <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
 
-                        {/* LEFT SIDE (Text Only) */}
-                        <div className="text-left">
-                            <Badge variant="primary" pill className="mb-3">
-                                <i className="fas fa-user-plus mr-1"></i> Create an Account
-                            </Badge>
+        <main className="flex-1 flex items-center justify-center w-full mt-[70px] px-6">
+            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[1fr_1.2fr] gap-12 items-center">
 
-                            <h1 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
-                                Join Zydoc
-                            </h1>
+                {/* Left: static copy */}
+                <div className="text-left space-y-4">
+                    <Badge variant="primary" pill>
+                        <i className="fas fa-user-plus mr-1"></i> Free to Join
+                    </Badge>
+                    <h1 className="text-4xl font-bold">Create your account</h1>
+                    <p className="text-lg text-slate-600 dark:text-slate-400">
+                        Join thousands of patients using Zydoc to take control of their healthcare.
+                    </p>
+                    <ul className="space-y-2 text-slate-500 text-sm">
+                        <li><i className="fas fa-check text-green-500 mr-2"></i>Free account, no credit card required</li>
+                        <li><i className="fas fa-check text-green-500 mr-2"></i>Access 1000+ verified doctors</li>
+                        <li><i className="fas fa-check text-green-500 mr-2"></i>Secure & private health records</li>
+                    </ul>
+                </div>
 
-                            <p className="mt-3 text-lg text-slate-600 dark:text-slate-400 max-w-md">
-                                Sign up as a patient or a healthcare professional and start managing your healthcare seamlessly.
-                            </p>
-                        </div>
-
-                        {/* RIGHT SIDE (Form) */}
-                        <div className="bg-white py-6 px-12  shadow-xl shadow-slate-200/50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl">
-                            <UnifiedSignupForm />
-
-                            <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
-                                <p className="mb-2">Already have an account?</p>
-
-                                <Link
-                                    href="/login"
-                                    className="font-semibold text-blue-600 hover:text-blue-500 transition-colors"
-                                >
-                                    Sign in here
-                                </Link>
-                            </div>
-                        </div>
-
+                {/* Right: form — already a Client Component */}
+                <div className="bg-white dark:bg-slate-900 py-12 px-12 shadow-xl rounded-2xl">
+                    <UnifiedSignupForm />
+                    <div className="mt-6 text-center text-sm">
+                        <p className="mb-2 text-slate-600 dark:text-slate-400">Already have an account?</p>
+                        <Link href="/login" className="text-blue-600 font-semibold hover:underline">
+                            Sign in
+                        </Link>
                     </div>
-                </main>
-
-
-
+                </div>
 
             </div>
-        </GuestGuard>
+        </main>
+        // </div>
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

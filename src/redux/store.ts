@@ -2,7 +2,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './auth/authSlice';
 import adminReducer from './features/admin/adminSlice';
-// import doctorReducer from './features/doctor/doctorSlice';
+import doctorReducer from './features/doctor/doctorSlice';
 // import patientReducer from './features/patient/patientSlice';
 import { injectStore } from '../api/axiosInstance'; // Path to moved axios
 
@@ -10,6 +10,7 @@ export const store = configureStore({
     reducer: {
         auth: authReducer,
         admin: adminReducer,
+        doctor: doctorReducer,
     },
     devTools: process.env.NODE_ENV !== 'production',
 });
