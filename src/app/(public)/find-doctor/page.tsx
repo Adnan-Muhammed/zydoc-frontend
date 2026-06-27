@@ -594,13 +594,14 @@ async function getUser(accessToken: string) {
 export default async function FindDoctorPage({
     searchParams
 }: {
-    searchParams: { search?: string; page?: string };
+    searchParams: { [key: string]: string | string[] | undefined };
 }) {
     const cookieStore = cookies();
     const accessToken = cookieStore.get('accessToken')?.value;
 
-    // Fetch ALL doctors so client-side filtering works correctly on the entire dataset
-    const doctorsDataPromise = getDoctorsList({ search: searchParams.search, limit: 0 });
+    // Fetch doctors based on URL search params (limit is handled by backend default or overridden by searchParams)
+    // We pass searchParams directly so backend handles specialty, minRating, page, limit, etc.
+    const doctorsDataPromise = getDoctorsList(searchParams);
     const userPromise = accessToken ? getUser(accessToken) : Promise.resolve(null);                             
 
     const [doctorsData, user] = await Promise.all([doctorsDataPromise, userPromise]);
@@ -622,10 +623,11 @@ export default async function FindDoctorPage({
             </section>
 
             {/* Static search bar shell — interactivity handled in DoctorFilters client component */}
-            <div className="search-container">
-                <div className="search-box">
-                    {/* DoctorFilters takes over search interactivity on the client */}
-                    <DoctorFilters />
+            <div className="desktop-search-only">
+                <div className="search-container">
+                    <div className="search-box">
+                        <DoctorFilters />
+                    </div>
                 </div>
             </div>
 
@@ -636,10 +638,10 @@ export default async function FindDoctorPage({
           DoctorList is a Client Component only for sort/filter interactivity.
           All doctor cards are in the initial HTML for SEO.
         */}
-                <DoctorList doctors={doctorsData.doctors} />
+                <DoctorList doctors={doctorsData.doctors} pagination={doctorsData.pagination} />
             </div>
 
 
         </div>
     );
-}
+} 

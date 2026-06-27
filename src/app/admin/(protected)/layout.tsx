@@ -372,5 +372,5 @@ export default async function AdminProtectedLayout({
         {children}
       </AppShell>
     </AuthHydrator>
-  );
+  ); 
 } 

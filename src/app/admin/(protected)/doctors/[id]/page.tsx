@@ -28,7 +28,7 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
             }
         };
         fetchDoctor();
-    }, [params.id]);
+    }, [params.id, router]);
 
     const showNotif = (msg: string, type: 'success' | 'error' | 'info' | 'warning' = 'success') => {
         setNotification({ show: true, msg, type });

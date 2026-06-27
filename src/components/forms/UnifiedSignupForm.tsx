@@ -913,7 +913,9 @@ const UnifiedSignupForm: React.FC = () => {
                     </p>
                 </div>
 
-                {error && <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg">{error}</div>}
+                <div className="min-h-[48px] w-full">
+                    {error && <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg break-words w-full">{error}</div>}
+                </div>
 
 
                 {
@@ -953,11 +955,14 @@ const UnifiedSignupForm: React.FC = () => {
     // --- VIEW: SIGNUP FORM ---
     return (
         <form onSubmit={handleSignup} className="space-y-4 animate-fade-in" noValidate>
-            {error && (
-                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-100 flex items-center gap-2">
-                    <i className="fas fa-exclamation-circle"></i> {error}
-                </div>
-            )}
+            <div className="min-h-[48px] w-full">
+                {error && (
+                    <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 border border-red-100 flex items-center gap-2 w-full break-words">
+                        <i className="fas fa-exclamation-circle flex-shrink-0"></i> 
+                        <span>{error}</span>
+                    </div>
+                )}
+            </div>
 
             {/* Role Selection */}
             <div className="flex gap-3">

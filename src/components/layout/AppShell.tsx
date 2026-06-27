@@ -9,7 +9,7 @@ import { useAppSelector } from '@/redux/hooks';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
  
-export default function AppShell({
+export default function AppShell({ 
     children,
     role,
 }: {
@@ -55,7 +55,7 @@ export default function AppShell({
                 isOpen={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
             />
-
+ 
             <div className="shell-main">
                 {/* <div className="dashboard-main"> */}
                 <Topbar

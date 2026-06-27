@@ -2,16 +2,21 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
- 
+
 export default function DoctorFilters() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [searchValue, setSearchValue] = useState('');
 
-    // Sync initial search value from URL query parameter
+    // Sync initial search value from URL query parameter only on mount
+    // to prevent it from overwriting what the user is currently typing
+    // when they click a filter in the sidebar.
     useEffect(() => {
-        setSearchValue(searchParams.get('search') || '');
-    }, [searchParams]);
+        const currentSearch = searchParams.get('search');
+        if (currentSearch !== null) {
+            setSearchValue(currentSearch);
+        }
+    }, []);
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -21,7 +26,22 @@ export default function DoctorFilters() {
         } else {
             params.delete('search');
         }
+        params.set('page', '1'); // Reset to page 1 on new search
         router.push(`/find-doctor?${params.toString()}`);
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setSearchValue(val);
+
+        // If the user clears the input completely, automatically update the URL 
+        // to remove the search parameter so they don't have to manually click "Search"
+        if (val.trim() === '') {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('search');
+            params.set('page', '1');
+            router.push(`/find-doctor?${params.toString()}`);
+        }
     };
 
     return (
@@ -31,7 +51,7 @@ export default function DoctorFilters() {
                 className="search-input"
                 placeholder="Search by doctor name, specialization..."
                 value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
+                onChange={handleInputChange}
                 aria-label="Search doctors"
             />
             <button type="submit" className="search-button">

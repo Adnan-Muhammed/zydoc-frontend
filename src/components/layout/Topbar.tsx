@@ -170,18 +170,20 @@ import React from 'react';
 import { useAppSelector } from '../../redux/hooks';
 
 interface TopbarProps {
-  onToggleSidebar: () => void;
+  onToggleSidebar: () => void; 
   title?: string;
-  role: string;
+  role: string; 
 }
 
-export default function Topbar({ onToggleSidebar, title = 'Patient Dashboard', role }: TopbarProps) {
+export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
   const { user } = useAppSelector((state) => state.auth);
+
+  const displayTitle = title || (role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Dashboard` : 'Dashboard');
 
   const getInitials = (name: string): string => {
     if (!name) return 'U';
     const parts = name.split(' ');
-    return parts.length > 1 ? (parts[0][0] + parts[1][0]).toUpperCase() : name[0].toUpperCase();
+    return parts.length > 1 ? (parts[0] [0] + parts[1][0]).toUpperCase() : name[0].toUpperCase();
   };
 
   return (
@@ -190,7 +192,7 @@ export default function Topbar({ onToggleSidebar, title = 'Patient Dashboard', r
         <button className="topbar-menu-btn" onClick={onToggleSidebar}>
           <i className="fas fa-bars"></i>
         </button>
-        <h2 className="topbar-page-title">{title}</h2>
+        <h2 className="topbar-page-title">{displayTitle}</h2>
       </div>
 
       <div className="topbar-right">
@@ -217,6 +219,6 @@ export default function Topbar({ onToggleSidebar, title = 'Patient Dashboard', r
           </div>
         </div>
       </div>
-    </header>
+    </header> 
   );
 }

@@ -1,8 +1,10 @@
 // src/components/find-doctor/DoctorList.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
+import { useRouter, useSearchParams } from 'next/navigation';
+import DoctorFilters from './DoctorFilters';
 
 type Doctor = {
     id: string;
@@ -21,94 +23,104 @@ type Doctor = {
     image: string;
 };
 
-type Props = {  
+type Props = {
     doctors: Doctor[];
+    pagination: {
+        total: number;
+        page: number;
+        limit: number;
+        pages: number;
+    } | null;
 };
 
-export default function DoctorList({ doctors }: Props) {
-    // All filter/sort state lives here — isolated in this Client Component
-    const [priceRange, setPriceRange] = useState(1000);
-    const [sortBy, setSortBy] = useState('popular');
-    const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
-    const [minRating, setMinRating] = useState(0);
-    const [consultationType, setConsultationType] = useState<'all' | 'video' | 'physical'>('all');
+const STATIC_SPECIALTIES = [
+    "General Practice",
+    "Cardiology",
+    "Dermatology",
+    "Pediatrics",
+    "Psychiatry",
+    "Dentistry",
+    "Neurology",
+    "Orthopedics",
+    "Gynecology"
+].sort();
 
-    // Client-side pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 6;
+export default function DoctorList({ doctors, pagination }: Props) {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-    // Reset pagination to page 1 whenever any filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [priceRange, sortBy, selectedSpecialties, minRating, consultationType, doctors]);
+    // Read current state from URL
+    const sortBy = searchParams.get('sortBy') || 'popular';
+    const selectedSpecialty = searchParams.get('specialty') || '';
+    const minRating = Number(searchParams.get('minRating')) || 0;
+    const consultationType = searchParams.get('consultationType') || 'all';
 
-    const toggleSpecialty = (specialty: string) => {
-        setSelectedSpecialties(prev =>
-            prev.includes(specialty)
-                ? prev.filter(s => s !== specialty)
-                : [...prev, specialty]
-        );
+    // Pagination from server
+    const currentPage = pagination?.page || 1;
+    const totalPages = pagination?.pages || 1;
+    const totalFiltered = pagination?.total || 0;
+    const itemsPerPage = pagination?.limit || 6;
+
+    // Helper to update URL params
+    const updateFilter = (key: string, value: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value && value !== 'all' && value !== '0' && value !== 'popular') {
+            params.set(key, value);
+        } else {
+            params.delete(key);
+        }
+        // Reset to page 1 on filter change
+        if (key !== 'page') {
+            params.set('page', '1');
+        }
+        router.push(`/find-doctor?${params.toString()}`);
     };
 
-    // Client-side filtering & sorting
-    const filtered = doctors
-        .filter(d => {
-            // Filter by selected consultation type availability
-            const hasVideo = d.videoFee !== null;
-            const hasPhysical = d.physicalFee !== null;
-            if (consultationType === 'video') return hasVideo;
-            if (consultationType === 'physical') return hasPhysical;
-            return true; // Show all doctors when 'all' is selected, even those without explicitly enabled settings
-        })
-        .filter(d => {
-            // Filter by fee range dynamically based on consultationType
-            if (consultationType === 'video') {
-                return d.videoFee !== null && d.videoFee <= priceRange;
-            }
-            if (consultationType === 'physical') {
-                return d.physicalFee !== null && d.physicalFee <= priceRange;
-            }
-            const minFee = Math.min(
-                d.videoFee !== null ? d.videoFee : Infinity,
-                d.physicalFee !== null ? d.physicalFee : Infinity
-            );
-            return minFee === Infinity || minFee <= priceRange; // If no fee is set, treat as Infinity but allow it to show
-        })
-        .filter(d => selectedSpecialties.length === 0 || selectedSpecialties.includes(d.specialty))
-        .filter(d => d.rating >= minRating)
-        .sort((a, b) => {
-            if (sortBy === 'rating') return b.rating - a.rating;
-            if (sortBy === 'price-low') {
-                const getMinFee = (doc: Doctor) => {
-                    if (consultationType === 'video') return doc.videoFee ?? Infinity;
-                    if (consultationType === 'physical') return doc.physicalFee ?? Infinity;
-                    return Math.min(doc.videoFee ?? Infinity, doc.physicalFee ?? Infinity);
-                };
-                return getMinFee(a) - getMinFee(b);
-            }
-            if (sortBy === 'price-high') {
-                const getMaxFee = (doc: Doctor) => {
-                    if (consultationType === 'video') return doc.videoFee ?? -Infinity;
-                    if (consultationType === 'physical') return doc.physicalFee ?? -Infinity;
-                    return Math.max(doc.videoFee ?? -Infinity, doc.physicalFee ?? -Infinity);
-                };
-                return getMaxFee(b) - getMaxFee(a);
-            }
-            return b.reviews - a.reviews; // popular
-        });
-
-    const totalFiltered = filtered.length;
-    const totalPages = Math.ceil(totalFiltered / itemsPerPage);
-    const paginatedDoctors = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-    // Extract unique specializations from the doctors dataset dynamically
-    const uniqueSpecialties = Array.from(new Set(doctors.map(d => d.specialty).filter(Boolean))).sort();
+    const clearFilters = () => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('specialty');
+        params.delete('minRating');
+        params.delete('consultationType');
+        params.delete('sortBy');
+        params.set('page', '1');
+        router.push(`/find-doctor?${params.toString()}`);
+    };
 
     return (
         <>
-            {/* Sidebar Filters */}
-            <aside className="filters-sidebar">
-                <h3 style={{ marginBottom: '1.5rem', fontWeight: 700, color: 'var(--text-dark)' }}>Filters</h3>
+            {/* Horizontal Filter Pills (Mobile Only) */}
+            <div className="mobile-filter-pills mobile-search-only">
+                <div className="filter-pill-icon" onClick={() => setIsMobileFiltersOpen(true)}>
+                    <i className="fas fa-cog"></i>
+                </div>
+                <div className="filter-pill" onClick={() => setIsMobileFiltersOpen(true)}>Type</div>
+                <div className="filter-pill" onClick={() => setIsMobileFiltersOpen(true)}>Specialty</div>
+                <div className="filter-pill" onClick={() => setIsMobileFiltersOpen(true)}>Rating</div>
+                <div className="filter-pill" onClick={() => setIsMobileFiltersOpen(true)}>Fees</div>
+            </div>
+
+            {/* Mobile Drawer Overlay */}
+            {isMobileFiltersOpen && (
+                <div 
+                    className="filters-drawer-overlay mobile-search-only" 
+                    onClick={() => setIsMobileFiltersOpen(false)}
+                />
+            )}
+
+            {/* Sidebar Filters / Mobile Drawer */}
+            <aside className={`filters-sidebar filters-drawer ${isMobileFiltersOpen ? 'open' : ''}`}>
+                <div className="drawer-header mobile-search-only">
+                    <button className="reset-btn" onClick={clearFilters}>Reset</button>
+                    <h3>Filters</h3>
+                    <button className="close-btn" onClick={() => setIsMobileFiltersOpen(false)}>✕</button>
+                </div>
+
+                <div className="mobile-search-only" style={{ marginBottom: '1.5rem' }}>
+                    <DoctorFilters />
+                </div>
+
+                <h3 className="desktop-search-only" style={{ marginBottom: '1.5rem', fontWeight: 700, color: 'var(--text-dark)' }}>Filters</h3>
 
                 {/* Consultation Type */}
                 <div className="filter-group">
@@ -125,7 +137,7 @@ export default function DoctorList({ doctors }: Props) {
                                     id={`type-${t.id}`}
                                     name="consultationType"
                                     checked={consultationType === t.id}
-                                    onChange={() => setConsultationType(t.id as any)}
+                                    onChange={() => updateFilter('consultationType', t.id)}
                                 />
                                 <label htmlFor={`type-${t.id}`}>{t.label}</label>
                             </div>
@@ -137,40 +149,18 @@ export default function DoctorList({ doctors }: Props) {
                 <div className="filter-group">
                     <div className="filter-title">Specialization</div>
                     <div className="filter-options">
-                        {uniqueSpecialties.map(specialty => {
-                            const count = doctors.filter(d => d.specialty === specialty).length;
-                            return (
-                                <div className="filter-option" key={specialty}>
-                                    <input
-                                        type="checkbox"
-                                        id={specialty}
-                                        checked={selectedSpecialties.includes(specialty)}
-                                        onChange={() => toggleSpecialty(specialty)}
-                                    />
-                                    <label htmlFor={specialty}>{specialty}</label>
-                                    <span className="filter-count">{count}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Price Range */}
-                <div className="filter-group">
-                    <div className="filter-title">Consultation Fee</div>
-                    <div className="range-slider">
-                        <input
-                            type="range"
-                            min="20"
-                            max="1000"
-                            value={priceRange}
-                            onChange={(e) => setPriceRange(Number(e.target.value))}
-                            aria-label="Maximum consultation fee"
-                        />
-                        <div className="range-values">
-                            <span>$20</span>
-                            <span>${priceRange}</span>
-                        </div>
+                        {STATIC_SPECIALTIES.map(specialty => (
+                            <div className="filter-option" key={specialty}>
+                                <input
+                                    type="radio"
+                                    name="specialty"
+                                    id={specialty}
+                                    checked={selectedSpecialty === specialty}
+                                    onChange={() => updateFilter('specialty', specialty)}
+                                />
+                                <label htmlFor={specialty}>{specialty}</label>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
@@ -182,34 +172,22 @@ export default function DoctorList({ doctors }: Props) {
                             { value: 5, label: '★★★★★ (5.0)' },
                             { value: 4, label: '★★★★☆ (4.0+)' },
                             { value: 3, label: '★★★☆☆ (3.0+)' },
-                        ].map(r => {
-                            const count = doctors.filter(d => d.rating >= r.value).length;
-                            return (
-                                <div className="filter-option" key={r.value}>
-                                    <input
-                                        type="radio"
-                                        id={`rating${r.value}`}
-                                        name="rating"
-                                        checked={minRating === r.value}
-                                        onChange={() => setMinRating(r.value)}
-                                    />
-                                    <label htmlFor={`rating${r.value}`}>{r.label}</label>
-                                    <span className="filter-count">{count}</span>
-                                </div>
-                            );
-                        })}
+                        ].map(r => (
+                            <div className="filter-option" key={r.value}>
+                                <input
+                                    type="radio"
+                                    id={`rating${r.value}`}
+                                    name="rating"
+                                    checked={minRating === r.value}
+                                    onChange={() => updateFilter('minRating', String(r.value))}
+                                />
+                                <label htmlFor={`rating${r.value}`}>{r.label}</label>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                <button
-                    className="clear-filters"
-                    onClick={() => {
-                        setPriceRange(1000);
-                        setSelectedSpecialties([]);
-                        setMinRating(0);
-                        setConsultationType('all');
-                    }}
-                >
+                <button className="clear-filters" onClick={clearFilters}>
                     Clear Filters
                 </button>
             </aside>
@@ -223,17 +201,16 @@ export default function DoctorList({ doctors }: Props) {
                     <select
                         className="sort-dropdown"
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value)}
+                        onChange={(e) => updateFilter('sortBy', e.target.value)}
                         aria-label="Sort doctors"
                     >
                         <option value="popular">Most Popular</option>
                         <option value="rating">Highest Rated</option>
-                        <option value="price-low">Lowest Fee</option>
-                        <option value="price-high">Highest Fee</option>
+                        <option value="fee">Lowest Fee</option>
                     </select>
                 </div>
 
-                {filtered.length === 0 ? (
+                {doctors.length === 0 ? (
                     <div className="no-results">
                         <div className="no-results-icon">🔍</div>
                         <h3>No Doctors Found</h3>
@@ -241,19 +218,14 @@ export default function DoctorList({ doctors }: Props) {
                         <button
                             className="clear-filters"
                             style={{ maxWidth: '200px', margin: '1rem auto 0' }}
-                            onClick={() => {
-                                setPriceRange(1000);
-                                setSelectedSpecialties([]);
-                                setMinRating(0);
-                                setConsultationType('all');
-                            }}
+                            onClick={clearFilters}
                         >
                             Reset All Filters
                         </button>
                     </div>
                 ) : (
                     <div className="doctors-grid">
-                        {paginatedDoctors.map(doc => (
+                        {doctors.map(doc => (
                             <article className="doctor-card" key={doc.id}>
                                 <div className="doctor-image">
                                     <Image src={doc.image} alt={`${doc.name} - ${doc.specialty}`} fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" />
@@ -287,7 +259,7 @@ export default function DoctorList({ doctors }: Props) {
                                         </div>
                                         <span className="rating-count">({doc.reviews} reviews)</span>
                                     </div>
-                                    
+
                                     <div className="doctor-fee">
                                         {doc.videoFee !== null && doc.physicalFee !== null ? (
                                             <div className="fee-split">
@@ -332,24 +304,24 @@ export default function DoctorList({ doctors }: Props) {
                 {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="pagination" role="navigation" aria-label="Pagination">
-                        <button 
-                            disabled={currentPage === 1} 
+                        <button
+                            disabled={currentPage === 1}
                             aria-label="Previous page"
                             onClick={() => {
-                                setCurrentPage(prev => prev - 1);
+                                updateFilter('page', String(currentPage - 1));
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
                         >
                             <i className="fas fa-chevron-left"></i>
                         </button>
-                        
+
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                            <button 
-                                key={page} 
+                            <button
+                                key={page}
                                 className={page === currentPage ? "active" : ""}
                                 aria-current={page === currentPage ? "page" : undefined}
                                 onClick={() => {
-                                    setCurrentPage(page);
+                                    updateFilter('page', String(page));
                                     window.scrollTo({ top: 0, behavior: 'smooth' });
                                 }}
                             >
@@ -357,11 +329,11 @@ export default function DoctorList({ doctors }: Props) {
                             </button>
                         ))}
 
-                        <button 
-                            disabled={currentPage === totalPages} 
+                        <button
+                            disabled={currentPage === totalPages}
                             aria-label="Next page"
                             onClick={() => {
-                                setCurrentPage(prev => prev + 1);
+                                updateFilter('page', String(currentPage + 1));
                                 window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
                         >
