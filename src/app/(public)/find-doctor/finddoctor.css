@@ -705,3 +705,85 @@
         font-size: 0.85rem;
     }
 }
+
+/* ============ DASHBOARD SPECIFIC OVERRIDES ============ */
+.dashboard-find-doctor .desktop-search-only {
+    display: none !important;
+}
+.dashboard-find-doctor .mobile-search-only {
+    display: block !important;
+}
+.dashboard-find-doctor .main-content {
+    grid-template-columns: 1fr !important;
+    margin-top: 1rem !important;
+}
+.dashboard-find-doctor .filters-drawer-overlay {
+    display: block;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+.dashboard-find-doctor .filters-drawer {
+    position: fixed !important;
+    top: 0 !important;
+    left: -100% !important;
+    width: 320px !important;
+    max-width: 85% !important;
+    height: 100% !important;
+    background: white !important;
+    z-index: 1001 !important;
+    transition: left 0.3s ease !important;
+    overflow-y: auto !important;
+    padding: 1.5rem !important;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.1) !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+.dashboard-find-doctor .filters-drawer.open {
+    left: 0 !important;
+}
+.dashboard-find-doctor .mobile-filter-pills {
+    display: flex !important;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding: 0.5rem 1rem 1rem 0;
+    scrollbar-width: none;
+}
+.dashboard-find-doctor .mobile-filter-pills::-webkit-scrollbar {
+    display: none;
+}
+.dashboard-find-doctor .filter-pill {
+    white-space: nowrap;
+    padding: 0.5rem 1rem;
+    background: #f0f4ff;
+    border: 1px solid var(--primary-light);
+    border-radius: 20px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--primary-dark);
+}
+.dashboard-find-doctor .filter-pill-icon {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.dashboard-find-doctor .mobile-search-only form {
+    flex-direction: column !important;
+    gap: 0.75rem;
+}
+.dashboard-find-doctor .mobile-search-only .search-button {
+    width: 100%;
+}
+.dashboard-find-doctor aside.filters-sidebar:not(.open) {
+    display: none !important;
+}

@@ -11,7 +11,7 @@ interface Qualification {
     institution: string;
     year: string;
 }
-
+ 
 interface WorkingHourSlot {
     start: string;
     end: string;

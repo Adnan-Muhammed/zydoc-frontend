@@ -28,7 +28,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
   type LinkItem = {
     href: string;
     icon: string;
-    label: string;
+    label: string; 
     badge?: Badge;
     disabled?: boolean;
   };
@@ -105,7 +105,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         label: 'Healthcare',
         links: [
           { href: '/patient/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
-          { href: '/patient/doctors', icon: 'fas fa-user-doctor', label: 'Find Doctors' },
+          { href: '/patient/find-doctor', icon: 'fas fa-user-doctor', label: 'Find Doctors' },
           { href: '/patient/appointments', icon: 'fas fa-calendar-alt', label: 'My Appointments' }
         ]
       },
@@ -119,8 +119,8 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       {
         label: 'Account',
         links: [
-          // Added Profile Update here
-          { href: '/patient/profile', icon: 'fas fa-user-pen', label: 'ProfilePatient' },
+          // Profile View Link
+          { href: '/patient/profile', icon: 'fas fa-user', label: 'My Profile' },
           { href: '/patient/settings', icon: 'fas fa-gear', label: 'Settings' }
         ]
       }
@@ -209,7 +209,17 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         </nav>
 
         <div className="sidebar-user">
-          <div className="sidebar-avatar">{getInitials(user?.name || role)}</div>
+          <div className="sidebar-avatar" style={{ overflow: 'hidden' }}>
+            {user?.avatarUrl ? (
+              <img 
+                src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`} 
+                alt="Profile" 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              getInitials(user?.name || role)
+            )}
+          </div>
           <div className="sidebar-user-info">
             {/* <div className="sidebar-user-name">{user?.name || `Demo ${role}`}</div> */}
             {/* <div className="sidebar-user-role">{user?.email || `${role}@doctify.com`}</div> */}

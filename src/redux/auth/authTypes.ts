@@ -47,6 +47,7 @@ export interface User {
     role: string; 
     isProfileCompleted?: boolean;
     verificationStatus?: 'pending' | 'approved' | 'rejected';
+    [key: string]: any;
 }
 
 export interface AuthState {

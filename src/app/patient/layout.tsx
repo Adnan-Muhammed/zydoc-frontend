@@ -3,7 +3,7 @@
 // src/app/patient/layout.tsx
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-
+ 
 export default async function PatientLayout({
   children
 }: {
@@ -47,4 +47,4 @@ export default async function PatientLayout({
   if (!user || user.role !== 'patient') redirect('/');
 
   return <>{children}</>;
-}
+} 

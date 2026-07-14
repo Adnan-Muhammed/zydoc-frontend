@@ -13,6 +13,8 @@ interface Qualification {
   degree: string;
   institution: string;
   year: string;
+  certificateStatus?: string;
+  rejectionReason?: string;
 }
 
 export default function ClinicalCredentialsForm() {
@@ -141,6 +143,7 @@ export default function ClinicalCredentialsForm() {
                 <tr>
                   <th className="px-4 py-2">Degree</th>
                   <th className="px-4 py-2">Institution</th>
+                  <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2 text-center">Action</th>
                 </tr>
               </thead>
@@ -149,6 +152,22 @@ export default function ClinicalCredentialsForm() {
                   <tr key={q.id} className="text-xs">
                     <td className="px-4 py-2 font-bold text-blue-600 dark:text-blue-400">{q.degree}</td>
                     <td className="px-4 py-2 text-slate-600 dark:text-slate-300">{q.institution} ({q.year})</td>
+                    <td className="px-4 py-2">
+                      {q.certificateStatus ? (
+                        <div>
+                          <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${q.certificateStatus === 'approved' ? 'bg-green-100 text-green-700' : q.certificateStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {q.certificateStatus}
+                          </span>
+                          {q.certificateStatus === 'rejected' && q.rejectionReason && (
+                            <div className="text-[10px] text-red-600 mt-1 max-w-[150px] truncate" title={q.rejectionReason}>
+                              {q.rejectionReason}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">None</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-center">
                       <button type="button" onClick={() => removeQualification(q.id)} className="font-bold text-red-500 hover:text-red-700 transition">Remove</button>
                     </td>

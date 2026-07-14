@@ -1,209 +1,165 @@
-// 'use client';
-
-// import React, { useState } from 'react';
-
-// export default function ConsultationSection({ initialData }: { initialData: any }) {
-//     const [video, setVideo] = useState({ enabled: initialData.enableVideo ?? false, fee: initialData.videoFee ?? '0' });
-//     const [physical, setPhysical] = useState({
-//         enabled: initialData.enablePhysical ?? false,
-//         fee: initialData.physicalFee ?? '0',
-//         clinicName: initialData.clinicName ?? '',
-//         clinicAddress: initialData.clinicAddress ?? ''
-//     });
-//     const [loading, setLoading] = useState(false);
-
-//     const handleSave = async () => {
-//         setLoading(true);
-//         try {
-//             const res = await fetch('/api/doctor/profile/consultation', {
-//                 method: 'PATCH',
-//                 headers: { 'Content-Type': 'application/json' },
-//                 body: JSON.stringify({ enableVideo: video.enabled, videoFee: video.fee, enablePhysical: physical.enabled, physicalFee: physical.fee, clinicName: physical.clinicName, clinicAddress: physical.clinicAddress }),
-//             });
-//             if (res.ok) alert('Consultation pathways saved!');
-//         } catch (err) {
-//             console.error(err);
-//         } finally {
-//             setLoading(false);
-//         }
-//     };
-
-//     return (
-//         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-//             <div className="flex items-center justify-between border-b border-slate-50 pb-2">
-//                 <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-//                     <i className="fas fa-stethoscope text-indigo-500 text-xs" /> Consultation Matrix
-//                 </h3>
-//                 <button type="button" onClick={handleSave} disabled={loading} className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg">
-//                     {loading ? 'Saving...' : 'Save Channels'}
-//                 </button>
-//             </div>
-//             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-//                 {/* Telehealth */}
-//                 <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
-//                     <div className="flex items-center justify-between">
-//                         <span className="text-xs font-bold text-slate-700">Video Telehealth</span>
-//                         <input type="checkbox" checked={video.enabled} onChange={e => setVideo({ ...video, enabled: e.target.checked })} className="accent-indigo-600" />
-//                     </div>
-//                     {video.enabled && (
-//                         <input type="number" value={video.fee} onChange={e => setVideo({ ...video, fee: e.target.value })} className="w-full text-sm px-3 py-1.5 border rounded-lg" placeholder="Fee" />
-//                     )}
-//                 </div>
-//                 {/* Physical Clinic */}
-//                 <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
-//                     <div className="flex items-center justify-between">
-//                         <span className="text-xs font-bold text-slate-700">In-Person Clinic</span>
-//                         <input type="checkbox" checked={physical.enabled} onChange={e => setPhysical({ ...physical, enabled: e.target.checked })} className="accent-emerald-600" />
-//                     </div>
-//                     {physical.enabled && (
-//                         <div className="space-y-2">
-//                             <input type="number" value={physical.fee} onChange={e => setPhysical({ ...physical, fee: e.target.value })} className="w-full text-sm px-3 py-1.5 border rounded-lg" placeholder="Fee" />
-//                             <input type="text" value={physical.clinicName} onChange={e => setPhysical({ ...physical, clinicName: e.target.value })} className="w-full text-sm px-3 py-1.5 border rounded-lg" placeholder="Clinic Name" />
-//                             <input type="text" value={physical.clinicAddress} onChange={e => setPhysical({ ...physical, clinicAddress: e.target.value })} className="w-full text-sm px-3 py-1.5 border rounded-lg" placeholder="Clinic Address" />
-//                         </div>
-//                     )}
-//                 </div>
-//             </div>
-//         </div>
-//     );
-// }
-
-
-
-
-
 'use client';
-
-import React, { useState } from 'react';
+ 
+import React, { useState, useEffect } from 'react';
+import axiosInstance from '@/api/axiosInstance';
+import { useRouter } from 'next/navigation';
 
 export default function ConsultationSection({ initialData }: { initialData: any }) {
-    const [video, setVideo] = useState({ enabled: initialData.enableVideo ?? false, fee: initialData.videoFee ?? '0' });
-    const [physical, setPhysical] = useState({
-        enabled: initialData.enablePhysical ?? false,
-        fee: initialData.physicalFee ?? '0',
-        clinicName: initialData.clinicName ?? '',
-        clinicAddress: initialData.clinicAddress ?? ''
+    const router = useRouter();
+    const extractVideo = (data: any) => ({ enabled: data?.enableVideo ?? false, fee: data?.videoFee ?? '0' });
+    const extractPhysical = (data: any) => ({ 
+        enabled: data?.enablePhysical ?? false,
+        fee: data?.physicalFee ?? '0',
+        clinicName: data?.clinicName ?? '',
+        clinicAddress: data?.clinicAddress ?? ''
     });
+ 
+    const [video, setVideo] = useState(extractVideo(initialData));
+    const [physical, setPhysical] = useState(extractPhysical(initialData));
+
+    useEffect(() => {
+        setVideo(extractVideo(initialData));
+        setPhysical(extractPhysical(initialData));
+    }, [initialData]);
+
     const [loading, setLoading] = useState(false);
 
     const handleSave = async () => {
-        setLoading(true);
+        setLoading(true); 
         try {
-            const res = await fetch('/api/doctor/profile/consultation', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enableVideo: video.enabled, videoFee: video.fee, enablePhysical: physical.enabled, physicalFee: physical.fee, clinicName: physical.clinicName, clinicAddress: physical.clinicAddress }),
-            });
-            if (res.ok) alert('Consultation pathways saved!');
-        } catch (err) {
+            const payload = { 
+                enableVideo: video.enabled, 
+                videoFee: video.fee, 
+                enablePhysical: physical.enabled, 
+                physicalFee: physical.fee, 
+                clinicName: physical.clinicName, 
+                clinicAddress: physical.clinicAddress 
+            };
+            const res = await axiosInstance.patch('/doctor/profile/consultation', payload);
+             
+            if (res.data?.success) {
+                alert('Consultation pathways saved!');
+                if (res.data.profile?.consultationSettings) {
+                    setVideo({
+                        enabled: res.data.profile.consultationSettings.video?.enabled ?? false,
+                        fee: res.data.profile.consultationSettings.video?.fee ?? '0'
+                    });
+                    setPhysical({
+                        enabled: res.data.profile.consultationSettings.physical?.enabled ?? false,
+                        fee: res.data.profile.consultationSettings.physical?.fee ?? '0',
+                        clinicName: res.data.profile.consultationSettings.physical?.clinicName ?? '',
+                        clinicAddress: res.data.profile.consultationSettings.physical?.clinicAddress ?? ''
+                    });
+                }
+                router.refresh();
+            } else {
+                alert(res.data?.message || 'Error saving details.');
+            }
+        } catch (err: any) {
             console.error(err);
+            alert(err.response?.data?.message || 'An error occurred while saving.');
         } finally {
             setLoading(false);
         }
-    };
+    }; 
 
     return (
-
-
-
-
-
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-    {/* Header Section with Title and Save Button from the first snippet */}
-    <div className="flex items-center justify-between border-b border-slate-50 pb-2">
-        <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-            <i className="fas fa-stethoscope text-indigo-500 text-xs" /> Consultation Channel Matrix
-        </h3>
-        <button 
-            type="button" 
-            onClick={handleSave} 
-            disabled={loading} 
-            className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg transition-colors hover:bg-indigo-700 disabled:opacity-50"
-        >
-            {loading ? 'Saving...' : 'Save Channels'}
-        </button>
-    </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        
-        {/* Telehealth Switch Box */}
-        <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <i className="fas fa-video text-indigo-500 text-xs" />
-                    <span className="text-xs font-bold text-slate-700">Video Telehealth</span>
-                </div>
-                <input
-                    type="checkbox" 
-                    checked={video.enabled} 
-                    onChange={e => setVideo({ ...video, enabled: e.target.checked })} 
-                    className="w-4 h-4 accent-indigo-600 cursor-pointer" 
-                />
+            <div className="flex items-center justify-between border-b border-slate-50 pb-2">
+                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <i className="fas fa-stethoscope text-indigo-500 text-xs" /> Consultation Channel Matrix
+                </h3>
+                <button 
+                    type="button" 
+                    onClick={handleSave} 
+                    disabled={loading} 
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-70"
+                >
+                    {loading ? 'Saving...' : 'Save Channels'}
+                </button>
             </div>
-            {video.enabled && (
-                <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Video Session Fee (₹)</label>
-                    <input 
-                        type="number" 
-                        value={video.fee} 
-                        onChange={e => setVideo({ ...video, fee: e.target.value })} 
-                        className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold" 
-                    />
-                </div>
-            )}
-        </div>
 
-        {/* In-Person Switch Box */}
-        <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <i className="fas fa-building-medical text-emerald-500 text-xs" />
-                    <span className="text-xs font-bold text-slate-700">In-Person Clinic Visits</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+                {/* Telehealth Switch Box */}
+                <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4 transition-all hover:border-indigo-100 hover:shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+                                <i className="fas fa-video text-xs" />
+                            </div>
+                            <span className="text-sm font-bold text-slate-700">Video Telehealth</span>
+                        </div>
+                        <input
+                            type="checkbox" 
+                            checked={video.enabled} 
+                            onChange={e => setVideo({ ...video, enabled: e.target.checked })} 
+                            className="w-5 h-5 accent-indigo-600 cursor-pointer rounded" 
+                        />
+                    </div>
+                    {video.enabled && (
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Video Session Fee (₹)</label>
+                            <input 
+                                type="number" 
+                                value={video.fee} 
+                                onChange={e => setVideo({ ...video, fee: e.target.value })} 
+                                className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold focus:ring-2 focus:ring-indigo-500/20 transition-all" 
+                            />
+                        </div>
+                    )}
                 </div>
-                <input 
-                    type="checkbox" 
-                    checked={physical.enabled} 
-                    onChange={e => setPhysical({ ...physical, enabled: e.target.checked })} 
-                    className="w-4 h-4 accent-emerald-600 cursor-pointer" 
-                />
+
+                {/* In-Person Switch Box */}
+                <div className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50 space-y-4 transition-all hover:border-emerald-100 hover:shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+                                <i className="fas fa-building-medical text-xs" />
+                            </div>
+                            <span className="text-sm font-bold text-slate-700">In-Person Clinic Visits</span>
+                        </div>
+                        <input 
+                            type="checkbox" 
+                            checked={physical.enabled} 
+                            onChange={e => setPhysical({ ...physical, enabled: e.target.checked })} 
+                            className="w-5 h-5 accent-emerald-600 cursor-pointer rounded" 
+                        />
+                    </div>
+                    {physical.enabled && (
+                        <div className="space-y-4 pt-2 border-t border-slate-100 animation-fade-in">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Session Fee (₹)</label>
+                                <input 
+                                    type="number" 
+                                    value={physical.fee} 
+                                    onChange={e => setPhysical({ ...physical, fee: e.target.value })} 
+                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Name</label>
+                                <input 
+                                    type="text" 
+                                    value={physical.clinicName} 
+                                    onChange={e => setPhysical({ ...physical, clinicName: e.target.value })} 
+                                    placeholder="e.g. Neuro Care Hub" 
+                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-800 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Address</label>
+                                <input 
+                                    type="text" 
+                                    value={physical.clinicAddress} 
+                                    onChange={e => setPhysical({ ...physical, clinicAddress: e.target.value })} 
+                                    placeholder="Street, City, Pin" 
+                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-800 focus:ring-2 focus:ring-emerald-500/20 transition-all" 
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-            {physical.enabled && (
-                <div className="space-y-3 animation-fade-in">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Session Fee (₹)</label>
-                        <input 
-                            type="number" 
-                            value={physical.fee} 
-                            onChange={e => setPhysical({ ...physical, fee: e.target.value })} 
-                            className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800 font-semibold" 
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Name</label>
-                        <input 
-                            type="text" 
-                            value={physical.clinicName} 
-                            onChange={e => setPhysical({ ...physical, clinicName: e.target.value })} 
-                            placeholder="e.g. Neuro Care Hub" 
-                            className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800" 
-                        />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Address</label>
-                        <input 
-                            type="text" 
-                            value={physical.clinicAddress} 
-                            onChange={e => setPhysical({ ...physical, clinicAddress: e.target.value })} 
-                            placeholder="Street, City, Pin" 
-                            className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800" 
-                        />
-                    </div>
-                </div>
-            )}
         </div>
-
-    </div>
-</div>
-    
     );
-}
+} 

@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import DoctorFilters from './DoctorFilters';
 
 type Doctor = {
@@ -31,6 +31,7 @@ type Props = {
         limit: number;
         pages: number;
     } | null;
+    basePath: string;
 };
 
 const STATIC_SPECIALTIES = [
@@ -45,9 +46,10 @@ const STATIC_SPECIALTIES = [
     "Gynecology"
 ].sort();
 
-export default function DoctorList({ doctors, pagination }: Props) {
+export default function DoctorList({ doctors, pagination, basePath }: Props) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const pathname = usePathname();
     const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
     // Read current state from URL
@@ -74,7 +76,7 @@ export default function DoctorList({ doctors, pagination }: Props) {
         if (key !== 'page') {
             params.set('page', '1');
         }
-        router.push(`/find-doctor?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`);
     };
 
     const clearFilters = () => {
@@ -84,7 +86,7 @@ export default function DoctorList({ doctors, pagination }: Props) {
         params.delete('consultationType');
         params.delete('sortBy');
         params.set('page', '1');
-        router.push(`/find-doctor?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`);
     };
 
     return (
@@ -292,15 +294,15 @@ export default function DoctorList({ doctors, pagination }: Props) {
                                     </div>
 
                                     <div className="doctor-actions">
-                                        <button className="btn-view">View Profile</button>
-                                        <button className="btn-book">Book Now</button>
+                                        <button className="btn-view" onClick={() => router.push(`${basePath}/${doc.id}`)}>View Profile</button>
+                                        <button className="btn-book" onClick={() => router.push(`${basePath}/book/${doc.id}`)}>Book Now</button>
                                     </div>
                                 </div>
                             </article>
                         ))}
                     </div>
                 )}
-
+ 
                 {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="pagination" role="navigation" aria-label="Pagination">

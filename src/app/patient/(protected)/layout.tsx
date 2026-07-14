@@ -135,4 +135,4 @@ export default async function PatientLayout({
       </AppShell>
     </AuthHydrator>
   );
-}
+} 

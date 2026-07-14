@@ -6,8 +6,9 @@
 
 import { useAppSelector } from '@/redux/hooks';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react'; 
 import Link from 'next/link';
+import axiosInstance from '@/api/axiosInstance';
 import './doctor-dashboard.css';
 
 export default function DoctorDashboardPage() {
@@ -33,6 +34,28 @@ const isApproved =
 
 // const isApproved = true; // testing
 
+    const [appointments, setAppointments] = useState<any[]>([]);
+    const [loadingAppointments, setLoadingAppointments] = useState(true);
+    const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'video' | 'physical'>('all');
+
+    useEffect(() => {
+        if (user && isApproved) {
+            const fetchAppointments = async () => {
+                try {
+                    const response = await axiosInstance.get('/appointments/doctor');
+                    if (response.data.success) {
+                        setAppointments(response.data.appointments);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch appointments:", error);
+                } finally {
+                    setLoadingAppointments(false);
+                }
+            };
+            fetchAppointments();
+        }
+    }, [user, isApproved]);
+
     useEffect(() => {
         if (user && !user.isProfileCompleted) {
             router.replace('/doctor/profile-update');
@@ -51,7 +74,7 @@ const isApproved =
 
 
 return (
-  <div className="flex flex-col flex-1 bg-slate-50 p-6 overflow-y-auto">
+  <div className="flex flex-col flex-1 bg-slate-100 p-6 overflow-y-auto rounded-xl">
 
     {/* Pending Banner */}
     {isPending && (
@@ -107,7 +130,7 @@ return (
     {isRejected && (
       <div className="mb-8 rounded-3xl border border-red-200 bg-red-50 p-6 shadow-sm">
 
-        <div className="flex gap-4">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
 
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-2xl text-red-600">
             <i className="fas fa-ban"></i>
@@ -128,7 +151,7 @@ return (
       </div>
     )}
 
-    {isApproved ? (
+    {isApproved ? ( 
       <>
         {/* Header */}
         <div className="mb-8">
@@ -145,51 +168,60 @@ return (
         <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-3">
 
           {/* Next Patient */}
-          <div className="xl:col-span-2 rounded-3xl bg-gradient-to-r from-indigo-500 to-indigo-700 p-6 text-white shadow-lg">
-
-            <div className="mb-5 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
-              Up Next
-            </div>
-
-            <div className="flex items-center gap-5">
-
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-bold text-indigo-600">
-                SJ
+          <div className="xl:col-span-2 rounded-3xl bg-gradient-to-r from-indigo-500 to-indigo-700 p-6 text-white shadow-lg flex flex-col justify-between">
+            <div>
+              <div className="mb-5 inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+                Up Next
               </div>
 
-              <div>
-
-                <h3 className="text-2xl font-semibold">
-                  Sarah Johnson
-                </h3>
-
-                <p className="mt-1 text-indigo-100">
-                  <i className="fas fa-clock mr-2"></i>
-                  10:30 AM (In 15 mins)
-                </p>
-
-                <span className="mt-3 inline-block rounded-lg bg-white/20 px-3 py-1 text-sm">
-                  Follow-up: Hypertension
-                </span>
-
-              </div>
+              {appointments.length > 0 ? (
+                (() => {
+                  const nextAppt = appointments[0];
+                  return (
+                    <div className="flex items-center gap-5">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-bold text-indigo-600 uppercase">
+                        {nextAppt.patientId?.name?.substring(0, 2) || "PT"}
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-semibold">
+                          {nextAppt.patientId?.name || "Patient"}
+                        </h3>
+                        <p className="mt-1 text-indigo-100">
+                          <i className="fas fa-clock mr-2"></i>
+                          {new Date(nextAppt.appointmentDate).toLocaleDateString()} at {nextAppt.appointmentTime}
+                        </p>
+                        <span className="mt-3 inline-block rounded-lg bg-white/20 px-3 py-1 text-sm capitalize">
+                          {nextAppt.consultationType} Consultation
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="flex items-center gap-5">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/10 text-xl text-white/50">
+                    <i className="fas fa-calendar-times"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-semibold text-white/80">No upcoming appointments</h3>
+                    <p className="mt-1 text-indigo-200">You're all caught up for now.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-4">
-
-              <button className="rounded-xl bg-white px-5 py-2.5 font-semibold text-indigo-700 transition hover:bg-slate-100">
+              <button disabled={appointments.length === 0} className="rounded-xl bg-white px-5 py-2.5 font-semibold text-indigo-700 transition hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed">
                 Start Consultation
               </button>
-
               <button className="rounded-xl border border-white/40 px-5 py-2.5 transition hover:bg-white/10">
                 View History
               </button>
-
             </div>
           </div>
 
           {/* Attention Card */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
 
             <h3 className="text-lg font-bold text-slate-800">
               Needs Your Attention
@@ -225,7 +257,7 @@ return (
         {/* Stats */}
         <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition hover:shadow-lg">
 
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-2xl text-indigo-600">
               <i className="fas fa-users"></i>
@@ -244,9 +276,9 @@ return (
               +12 this month
             </p>
 
-          </div>
+            </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition hover:shadow-lg">
 
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-pink-100 text-2xl text-pink-600">
               <i className="fas fa-calendar-check"></i>
@@ -267,7 +299,7 @@ return (
 
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition hover:shadow-lg">
 
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-600">
               <i className="fas fa-dollar-sign"></i>
@@ -288,7 +320,7 @@ return (
 
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-lg">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md transition hover:shadow-lg">
 
             <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-yellow-100 text-2xl text-yellow-600">
               <i className="fas fa-star"></i>
@@ -313,27 +345,89 @@ return (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
 
           {/* Appointments */}
-          <div className="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
 
             <div className="mb-6 flex items-center justify-between">
 
               <h3 className="text-xl font-bold text-slate-800">
                 Upcoming Appointments
               </h3>
+              
+              <div className="flex bg-slate-100 p-1 rounded-lg">
+                <button 
+                  onClick={() => setAppointmentFilter('all')}
+                  className={`text-xs px-3 py-1 font-bold rounded-md transition-colors ${appointmentFilter === 'all' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  All
+                </button>
+                <button 
+                  onClick={() => setAppointmentFilter('video')}
+                  className={`text-xs px-3 py-1 font-bold rounded-md transition-colors ${appointmentFilter === 'video' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Online
+                </button>
+                <button 
+                  onClick={() => setAppointmentFilter('physical')}
+                  className={`text-xs px-3 py-1 font-bold rounded-md transition-colors ${appointmentFilter === 'physical' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  In-Person
+                </button>
+              </div>
 
               <Link
                 href="#"
-                className="rounded-xl border border-slate-200 px-4 py-2 font-medium text-indigo-600 hover:bg-slate-100"
+                className="hidden sm:block rounded-xl border border-slate-200 px-4 py-2 font-medium text-indigo-600 hover:bg-slate-100"
               >
                 View All
               </Link>
 
             </div>
+            
+            {loadingAppointments ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              </div>
+            ) : (() => {
+              const filteredAppointments = appointments.filter(appt => appointmentFilter === 'all' || appt.consultationType === appointmentFilter);
+              
+              return filteredAppointments.length > 0 ? (
+                <div className="space-y-4">
+                  {filteredAppointments.slice(0, 5).map((appt) => (
+                    <div key={appt._id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold uppercase">
+                          {appt.patientId?.name?.substring(0, 2) || "PT"}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800">{appt.patientId?.name || "Patient"}</h4>
+                          <p className="text-sm text-slate-500">
+                            {new Date(appt.appointmentDate).toLocaleDateString()} at {appt.appointmentTime}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                          appt.consultationType === 'video' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {appt.consultationType === 'video' ? 'Online' : 'In-Person'}
+                        </span>
+                        <p className="text-xs text-slate-400 mt-1">₹{appt.fee}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10">
+                  <i className="far fa-calendar-times text-slate-300 text-4xl mb-3"></i>
+                  <p className="text-slate-500 font-medium">No upcoming appointments for this filter.</p>
+                </div>
+              )
+            })()}
 
           </div>
 
           {/* Reviews */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-md">
 
             <h3 className="mb-6 text-xl font-bold text-slate-800">
               Recent Reviews
@@ -346,7 +440,7 @@ return (
     ) : (
 
       <>
- <div className="flex-1 max-h-[220px] rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm flex flex-col items-center justify-center">
+ <div className="flex-1 w-full min-h-[220px] rounded-3xl border border-dashed border-slate-300 bg-white p-8 sm:p-12 text-center shadow-md flex flex-col items-center justify-center mb-6 shrink-0">
  <div className="  mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 text-4xl text-slate-400">
           <i className={isRejected ? "fas fa-ban" : "fas fa-hourglass-half"}></i>
         </div>

@@ -40,9 +40,21 @@ function getRedirectForRole(role: string, pathname: string, isProfileCompleted?:
         }
     }
 
+    // Enforce patient profile completion
+    if (role === 'patient') {
+        if (isProfileCompleted === false && !pathname.startsWith('/patient/profile-update')) {
+            const isProtectedOrAuth = PROTECTED_ROUTES.some(r => pathname.startsWith(r)) || AUTH_ROUTES.includes(pathname);
+            if (isProtectedOrAuth) return '/patient/profile-update';
+        }
+        if (isProfileCompleted === true && pathname.startsWith('/patient/profile-update')) {
+            return dashboard;
+        }
+    }
+
     // Logged-in user on any auth page → own dashboard (or profile-update if incomplete)
     if (AUTH_ROUTES.includes(pathname)) {
         if (role === 'doctor' && isProfileCompleted === false) return '/doctor/complete-profile';
+        if (role === 'patient' && isProfileCompleted === false) return '/patient/profile-update';
         return dashboard;
     }
 
@@ -53,6 +65,7 @@ function getRedirectForRole(role: string, pathname: string, isProfileCompleted?:
     );
     if (isOtherRoleArea) {
         if (role === 'doctor' && isProfileCompleted === false) return '/doctor/complete-profile';
+        if (role === 'patient' && isProfileCompleted === false) return '/patient/profile-update';
         return dashboard;
     }
 

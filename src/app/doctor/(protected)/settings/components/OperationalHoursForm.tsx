@@ -20,6 +20,11 @@ interface WorkingHours {
   sunday: WorkingHourSlot;
 }
 
+interface WorkingHoursConfig {
+  online: WorkingHours;
+  offline: WorkingHours;
+}
+
 export default function OperationalHoursForm() {
   const dispatch = useAppDispatch();
   const { user, isLoading } = useAppSelector((state) => state.auth);
@@ -30,21 +35,50 @@ export default function OperationalHoursForm() {
   const [physicalFee, setPhysicalFee] = useState('150');
   const [clinicName, setClinicName] = useState('');
   const [clinicAddress, setClinicAddress] = useState('');
-  const [workingHours, setWorkingHours] = useState<WorkingHours | null>(null);
+  const [workingHours, setWorkingHours] = useState<WorkingHoursConfig | null>(null);
+  
+  // Track which schedule we are currently editing
+  const [activeTab, setActiveTab] = useState<'online' | 'offline'>('online');
 
   useEffect(() => {
     if (user) {
-      setEnableVideo(user.consultationSettings?.video?.enabled ?? true);
+      const isVideo = user.consultationSettings?.video?.enabled ?? true;
+      const isPhysical = user.consultationSettings?.physical?.enabled ?? false;
+      
+      setEnableVideo(isVideo);
       setVideoFee(String(user.consultationSettings?.video?.fee || '100'));
-      setEnablePhysical(user.consultationSettings?.physical?.enabled ?? false);
+      setEnablePhysical(isPhysical);
       setPhysicalFee(String(user.consultationSettings?.physical?.fee || '150'));
       setClinicName(user.consultationSettings?.physical?.clinicName || '');
       setClinicAddress(user.consultationSettings?.physical?.clinicAddress || '');
-      setWorkingHours(user.workingHours || {
+      
+      const defaultHours: WorkingHours = {
         mondayToFriday: { start: '09:00', end: '17:00', active: true },
         saturday: { start: '10:00', end: '14:00', active: true },
         sunday: { start: '00:00', end: '00:00', active: false },
+      };
+
+      // Handle seamless migration from flat structure to nested structure
+      let onlineHours = user.workingHours?.online;
+      let offlineHours = user.workingHours?.offline;
+
+      if (!onlineHours && !offlineHours && user.workingHours && Object.keys(user.workingHours).length > 0) {
+        // Migration from old flat structure
+        onlineHours = user.workingHours;
+        offlineHours = JSON.parse(JSON.stringify(user.workingHours)); 
+      }
+
+      setWorkingHours({
+        online: onlineHours || defaultHours,
+        offline: offlineHours || defaultHours
       });
+      
+      // Auto-select the active tab based on what is enabled
+      if (!isVideo && isPhysical) {
+        setActiveTab('offline');
+      } else {
+        setActiveTab('online');
+      }
     }
   }, [user]);
 
@@ -52,7 +86,10 @@ export default function OperationalHoursForm() {
     if (!workingHours) return;
     setWorkingHours({
       ...workingHours,
-      [dayKey]: { ...workingHours[dayKey], [field]: value }
+      [activeTab]: {
+        ...workingHours[activeTab],
+        [dayKey]: { ...workingHours[activeTab][dayKey], [field]: value }
+      }
     });
   };
 
@@ -77,7 +114,15 @@ export default function OperationalHoursForm() {
     }
   };
 
+  // If a tab is disabled, switch to the other one automatically
+  useEffect(() => {
+      if (!enableVideo && enablePhysical && activeTab === 'online') setActiveTab('offline');
+      if (!enablePhysical && enableVideo && activeTab === 'offline') setActiveTab('online');
+  }, [enableVideo, enablePhysical, activeTab]);
+
   if (!workingHours) return null;
+
+  const currentSchedule = workingHours[activeTab];
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
@@ -116,31 +161,62 @@ export default function OperationalHoursForm() {
       </div>
 
       {/* Hours Listing Setup */}
-      <div className="space-y-3">
-        <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Standard Availability Hours</label>
-        <div className="border border-slate-200 dark:border-[#24274d] rounded-xl divide-y divide-slate-200 dark:divide-[#24274d] bg-white dark:bg-[#151732] overflow-hidden shadow-inner">
-          {(Object.entries(workingHours) as [keyof WorkingHours, WorkingHourSlot][]).map(([key, dayData]) => (
-            <div key={key} className="p-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/40 dark:hover:bg-[#1a1c3d]/10 transition">
-              <div className="flex items-center gap-3 w-44 shrink-0">
-                <input type="checkbox" checked={dayData.active} onChange={(e) => handleHourChange(key, 'active', e.target.checked)} className="rounded text-blue-600 w-4 h-4" />
-                <span className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  {key.replace(/([A-Z])/g, ' $1').trim()}
-                </span>
+      {(enableVideo || enablePhysical) && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#24274d] pb-2">
+            <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">Standard Availability Hours</label>
+            
+            {/* Tabs for Online/Offline */}
+            {(enableVideo && enablePhysical) && (
+              <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
+                <button 
+                  type="button" 
+                  onClick={() => setActiveTab('online')}
+                  className={`text-xs px-3 py-1 font-bold rounded-md transition-colors ${activeTab === 'online' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Online
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => setActiveTab('offline')}
+                  className={`text-xs px-3 py-1 font-bold rounded-md transition-colors ${activeTab === 'offline' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  In-Person
+                </button>
               </div>
-
-              {dayData.active ? (
-                <div className="flex items-center gap-2 animate-fade-in">
-                  <input type="time" value={dayData.start} onChange={(e) => handleHourChange(key, 'start', e.target.value)} className="p-1.5 border border-slate-200 dark:border-[#24274d] dark:bg-[#151732] rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200" />
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">to</span>
-                  <input type="time" value={dayData.end} onChange={(e) => handleHourChange(key, 'end', e.target.value)} className="p-1.5 border border-slate-200 dark:border-[#24274d] dark:bg-[#151732] rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200" />
+            )}
+            {enableVideo && !enablePhysical && (
+              <span className="text-xs px-3 py-1 font-bold rounded-md bg-blue-50 text-blue-600">Online Schedule</span>
+            )}
+            {!enableVideo && enablePhysical && (
+              <span className="text-xs px-3 py-1 font-bold rounded-md bg-green-50 text-green-600">In-Person Schedule</span>
+            )}
+          </div>
+          
+          <div className={`border rounded-xl divide-y bg-white dark:bg-[#151732] overflow-hidden shadow-inner transition-colors ${activeTab === 'online' ? 'border-blue-200 divide-blue-50' : 'border-green-200 divide-green-50'}`}>
+            {(Object.entries(currentSchedule) as [keyof WorkingHours, WorkingHourSlot][]).map(([key, dayData]) => (
+              <div key={key} className={`p-3.5 flex items-center justify-between gap-4 transition ${activeTab === 'online' ? 'hover:bg-blue-50/30' : 'hover:bg-green-50/30'}`}>
+                <div className="flex items-center gap-3 w-44 shrink-0">
+                  <input type="checkbox" checked={dayData.active} onChange={(e) => handleHourChange(key, 'active', e.target.checked)} className={`rounded w-4 h-4 ${activeTab === 'online' ? 'text-blue-600' : 'text-green-600'}`} />
+                  <span className="font-bold text-xs uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                    {String(key).replace(/([A-Z])/g, ' $1').trim()}
+                  </span>
                 </div>
-              ) : (
-                <span className="text-slate-400 dark:text-slate-500 italic text-xs bg-slate-100 dark:bg-[#1a1c3d]/60 px-3 py-1 rounded-md font-bold">Closed</span>
-              )}
-            </div>
-          ))}
+
+                {dayData.active ? (
+                  <div className="flex items-center gap-2 animate-fade-in">
+                    <input type="time" value={dayData.start} onChange={(e) => handleHourChange(key, 'start', e.target.value)} className="p-1.5 border border-slate-200 dark:border-[#24274d] dark:bg-[#151732] rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200" />
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">to</span>
+                    <input type="time" value={dayData.end} onChange={(e) => handleHourChange(key, 'end', e.target.value)} className="p-1.5 border border-slate-200 dark:border-[#24274d] dark:bg-[#151732] rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200" />
+                  </div>
+                ) : (
+                  <span className="text-slate-400 dark:text-slate-500 italic text-xs bg-slate-100 dark:bg-[#1a1c3d]/60 px-3 py-1 rounded-md font-bold">Closed</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex justify-end border-t border-slate-100 dark:border-[#24274d]/50 pt-4">
         <Button type="submit" isLoading={isLoading} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl px-6 py-2.5 shadow-md">

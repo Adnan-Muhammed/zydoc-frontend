@@ -48,4 +48,4 @@ export default async function DoctorLayout({
       </AppShell>
     </AuthHydrator>
   );
-} 
+}  

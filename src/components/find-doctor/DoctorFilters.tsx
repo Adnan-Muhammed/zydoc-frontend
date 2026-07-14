@@ -1,11 +1,12 @@
 // src/components/find-doctor/DoctorFilters.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 export default function DoctorFilters() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const pathname = usePathname();
     const [searchValue, setSearchValue] = useState('');
 
     // Sync initial search value from URL query parameter only on mount
@@ -27,7 +28,7 @@ export default function DoctorFilters() {
             params.delete('search');
         }
         params.set('page', '1'); // Reset to page 1 on new search
-        router.push(`/find-doctor?${params.toString()}`);
+        router.push(`${pathname}?${params.toString()}`);
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,7 +41,7 @@ export default function DoctorFilters() {
             const params = new URLSearchParams(searchParams.toString());
             params.delete('search');
             params.set('page', '1');
-            router.push(`/find-doctor?${params.toString()}`);
+            router.push(`${pathname}?${params.toString()}`);
         }
     };
 

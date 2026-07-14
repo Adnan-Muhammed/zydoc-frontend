@@ -11,8 +11,8 @@
   --gray-700: #374151;
   --gray-800: #1f2937;
   --gray-900: #111827;
-}
-
+} 
+ 
 .admin-doctors-page {
   /* Force light mode text colors within this specific container since the backgrounds are forced to white */
   color: var(--gray-900);

@@ -1,22 +1,3 @@
-// // src/app/(auth)/layout.tsx
-// import { cookies } from 'next/headers';
-// import { redirect } from 'next/navigation';
-
-// export default function AuthLayout({
-//     children,
-// }: {
-//     children: React.ReactNode;
-// }) {
-//     const token = cookies().get('token')?.value;
-
-//     if (token) {
-//         redirect('/'); // or dashboard if you want
-//     }
-
-//     return <>{children}</>;
-// }
-
-
 // src/app/(auth)/layout.tsx
 // ✅ Server Component — no 'use client' needed
 import AuthHeader from '@/components/layout/AuthHeader';

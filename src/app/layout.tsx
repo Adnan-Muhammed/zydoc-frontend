@@ -1,6 +1,6 @@
 
 
-// src/app/layout.tsx
+// src/app/layout.tsx 
 import type { Metadata } from "next";
 import { Manrope, Plus_Jakarta_Sans } from "next/font/google";
 import localFont from 'next/font/local';
