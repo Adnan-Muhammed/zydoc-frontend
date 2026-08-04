@@ -1,15 +1,16 @@
-import axios from 'axios';
+// src/api/axiosInstance.ts
+import axios, { AxiosInstance } from 'axios';
+import type { Store } from '@reduxjs/toolkit';
 
-let store: any;
+// Lazily injected store — avoids circular imports between store and axios
+let store: Store;
 
-export const injectStore = (_store: any) => {
+export const injectStore = (_store: Store) => {
     store = _store;
-};
-// baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
+}; 
 
-const axiosInstance = axios.create({
+const axiosInstance: AxiosInstance = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL + "/api",
-
     withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
@@ -19,7 +20,7 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
     (config) => {
         if (store) {
-            const state = store.getState();
+            const state = store.getState() as { auth: { accessToken: string | null } };
             const token = state.auth.accessToken;
             if (token) {
                 config.headers['Authorization'] = `Bearer ${token}`;
@@ -34,6 +35,17 @@ axiosInstance.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
+
+        // Detect CORS / network-level errors (no response received)
+        if (!error.response) {
+            console.error(
+                `[Axios] Network/CORS error on ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`,
+                '\nThis is likely a CORS block or the backend is unreachable.',
+                error.code
+            );
+            return Promise.reject(error);
+        }
+
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
             try {
@@ -46,10 +58,11 @@ axiosInstance.interceptors.response.use(
                 axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                 originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
                 return axiosInstance(originalRequest);
-            } catch (refreshError) {
+            } catch {   
                 if (store) {
                     store.dispatch({ type: 'auth/clearCredentials' });
                 }
+                return Promise.reject(error);
             }
         }
         return Promise.reject(error);

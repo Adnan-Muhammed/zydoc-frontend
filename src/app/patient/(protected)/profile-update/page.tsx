@@ -3,15 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
+import { useAppSelector } from '@/redux/hooks';
 
 export default function PatientProfileUpdatePage() {
     const router = useRouter();
+    const reduxUser = useAppSelector((state) => state.auth.user);
     const [loading, setLoading] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
-
+    
+ // firstName and lastName from the google Auth name if two words  like Adnan Muhammed then first=Adnan last=Muhammed 
+    // image  also from google profile pic if existing it will automatically updated in the preview if it not uploaded
+    
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -48,8 +53,8 @@ export default function PatientProfileUpdatePage() {
                     }
 
                     setFormData({
-                        firstName: pData.firstName || user.name?.split(' ')[0] || '',
-                        lastName: pData.lastName || user.name?.split(' ').slice(1).join(' ') || '',
+                        firstName: pData.firstName || user.name?.split(' ')[0] || reduxUser?.name?.split(' ')[0] || '',
+                        lastName: pData.lastName || user.name?.split(' ').slice(1).join(' ') || reduxUser?.name?.split(' ').slice(1).join(' ') || '',
                         dateOfBirth: pData.dateOfBirth ? new Date(pData.dateOfBirth).toISOString().split('T')[0] : '',
                         gender: pData.gender || '',
                         phone: pData.phone || '',

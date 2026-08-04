@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Input from '@/components/ui/Input';
 import { DraftState } from './types';
+import { useAppSelector } from '@/redux/hooks';
 
 interface StepIdentitySectionProps {
     draft: Pick<DraftState, 'firstName' | 'lastName' | 'phone' | 'bio'>;
@@ -14,12 +15,27 @@ interface StepIdentitySectionProps {
 
 export default function StepIdentitySection({
     draft,
-    setDraft,
+    setDraft, 
     avatarPreview,
     onAvatarChange,
     serverErrors,
 }: StepIdentitySectionProps) {
-    const { firstName, lastName, phone, bio } = draft;
+    const { firstName, lastName, phone, bio } = draft; 
+    
+    const user = useAppSelector((state) => state.auth.user);
+
+    useEffect(() => {
+        if (user?.name && !firstName && !lastName) {
+            const nameParts = user.name.trim().split(/\s+/);
+            if (nameParts.length === 2) {
+                setDraft({ firstName: nameParts[0], lastName: nameParts[1] });
+            } else if (nameParts.length === 1) {
+                setDraft({ firstName: nameParts[0] });
+            }
+        }
+    }, [user, firstName, lastName, setDraft]);
+
+    const displayAvatar = avatarPreview || user?.avatarUrl;
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in items-stretch py-3">
@@ -29,8 +45,8 @@ export default function StepIdentitySection({
                     onClick={() => document.getElementById('avatarInput')?.click()}
                     className="w-24 h-24 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative group bg-white dark:bg-[#151732] shadow-md mb-4 transition hover:border-blue-500"
                 >
-                    {avatarPreview ? (
-                        <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+                    {displayAvatar ? (
+                        <img src={displayAvatar} alt="Preview" className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-center p-2">
                             <i className="fas fa-camera text-slate-400 text-lg"></i>

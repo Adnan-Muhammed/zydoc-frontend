@@ -1,7 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit'; // Added PayloadAction for typing
-import {
-    getSystemStats, getAllUsers, approveDoctor, getAuditLogs
-} from './adminThunk';
+import { createSlice } from '@reduxjs/toolkit';
+import { getSystemStats, getAllUsers, approveDoctor, getAuditLogs } from './adminThunk';
 import { AdminState } from './adminTypes';
 
 const initialState: AdminState = {
@@ -32,8 +30,8 @@ const adminSlice = createSlice({
                 state.users = action.payload;
             })
             .addCase(approveDoctor.fulfilled, (state, action) => {
-                const updated = action.payload;
-                state.users = state.users.map((u) => u._id === updated._id ? updated : u);
+                const updated = action.payload as { _id: string };
+                state.users = state.users.map((u) => u._id === updated._id ? { ...u, ...updated } : u);
             })
             .addCase(getAuditLogs.fulfilled, (state, action) => {
                 state.isLoading = false;
@@ -46,11 +44,10 @@ const adminSlice = createSlice({
                 (state) => { state.isLoading = true; }
             )
             .addMatcher(
-                (action) => action.type.endsWith('/rejected') && !action.type.includes('login'),
-                (state, action: PayloadAction<any>) => { // Explicitly type action here
+                (action: { type: string }) => action.type.endsWith('/rejected') && !action.type.includes('login'),
+                (state, action: { payload?: unknown }) => {
                     state.isLoading = false;
-                    // FIX: String() ensures the value is treated as a string, and || handles undefined
-                    state.error = (action.payload as string) || "An unexpected error occurred";
+                    state.error = (action.payload as string) || 'An unexpected error occurred';
                 }
             );
     },

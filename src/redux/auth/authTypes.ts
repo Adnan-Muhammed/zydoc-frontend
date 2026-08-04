@@ -1,53 +1,15 @@
-// // export interface User {
-// //     _id: string;
-// //     name: string;
-// //     email: string;
-// //     role: string;
-// // }
-
-// // export interface AuthState {
-// //     user: User | null;
-// //     accessToken: string | null;
-// //     isAuthenticated: boolean;
-// //     isLoading: boolean;
-// //     isAuthChecked: boolean
-// //     error: string | null;
-// // }
-
-
-
-// // src/redux/auth/authTypes.ts
-// export interface User {
-//     _id: string;
-//     name: string;
-//     email: string;
-//     role: 'admin' | 'doctor' | 'patient';
-//     isApproved?: boolean;
-// }
-
-// export interface AuthState {
-//     user: User | null;
-//     requires2FA: boolean; // Added for Admin 2FA flow
-//     emailForOTP: string | null;
-//     isAuthenticated: boolean;
-//     isLoading: boolean;
-//     isAuthChecked: boolean;
-//     error: string | null;
-// }
-
-
-
-
 // src/redux/auth/authTypes.ts
 
 export interface User {
-    _id: string; 
+    _id: string;
     name: string;
     email: string;
-    role: string; 
+    role: string;
     isProfileCompleted?: boolean;
     verificationStatus?: 'pending' | 'approved' | 'rejected';
-    [key: string]: any;
+    avatarUrl?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any; // Accommodates dynamic role-specific backend fields (consultationSettings, doctorProfile, etc.)
 }
 
 export interface AuthState {
@@ -56,9 +18,7 @@ export interface AuthState {
     isAuthenticated: boolean;
     isLoading: boolean;
     isAuthChecked: boolean;
-    requires2FA: boolean; // Admin 2FA flag
-    emailForOTP: string | null; // Email used for OTP verification
+    requires2FA: boolean;
+    emailForOTP: string | null;
     error: string | null;
-    // generatedOtpCode: string | null;// just for testing
-
 }

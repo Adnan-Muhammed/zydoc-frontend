@@ -30,7 +30,7 @@ export default function EditPatientProfilePage() {
         state: '',
         zipCode: '',
         country: ''
-    });
+    }); 
 
     useEffect(() => {
         const fetchProfile = async () => {

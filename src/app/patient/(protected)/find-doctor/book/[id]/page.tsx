@@ -9,7 +9,7 @@ export default async function BookingPage({ params }: { params: { id: string } }
   if (!doctor) {
     notFound();
   }
-
+ 
   const d = doctor.doctor || doctor;
   
   return (

@@ -80,7 +80,7 @@ export default function CompleteDoctorProfileClient() {
 
     const totalSteps = 4;
 
-    useEffect(() => {
+    useEffect(() => { 
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) setShowRestoredBanner(true);
@@ -167,6 +167,31 @@ export default function CompleteDoctorProfileClient() {
                 alert('Please select at least one available day for In-Person consultation.');
                 return;
             }
+        }
+        
+        // --- FILE INTEGRITY VALIDATION (In case of page reload restoring draft but losing files) ---
+        // @ts-ignore
+        const existingMedicalCert = user?.medicalCertificateUrl || user?.doctorProfile?.medicalCertificateUrl;
+        // @ts-ignore
+        const existingGovId = user?.governmentIdUrl || user?.doctorProfile?.governmentIdUrl;
+
+        if (!medicalCertificate && !existingMedicalCert) {
+            alert('Your Medical Council Registration Certificate file is missing (perhaps due to a page reload). Please re-upload it in Step 3.');
+            setDraft({ currentStep: 3 });
+            return;
+        }
+
+        if (!governmentId && !existingGovId) {
+            alert('Your Government Issued Photo ID file is missing (perhaps due to a page reload). Please re-upload it in Step 3.');
+            setDraft({ currentStep: 3 });
+            return;
+        }
+
+        const missingQualFiles = draft.qualifications.some((q: any) => !q.certificateUrl && !qualificationFiles[q.id]);
+        if (missingQualFiles) {
+            alert('Some qualifications are missing their certificate files (perhaps due to a page reload). Please re-upload them in Step 2 or remove the incomplete entries.');
+            setDraft({ currentStep: 2 });
+            return;
         }
         
         setServerErrors(null);

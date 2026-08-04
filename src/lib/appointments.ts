@@ -1,7 +1,5 @@
-import axios from "axios";
-
-// Assuming you have an axios instance setup, or we just use fetch. 
-// We'll use fetch with credentials for simplicity.
+// Fetches use the native `fetch` API since these run server-side and in client
+// components that don't need the shared axiosInstance interceptors.
 
 const getAuthHeaders = (): Record<string, string> => {
     let token = '';

@@ -4,7 +4,7 @@ import React from 'react';
 import Input from '@/components/ui/Input'; 
 import { DraftState, WorkingHours, DailySchedule } from './types';
 
-const DAYS = ['mondayToFriday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+const DAYS = ['fullWeek', 'mondayToFriday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
 interface StepScheduleSectionProps {
     draft: Pick<DraftState, 'enableVideo' | 'videoFee' | 'enablePhysical' | 'physicalFee' | 'clinicName' | 'clinicAddress' | 'workingHours'>;
@@ -13,6 +13,44 @@ interface StepScheduleSectionProps {
 
 export default function StepScheduleSection({ draft, setDraft }: StepScheduleSectionProps) {
     const { enableVideo, videoFee, enablePhysical, physicalFee, clinicName, clinicAddress, workingHours } = draft;
+
+    const handleTimeChange = (type: 'online' | 'offline', key: string, field: 'active' | 'start' | 'end', val: any) => {
+        const typeSchedule = { ...workingHours[type] };
+        const dayData = typeSchedule[key as keyof DailySchedule] || { start: '09:00', end: '17:00', active: false };
+
+        if (key === 'fullWeek') {
+            const daysToUpdate = ['fullWeek', 'mondayToFriday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+            daysToUpdate.forEach(d => {
+                if (!typeSchedule[d]) typeSchedule[d] = { start: '09:00', end: '17:00', active: false };
+                typeSchedule[d] = { ...typeSchedule[d], [field]: val };
+            });
+        } else if (key === 'mondayToFriday') {
+            const daysToUpdate = ['mondayToFriday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'] as const;
+            daysToUpdate.forEach(d => {
+                if (!typeSchedule[d]) typeSchedule[d] = { start: '09:00', end: '17:00', active: false };
+                typeSchedule[d] = { ...typeSchedule[d], [field]: val };
+            });
+        } else {
+            typeSchedule[key as keyof DailySchedule] = { ...dayData, [field]: val };
+            
+            // Unset bulk toggles if an individual day is updated
+            if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].includes(key)) {
+                if (typeSchedule.fullWeek) {
+                    typeSchedule.fullWeek = { ...typeSchedule.fullWeek, active: false };
+                }
+                if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(key) && typeSchedule.mondayToFriday) {
+                    typeSchedule.mondayToFriday = { ...typeSchedule.mondayToFriday, active: false };
+                }
+            }
+        }
+
+        setDraft({
+            workingHours: {
+                ...workingHours,
+                [type]: typeSchedule,
+            }
+        });
+    };
 
     return ( 
         <div className="space-y-8 animate-fade-in py-2 px-1">
@@ -127,7 +165,7 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                                 </h4>
                                 <div className="space-y-3">
                                     {DAYS.map((key) => {
-                                        const dayData = workingHours[type][key];
+                                        const dayData = workingHours[type][key] || { start: '09:00', end: '17:00', active: false };
                                         return (
                                             <div
                                                 key={key}
@@ -136,52 +174,22 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                                                 <div className="flex items-center gap-4 w-full sm:w-auto">
                                                     <input
                                                         type="checkbox"
-                                                        checked={dayData.active}
-                                                        onChange={(e) => {
-                                                            const isChecked = e.target.checked;
-                                                            if (key === 'mondayToFriday') {
-                                                                setDraft({
-                                                                    workingHours: {
-                                                                        ...workingHours,
-                                                                        [type]: {
-                                                                            ...workingHours[type],
-                                                                            mondayToFriday: { ...dayData, active: isChecked },
-                                                                            monday: { ...workingHours[type].monday, active: isChecked, start: dayData.start, end: dayData.end },
-                                                                            tuesday: { ...workingHours[type].tuesday, active: isChecked, start: dayData.start, end: dayData.end },
-                                                                            wednesday: { ...workingHours[type].wednesday, active: isChecked, start: dayData.start, end: dayData.end },
-                                                                            thursday: { ...workingHours[type].thursday, active: isChecked, start: dayData.start, end: dayData.end },
-                                                                            friday: { ...workingHours[type].friday, active: isChecked, start: dayData.start, end: dayData.end },
-                                                                        },
-                                                                    },
-                                                                });
-                                                            } else {
-                                                                const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(key);
-                                                                setDraft({
-                                                                    workingHours: {
-                                                                        ...workingHours,
-                                                                        [type]: {
-                                                                            ...workingHours[type],
-                                                                            [key]: { ...dayData, active: isChecked },
-                                                                            ...(isWeekday && !isChecked ? { mondayToFriday: { ...workingHours[type].mondayToFriday, active: false } } : {})
-                                                                        },
-                                                                    },
-                                                                });
-                                                            }
-                                                        }}
+                                                        checked={dayData?.active || false}
+                                                        onChange={(e) => handleTimeChange(type, key, 'active', e.target.checked)}
                                                         className="w-5 h-5 bg-slate-100 border-slate-300 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
                                                     />
                                                     <div>
                                                          <span className="font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 text-sm">
-                                                            {key === 'mondayToFriday' ? 'Monday - Friday' : key}
+                                                            {key === 'fullWeek' ? 'Full Week (Mon-Sun)' : key === 'mondayToFriday' ? 'Monday - Friday' : key}
                                                         </span>
                                                         <div className="text-xs text-slate-400 mt-0.5">
-                                                            {key === 'mondayToFriday' ? 'Bulk update weekdays' : 'Individual day'}
+                                                            {key === 'fullWeek' || key === 'mondayToFriday' ? 'Bulk update' : 'Individual day'}
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-3 sm:ml-auto pl-9 sm:pl-0">
-                                                    {dayData.active ? (
+                                                    {dayData?.active ? (
                                                         <div className="flex items-center gap-2 animate-fade-in w-full sm:w-auto">
                                                             <div className="relative">
                                                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -189,38 +197,8 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                                                                 </div>
                                                                 <input
                                                                     type="time"
-                                                                    value={dayData.start}
-                                                                    onChange={(e) => {
-                                                                        const newStart = e.target.value;
-                                                                        if (key === 'mondayToFriday') {
-                                                                            setDraft({
-                                                                                workingHours: {
-                                                                                    ...workingHours,
-                                                                                    [type]: {
-                                                                                        ...workingHours[type],
-                                                                                        mondayToFriday: { ...dayData, start: newStart },
-                                                                                        monday: { ...workingHours[type].monday, start: newStart },
-                                                                                        tuesday: { ...workingHours[type].tuesday, start: newStart },
-                                                                                        wednesday: { ...workingHours[type].wednesday, start: newStart },
-                                                                                        thursday: { ...workingHours[type].thursday, start: newStart },
-                                                                                        friday: { ...workingHours[type].friday, start: newStart },
-                                                                                    },
-                                                                                },
-                                                                            });
-                                                                        } else {
-                                                                            const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(key);
-                                                                            setDraft({
-                                                                                workingHours: {
-                                                                                    ...workingHours,
-                                                                                    [type]: {
-                                                                                        ...workingHours[type],
-                                                                                        [key]: { ...dayData, start: newStart },
-                                                                                        ...(isWeekday ? { mondayToFriday: { ...workingHours[type].mondayToFriday, active: false } } : {})
-                                                                                    },
-                                                                                },
-                                                                            });
-                                                                        }
-                                                                    }}
+                                                                    value={dayData?.start || "09:00"}
+                                                                    onChange={(e) => handleTimeChange(type, key, 'start', e.target.value)}
                                                                     className="pl-8 pr-3 py-2 border border-slate-200 dark:border-[#24274d] bg-slate-50 dark:bg-[#1a1c3d] rounded-lg outline-none text-slate-700 dark:text-slate-200 text-sm font-semibold focus:ring-2 focus:ring-blue-500/20 transition w-full sm:w-32"
                                                                 />
                                                             </div>
@@ -231,38 +209,8 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                                                                 </div>
                                                                 <input
                                                                     type="time"
-                                                                    value={dayData.end}
-                                                                    onChange={(e) => {
-                                                                        const newEnd = e.target.value;
-                                                                        if (key === 'mondayToFriday') {
-                                                                            setDraft({
-                                                                                workingHours: {
-                                                                                    ...workingHours,
-                                                                                    [type]: {
-                                                                                        ...workingHours[type],
-                                                                                        mondayToFriday: { ...dayData, end: newEnd },
-                                                                                        monday: { ...workingHours[type].monday, end: newEnd },
-                                                                                        tuesday: { ...workingHours[type].tuesday, end: newEnd },
-                                                                                        wednesday: { ...workingHours[type].wednesday, end: newEnd },
-                                                                                        thursday: { ...workingHours[type].thursday, end: newEnd },
-                                                                                        friday: { ...workingHours[type].friday, end: newEnd },
-                                                                                    },
-                                                                                },
-                                                                            });
-                                                                        } else {
-                                                                            const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(key);
-                                                                            setDraft({
-                                                                                workingHours: {
-                                                                                    ...workingHours,
-                                                                                    [type]: {
-                                                                                        ...workingHours[type],
-                                                                                        [key]: { ...dayData, end: newEnd },
-                                                                                        ...(isWeekday ? { mondayToFriday: { ...workingHours[type].mondayToFriday, active: false } } : {})
-                                                                                    },
-                                                                                },
-                                                                            });
-                                                                        }
-                                                                    }}
+                                                                    value={dayData?.end || "17:00"}
+                                                                    onChange={(e) => handleTimeChange(type, key, 'end', e.target.value)}
                                                                     className="pl-8 pr-3 py-2 border border-slate-200 dark:border-[#24274d] bg-slate-50 dark:bg-[#1a1c3d] rounded-lg outline-none text-slate-700 dark:text-slate-200 text-sm font-semibold focus:ring-2 focus:ring-blue-500/20 transition w-full sm:w-32"
                                                                 />
                                                             </div>

@@ -1,334 +1,21 @@
-// // import axios from 'axios';
-// import axiosInstance from '../../api/axiosInstance';
-
-
-
-// // const API_URL = '/api';
-
-// // const login = async (credentials: any) => {
-
-// //     const res = await axiosInstance.post(`/auth/login`, credentials, {
-// //         withCredentials: true,
-// //     });
-// //     return res.data;
-// // };
-
-// // const adminLogin = async (credentials: any) => {
-// //     const res = await axiosInstance.post(`/admin/auth/login`, credentials, {
-// //         withCredentials: true,
-// //     });
-// //     return res.data;
-// // };
-
-// const login = async (credentials: any, isAdmin = false) => {
-//     const url = isAdmin ? `/admin/auth/login` : `/auth/login`;
-
-//     const res = await axiosInstance.post(url, credentials, {
-//         withCredentials: true,
-//     });
-
-//     return res.data;
-// };
-
-// const signup = async (userData: any) => {
-//     const res = await axiosInstance.post(`/auth/signup`, userData, {
-//         withCredentials: true,
-//     });
-//     return res.data;
-// };
-
-// const logout = async () => {
-//     const res = await axiosInstance.post(`/auth/logout`, {}, {
-//         withCredentials: true,
-//     });
-//     return res.data;
-// };
-
-// const getCurrentUser = async () => {
-//     const res = await axiosInstance.get(`/auth/me`, {
-//         withCredentials: true,
-//     });
-//     return res.data;
-// };
-
-// const authService = {
-//     login,
-//     // adminLogin,
-//     signup,
-//     logout,
-//     getCurrentUser,
-// };
-
-// export default authService;
-
-
-
-// // src/redux/auth/authService.ts
-// import axiosInstance from '../../api/axiosInstance';
-
-// // ✅ Combined Login (user + admin)
-// const login = async (
-//     credentials: { email: string; password: string },
-//     isAdmin?: boolean
-// ) => {
-//     const url = isAdmin ? `/admin/auth/login` : `/auth/login`;
-
-//     const res = await axiosInstance.post(url, credentials, {
-//         withCredentials: true,
-//     });
-
-//     return res.data;
-// };
-
-// const signup = async (userData: any) => {
-//     const res = await axiosInstance.post(`/auth/signup`, userData, {
-//         withCredentials: true,
-//     });
-//     return res.data;
-// };
-
-// const logout = async () => {
-//     const res = await axiosInstance.post(
-//         `/auth/logout`,
-//         {},
-//         { withCredentials: true }
-//     );
-//     return res.data;
-// };
-
-// const getCurrentUser = async () => {
-//     const res = await axiosInstance.get(`/auth/me`, {
-//         withCredentials: true,
-//     });
-//     return res.data;
-// };
-
-// const authService = {
-//     login,
-//     signup,
-//     logout,
-//     getCurrentUser,
-// };
-
-// export default authService;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // src/redux/auth/authService.ts
-
-// import axiosInstance from '../../api/axiosInstance';
-
-// // ==========================
-// // 🔐 LOGIN (USER / ADMIN)
-// // ==========================
-// const login = async (
-//     credentials: { email: string; password: string },
-//     isAdmin?: boolean
-// ) => {
-//     try {
-//         const url = isAdmin
-//             ? `/admin/auth/login`
-//             : `/auth/login`;
-
-
-//         console.log(credentials);
-//         console.log(axiosInstance.defaults.baseURL);
-//         console.log(url);
-
-
-
-//         const res = await axiosInstance.post(url, credentials, {
-//             withCredentials: true, // 🔥 IMPORTANT (cookie-based auth)
-//         });
-
-//         return res.data;
-//     } catch (error: any) {
-//         throw error.response?.data || { message: 'Login failed' };
-//     }
-// };
-
-
-// // --- Auth Endpoints ---
-// const adminLogin = async (credentials: any) => {
-//     const res = await axiosInstance.post('/admin/auth/login', credentials);
-//     return res.data;
-// }
-
-
-// // ==========================
-// // 📝 SIGNUP
-// // ==========================
-// const signup = async (userData: any) => {
-//     console.log(userData);
-
-//     try {
-//         const res = await axiosInstance.post(
-//             `/auth/signup`,
-//             userData,
-//             {
-//                 withCredentials: true,
-//             }
-//         );
-
-//         return res.data;
-//     } catch (error: any) {
-//         throw error.response?.data || { message: 'Signup failed' };
-//     }
-// };
-
-// const verifyOtp = async ({ email, otpCode }: { email: string; otpCode: string }) => {
-//     try {
-//         const res = await axiosInstance.post(
-//             `/auth/verify-otp`,
-//             { email, otpCode },
-//             {
-//                 withCredentials: true,
-//             }
-//         );
-//         return res.data;
-//     } catch (error: any) {
-//         throw error.response?.data || { message: 'Verification failed' };
-//     }
-// };
-
-// // ==========================
-// // 🚪 LOGOUT
-// // ==========================
-// const logout = async () => {
-//     try {
-//         const res = await axiosInstance.post(
-//             `/auth/logout`,
-//             {},
-//             {
-//                 withCredentials: true,
-//             }
-//         );
-
-//         return res.data;
-//     } catch (error: any) {
-//         throw error.response?.data || { message: 'Logout failed' };
-//     }
-// };
-
-// // ==========================
-// // 👤 GET CURRENT USER
-// // ==========================
-// const getCurrentUser = async () => {
-//     try {
-//         const res = await axiosInstance.get(`/auth/me`, {
-//             withCredentials: true, // 🔥 sends cookies automatically
-//         });
-
-//         return res.data;
-//     } catch (error: any) {
-//         // IMPORTANT: return null instead of throwing for auth state checks
-//         return null;
-//     }
-// };
-
-// // ==========================
-// // 📦 EXPORT SERVICE
-// // ==========================
-// const authService = {
-//     login,
-//     signup,
-//     verifyOtp,
-//     logout,
-//     getCurrentUser,
-// };
-
-// export default authService;
-
-
-
-// // src/redux/auth/authService.ts
-
-// import axiosInstance from '../../api/axiosInstance';
-
-// const login = async (credentials: any, isAdmin?: boolean) => {
-//     const url = isAdmin ? '/admin/auth/login' : '/auth/login';
-//     const res = await axiosInstance.post(url, credentials, { withCredentials: true });
-//     return res.data;
-// };
-
-// const signup = async (userData: any) => {
-//     const res = await axiosInstance.post('/auth/signup', userData, { withCredentials: true });
-//     return res.data;
-// };
-
-// // const verifyOtp = async (data: { email: string; otp: string }, isAdmin?: boolean) => {
-// //     const url = isAdmin ? '/admin/auth/verify-otp' : '/auth/verify-otp';
-// //     const res = await axiosInstance.post(url, data, { withCredentials: true });
-// //     return res.data;
-// // };
-
-// const verifyOtp = async (data: { email: string; otp: string }, isAdmin?: boolean) => {
-//     const url = isAdmin ? '/admin/auth/verify-otp' : '/auth/verify-otp';
-
-//     // Most backends expect { email, otp } or { email, otpCode }
-//     // Ensure this matches your API expectation exactly
-//     const res = await axiosInstance.post(url, data, { withCredentials: true });
-//     return res.data;
-// };
-
-// const logout = async () => {
-//     await axiosInstance.post('/auth/logout', {}, { withCredentials: true });
-// };
-
-// const getCurrentUser = async () => {
-//     try {
-//         const res = await axiosInstance.get('/auth/me', { withCredentials: true });
-//         return res.data;
-//     } catch {
-//         return null;
-//     }
-// };
-
-// const authService = { login, signup, verifyOtp, logout, getCurrentUser };
-// export default authService;
-
-
 // src/redux/auth/authService.ts
 import axiosInstance from '../../api/axiosInstance';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { auth } from '../../lib/firebase/client';
 
-const login = async (credentials: any, isAdmin?: boolean) => {
+const login = async (credentials: { email: string; password: string }, isAdmin?: boolean) => {
     const url = isAdmin ? '/admin/auth/login' : '/auth/login';
     const res = await axiosInstance.post(url, credentials, { withCredentials: true });
-    return res.data;
+    return res.data; 
 };
 
-const signup = async (userData: any) => {
+const signup = async (userData: { name: string; email: string; password: string; role: string }) => {
     const res = await axiosInstance.post('/auth/signup', userData, { withCredentials: true });
     return res.data;
 };
 
 const verifyOtp = async (data: { email: string; otpCode: string }, isAdmin?: boolean) => {
     const url = isAdmin ? '/admin/auth/verify-otp' : '/auth/verify-otp';
-    console.log("redux verify", data);
-
     const res = await axiosInstance.post(url, data, { withCredentials: true });
     return res.data;
 };
@@ -347,8 +34,42 @@ const getCurrentUser = async () => {
     try {
         const res = await axiosInstance.get('/auth/me', { withCredentials: true });
         return res.data;
-    } catch { return null; }
+    } catch {
+        return null;
+    }
 };
 
-const authService = { login, signup, verifyOtp, logout, getCurrentUser, resendOtp };
+const loginWithGoogle = async (role?: string) => {
+    const provider = new GoogleAuthProvider();
+    // Force the Google account selection screen to appear instead of auto-login
+    provider.setCustomParameters({
+        prompt: 'select_account'
+    });
+    
+    const userCredential = await signInWithPopup(auth, provider);
+    const firebaseToken = await userCredential.user.getIdToken();
+
+    // Send the Firebase token and requested role to our custom backend to issue the JWT
+    const res = await axiosInstance.post('/auth/google', { firebaseToken, role }, { withCredentials: true });
+    return res.data;
+};
+
+// setRole calls the Next.js API route (same-origin → no CORS preflight)
+// The Next.js route reads the accessToken cookie and calls the backend server-to-server.
+// This is the same pattern used by /api/auth/refresh in this project.
+const setRole = async (data: { role: string }) => {
+    const res = await fetch('/api/auth/set-role', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw { response: { data: err } };
+    }
+    return res.json();
+};
+
+const authService = { login, signup, verifyOtp, logout, getCurrentUser, resendOtp, loginWithGoogle, setRole };
 export default authService;

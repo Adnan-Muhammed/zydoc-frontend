@@ -330,7 +330,7 @@ import AuthHydrator from '@/components/auth/AuthHydrator';
 export default async function AdminProtectedLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode; 
 }) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value || cookieStore.get('token')?.value;

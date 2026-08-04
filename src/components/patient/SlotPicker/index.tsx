@@ -1,11 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface Slot {
     time: string;
-    status: 'available' | 'booked' | 'past';
+    status: 'available' | 'booked' | 'past' | 'locked' | 'Locked' | 'Booked' | string;
     available: boolean;
+    isLocked?: boolean;
 }
 
 interface SlotPickerProps {
@@ -14,9 +15,19 @@ interface SlotPickerProps {
     onTimeSelect: (time: string) => void;
     isLoading?: boolean;
     doctorWorking?: boolean;
-}
+    fee?: number;
+    consultationType?: string;
+} 
 
-export default function SlotPicker({ allSlots, selectedTime, onTimeSelect, isLoading, doctorWorking }: SlotPickerProps) {
+export default function SlotPicker({ 
+    allSlots, 
+    selectedTime, 
+    onTimeSelect, 
+    isLoading, 
+    doctorWorking,
+    fee,
+    consultationType
+}: SlotPickerProps) {
     const formatTime = (t: string) => {
         const [h, m] = t.split(":").map(Number);
         return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
@@ -86,22 +97,32 @@ export default function SlotPicker({ allSlots, selectedTime, onTimeSelect, isLoa
         );
     }
 
+    console.log('Slots Data from API:', allSlots);
+
     return (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
-            {allSlots.map(({ time: slot, status }) => {
-                const isSelected = selectedTime === slot;
-                const isAvailable = status === "available";
-                const isBooked = status === "booked";
+            {allSlots.map((slotObj) => {
+                const { time: slot, status, isLocked: apiIsLocked } = slotObj;
+                const isSlotLocked = status === 'Locked' || status === 'locked' || apiIsLocked === true;
+                const isBooked = status === "booked" || status === "Booked";
                 const isPst = status === "past";
+                const isDisabled = isSlotLocked || isBooked || isPst;
+                const isSelected = selectedTime === slot && !isDisabled;
+                const isAvailable = !isDisabled;
 
                 return (
                     <button
                         key={slot}
                         type="button"
-                        disabled={!isAvailable}
-                        onClick={() => isAvailable && onTimeSelect(slot)}
+                        disabled={isDisabled}
+                        onClick={() => {
+                            if (isAvailable) {
+                                onTimeSelect(slot);
+                            }
+                        }}
                         title={
-                            isBooked ? "Already booked"
+                            isSlotLocked ? "Locked by another user"
+                            : isBooked ? "Already booked"
                             : isPst  ? "Time has passed"
                             : "Click to select"
                         }
@@ -109,15 +130,18 @@ export default function SlotPicker({ allSlots, selectedTime, onTimeSelect, isLoa
                             relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200
                             ${isPst
                                 ? "bg-slate-50/50 text-slate-300 border-slate-100 cursor-not-allowed"
+                                : isSlotLocked
+                                    ? "bg-orange-50 text-orange-600 border-orange-400 font-semibold opacity-75 cursor-not-allowed pointer-events-none"
                                 : isBooked
-                                    ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
-                                    : isSelected
-                                        ? "bg-indigo-50 text-indigo-700 border-indigo-600 shadow-sm"
-                                        : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-sm"
+                                    ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed opacity-50"
+                                : isSelected
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-600 shadow-sm"
+                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-sm"
                             }
                         `}
                     >
-                        <span className={`text-sm font-bold ${isPst || isBooked ? 'opacity-70' : ''}`}>
+                        <span className={`text-sm font-bold flex items-center gap-1.5 ${isPst || isBooked || isSlotLocked ? 'opacity-70' : ''}`}>
+                            {isSlotLocked && <i className="fas fa-lock text-[10px] opacity-70" />}
                             {formatTime(slot)}
                         </span>
                         {isBooked && (
@@ -126,6 +150,7 @@ export default function SlotPicker({ allSlots, selectedTime, onTimeSelect, isLoa
                     </button>
                 );
             })}
+
         </div>
     );
 }

@@ -24,7 +24,6 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         if (!isAuthChecked) return;
 
         if (!isAuthenticated) {
-            console.log('[AuthGuard] Not authenticated → redirect');
             router.replace('/login');
         } else if (user) {
             // Role-based route validation

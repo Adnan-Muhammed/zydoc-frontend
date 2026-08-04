@@ -15,6 +15,7 @@ export interface WorkingHourSlot {
 }
 
 export interface DailySchedule {
+    fullWeek?: WorkingHourSlot;
     mondayToFriday: WorkingHourSlot;
     monday: WorkingHourSlot;
     tuesday: WorkingHourSlot;
@@ -71,6 +72,7 @@ export const DEFAULT_DRAFT: DraftState = {
     clinicAddress: '',
     workingHours: {
         online: {
+            fullWeek: { start: '09:00', end: '17:00', active: false },
             mondayToFriday: { start: '09:00', end: '17:00', active: false },
             monday: { start: '09:00', end: '17:00', active: false },
             tuesday: { start: '09:00', end: '17:00', active: false },
@@ -81,6 +83,7 @@ export const DEFAULT_DRAFT: DraftState = {
             sunday: { start: '00:00', end: '00:00', active: false },
         },
         offline: {
+            fullWeek: { start: '09:00', end: '17:00', active: false },
             mondayToFriday: { start: '09:00', end: '17:00', active: false },
             monday: { start: '09:00', end: '17:00', active: false },
             tuesday: { start: '09:00', end: '17:00', active: false },

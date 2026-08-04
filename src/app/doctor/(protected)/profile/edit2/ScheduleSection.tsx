@@ -33,12 +33,33 @@ export default function ScheduleSection({ initialData, consultationSettings }: {
             return;
         } 
 
+        if (day === 'mondayToFriday') {
+            const daysToUpdate = ['mondayToFriday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+            const typeSchedule = { ...schedule[type] };
+            daysToUpdate.forEach(d => {
+                if (!typeSchedule[d]) typeSchedule[d] = { start: '09:00', end: '17:00', active: false };
+                typeSchedule[d] = { ...typeSchedule[d], [field]: val };
+            });
+            setSchedule({ ...schedule, [type]: typeSchedule });
+            return;
+        }
+
+        const typeSchedule = { ...schedule[type] };
+        if (!typeSchedule[day]) typeSchedule[day] = { start: '09:00', end: '17:00', active: false };
+        typeSchedule[day] = { ...typeSchedule[day], [field]: val };
+
+        if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].includes(day)) {
+            if (typeSchedule['fullWeek']) {
+                typeSchedule['fullWeek'] = { ...typeSchedule['fullWeek'], active: false };
+            }
+            if (['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(day) && typeSchedule['mondayToFriday']) {
+                typeSchedule['mondayToFriday'] = { ...typeSchedule['mondayToFriday'], active: false };
+            }
+        }
+
         setSchedule({
             ...schedule,
-            [type]: {
-                ...schedule[type],
-                [day]: { ...(schedule[type][day] || { start: '09:00', end: '17:00', active: false }), [field]: val }
-            }
+            [type]: typeSchedule
         });
     };
 

@@ -41,3 +41,7 @@ next-env.d.ts
 
 # planningFolder ignore  entirely not any files inside it
 planningFolder/
+
+
+.env
+.env.local
