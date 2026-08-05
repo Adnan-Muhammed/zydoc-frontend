@@ -1,5 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { lockSlot, unlockSlot } from './appointmentThunk';
+import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from './appointmentThunk';
 
 export interface AppointmentState {
     isLoading: boolean;
@@ -51,6 +51,30 @@ const appointmentSlice = createSlice({
                 state.lockedSlotDetails = null;
             })
             .addCase(unlockSlot.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(createRazorpayOrder.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(createRazorpayOrder.fulfilled, (state) => {
+                state.isLoading = false;
+            })
+            .addCase(createRazorpayOrder.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(verifyPayment.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(verifyPayment.fulfilled, (state) => {
+                state.isLoading = false;
+                state.isSlotLocked = false;
+                state.lockedSlotDetails = null;
+            })
+            .addCase(verifyPayment.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
             });

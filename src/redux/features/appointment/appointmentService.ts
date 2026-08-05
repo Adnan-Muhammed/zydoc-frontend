@@ -9,6 +9,16 @@ export const appointmentService = {
     unlockSlot: async (payload: { doctorId: string; date: string; time: string; consultationType: string }) => {
         const res = await axiosInstance.post('/appointments/unlock', payload);
         return res.data;
+    },
+
+    createRazorpayOrder: async (payload: { appointmentId: string }) => {
+        const res = await axiosInstance.post('/appointments/create-razorpay-order', payload);
+        return res.data;
+    },
+
+    verifyPayment: async (payload: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string; appointmentId?: string }) => {
+        const res = await axiosInstance.post('/appointments/verify-payment', payload);
+        return res.data;
     }
 };
 
