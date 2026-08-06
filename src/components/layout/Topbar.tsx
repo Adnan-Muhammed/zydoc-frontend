@@ -168,6 +168,7 @@
 
 import React from 'react';
 import { useAppSelector } from '../../redux/hooks';
+import { useSocket } from '../../hooks/useSocket';
 
 interface TopbarProps {
   onToggleSidebar: () => void; 
@@ -177,6 +178,11 @@ interface TopbarProps {
 
 export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
   const { user } = useAppSelector((state) => state.auth);
+  
+  const { hasUnreadNotifications, markNotificationsAsRead } = useSocket({ 
+    userId: (user as any)?.profileId || user?.id || (user as any)?._id, 
+    role 
+  });
 
   const displayTitle = title || (role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Dashboard` : 'Dashboard');
 
@@ -202,9 +208,14 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
         </div>
 
         <div className="topbar-actions flex items-center gap-2 sm:gap-3">
-          <button className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors relative">
+          <button 
+            onClick={markNotificationsAsRead}
+            className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors relative"
+          >
             <i className="fas fa-bell"></i>
-            <span className="topbar-notif-dot absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+            {hasUnreadNotifications && (
+              <span className="topbar-notif-dot absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+            )}
           </button>
           <button className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
             <i className="fas fa-envelope"></i>

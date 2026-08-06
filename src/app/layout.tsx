@@ -6,6 +6,7 @@ import { Manrope, Plus_Jakarta_Sans } from "next/font/google";
 import localFont from 'next/font/local';
 import "./globals.css";
 import { ReduxProvider } from "../redux/provider";
+import { Toaster } from "react-hot-toast";
 
 const geist = localFont({
   src: './fonts/GeistVF.woff',
@@ -57,6 +58,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ReduxProvider>
           {children}
+          <Toaster />
         </ReduxProvider>
       </body>
     </html>
