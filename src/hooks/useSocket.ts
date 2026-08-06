@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { useAppDispatch } from '../redux/hooks';
+import { addRealTimeNotification } from '../redux/features/notification/notificationSlice';
 
 interface UseSocketProps {
   userId?: string | null;
@@ -8,14 +10,12 @@ interface UseSocketProps {
 }
 
 export const useSocket = ({ userId, role }: UseSocketProps) => {
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const dispatch = useAppDispatch();
 
   useEffect(() => {
-    // Only connect if we have a userId
     if (!userId) return;
 
-    // Initialize socket connection
     const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
       withCredentials: true,
     });
@@ -24,14 +24,14 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
 
     socket.on('connect', () => {
       console.log('Connected to socket server');
-      // Register user with socket server
       socket.emit('register', { userId, role });
     });
 
-    socket.on('new_booking', (payload: any) => {
-      console.log('New booking notification received:', payload);
-      setHasUnreadNotifications(true);
-      toast.success(payload.message || 'New Appointment Received!', {
+
+
+    socket.on('new_notification', (notification: any) => {
+      dispatch(addRealTimeNotification(notification));
+      toast.success(notification.title || 'New Notification!', {
         duration: 4000,
         position: 'top-right',
       });
@@ -41,21 +41,14 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
       console.log('Disconnected from socket server');
     });
 
-    // Cleanup on unmount
     return () => {
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
     };
-  }, [userId, role]);
-
-  const markNotificationsAsRead = () => {
-    setHasUnreadNotifications(false);
-  };
+  }, [userId, role, dispatch]);
 
   return {
     socket: socketRef.current,
-    hasUnreadNotifications,
-    markNotificationsAsRead,
   };
 };

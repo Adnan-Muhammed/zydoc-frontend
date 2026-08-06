@@ -2,8 +2,8 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './auth/authSlice';
 import adminReducer from './features/admin/adminSlice';
-import doctorReducer from './features/doctor/doctorSlice';
 import appointmentReducer from './features/appointment/appointmentSlice';
+import notificationReducer from './features/notification/notificationSlice';
 // NOTE: patientSlice is scaffolded but patient state is handled server-side
 // via Next.js layout fetches. Uncomment if client-side patient state is needed.
 // import patientReducer from './features/patient/patientSlice';
@@ -13,8 +13,8 @@ export const store = configureStore({
     reducer: {
         auth: authReducer,
         admin: adminReducer,
-        doctor: doctorReducer,
         appointment: appointmentReducer,
+        notification: notificationReducer,
     },
     devTools: process.env.NODE_ENV !== 'production',
 });
