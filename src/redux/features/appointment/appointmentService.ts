@@ -19,6 +19,21 @@ export const appointmentService = {
     verifyPayment: async (payload: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string; appointmentId?: string }) => {
         const res = await axiosInstance.post('/appointments/verify-payment', payload);
         return res.data;
+    },
+
+    getPatientAppointments: async () => {
+        const res = await axiosInstance.get('/appointments/patient');
+        return res.data;
+    },
+
+    getDoctorAppointments: async () => {
+        const res = await axiosInstance.get('/appointments/doctor');
+        return res.data;
+    },
+
+    getAllAdminAppointments: async () => {
+        const res = await axiosInstance.get('/appointments/admin/all');
+        return res.data;
     }
 };
 

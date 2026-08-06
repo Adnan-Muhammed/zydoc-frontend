@@ -3,7 +3,7 @@ import appointmentService from './appointmentService';
 
 export const lockSlot = createAsyncThunk(
     'appointment/lockSlot',
-    async (payload: { doctorId: string; date: string; time: string; consultationType: string }, thunkAPI) => {
+    async (payload: { doctorId: string; date: string; time: string; consultationType: string; notes?: string }, thunkAPI) => {
         try {
             return await appointmentService.lockSlot(payload);
         } catch (error: any) {
@@ -42,6 +42,42 @@ export const verifyPayment = createAsyncThunk(
     async (payload: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string; appointmentId?: string }, thunkAPI) => {
         try {
             return await appointmentService.verifyPayment(payload);
+        } catch (error: any) {
+            const message = error.response?.data?.message || error.message;
+            return thunkAPI.rejectWithValue(message);
+        }
+    }
+);
+
+export const fetchPatientAppointments = createAsyncThunk(
+    'appointment/fetchPatientAppointments',
+    async (_, thunkAPI) => {
+        try {
+            return await appointmentService.getPatientAppointments();
+        } catch (error: any) {
+            const message = error.response?.data?.message || error.message;
+            return thunkAPI.rejectWithValue(message);
+        }
+    }
+);
+
+export const fetchDoctorAppointments = createAsyncThunk(
+    'appointment/fetchDoctorAppointments',
+    async (_, thunkAPI) => {
+        try {
+            return await appointmentService.getDoctorAppointments();
+        } catch (error: any) {
+            const message = error.response?.data?.message || error.message;
+            return thunkAPI.rejectWithValue(message);
+        }
+    }
+);
+
+export const fetchAllAdminAppointments = createAsyncThunk(
+    'appointment/fetchAllAdminAppointments',
+    async (_, thunkAPI) => {
+        try {
+            return await appointmentService.getAllAdminAppointments();
         } catch (error: any) {
             const message = error.response?.data?.message || error.message;
             return thunkAPI.rejectWithValue(message);

@@ -4,11 +4,11 @@
 
 'use client';
 
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react'; 
 import Link from 'next/link';
-import axiosInstance from '@/api/axiosInstance';
+import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
 import './doctor-dashboard.css';
 
 export default function DoctorDashboardPage() {
@@ -34,27 +34,32 @@ const isApproved =
 
 // const isApproved = true; // testing
 
-    const [appointments, setAppointments] = useState<any[]>([]);
-    const [loadingAppointments, setLoadingAppointments] = useState(true);
+const dispatch = useAppDispatch();
+const { doctorAppointments: appointments, isLoading: loadingAppointments } = useAppSelector((state) => state.appointment);
+
     const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'video' | 'physical'>('all');
 
     useEffect(() => {
         if (user && isApproved) {
-            const fetchAppointments = async () => {
-                try {
-                    const response = await axiosInstance.get('/appointments/doctor');
-                    if (response.data.success) {
-                        setAppointments(response.data.appointments);
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch appointments:", error);
-                } finally {
-                    setLoadingAppointments(false);
-                }
-            };
-            fetchAppointments();
+            dispatch(fetchDoctorAppointments());
         }
-    }, [user, isApproved]);
+    }, [user, isApproved, dispatch]);
+
+    const getPatientName = (patientData: any) => {
+        if (!patientData) return "Patient";
+        if (patientData.profileId?.firstName) {
+            return `${patientData.profileId.firstName} ${patientData.profileId.lastName || ''}`.trim();
+        }
+        if (patientData.googleName) return patientData.googleName;
+        return "Patient";
+    };
+
+    const getPatientInitials = (patientData: any) => {
+        const name = getPatientName(patientData);
+        if (name === "Patient") return "PT";
+        return name.substring(0, 2).toUpperCase();
+    };
+
 
     useEffect(() => {
         if (user && !user.isProfileCompleted) {
@@ -180,11 +185,11 @@ return (
                   return (
                     <div className="flex items-center gap-5">
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-bold text-indigo-600 uppercase">
-                        {nextAppt.patientId?.name?.substring(0, 2) || "PT"}
+                        {getPatientInitials(nextAppt.patientId)}
                       </div>
                       <div>
                         <h3 className="text-2xl font-semibold">
-                          {nextAppt.patientId?.name || "Patient"}
+                          {getPatientName(nextAppt.patientId)}
                         </h3>
                         <p className="mt-1 text-indigo-100">
                           <i className="fas fa-clock mr-2"></i>
@@ -396,10 +401,10 @@ return (
                     <div key={appt._id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:border-indigo-100 hover:bg-indigo-50/30 transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold uppercase">
-                          {appt.patientId?.name?.substring(0, 2) || "PT"}
+                          {getPatientInitials(appt.patientId)}
                         </div>
                         <div>
-                          <h4 className="font-bold text-slate-800">{appt.patientId?.name || "Patient"}</h4>
+                          <h4 className="font-bold text-slate-800">{getPatientName(appt.patientId)}</h4>
                           <p className="text-sm text-slate-500">
                             {new Date(appt.appointmentDate).toLocaleDateString()} at {appt.appointmentTime}
                           </p>

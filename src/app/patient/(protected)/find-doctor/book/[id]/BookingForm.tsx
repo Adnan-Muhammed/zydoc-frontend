@@ -413,7 +413,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 doctorId: doctor._id || doctor.id, 
                 date: dateString, 
                 time, 
-                consultationType: type 
+                consultationType: type,
+                notes
             })).unwrap();
             lockSuccess = true;
             

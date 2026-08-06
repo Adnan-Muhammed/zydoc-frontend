@@ -36,6 +36,7 @@ const ADMIN_NAV: NavSection[] = [
         label: 'Overview',
         links: [
             { href: '/admin/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
+            { href: '/admin/appointments', icon: 'fas fa-calendar-check', label: 'Appointments' },
             { href: '/admin/analytics', icon: 'fas fa-chart-line', label: 'Analytics' },
         ],
     },
