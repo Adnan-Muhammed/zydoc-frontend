@@ -24,6 +24,7 @@ const STORAGE_KEY = 'doctor_profile_draft_v1';
 
 function useDraft() {
     const loadDraft = (): DraftState => {
+        if (typeof window === 'undefined') return DEFAULT_DRAFT;
         try {
             const raw = localStorage.getItem(STORAGE_KEY);
             if (!raw) return DEFAULT_DRAFT;
@@ -256,7 +257,12 @@ export default function CompleteDoctorProfileClient() {
             const resultAction = await dispatch(updateDoctorProfile(formData));
 
             if (updateDoctorProfile.fulfilled.match(resultAction)) {
-                dispatch(setCredentials(resultAction.payload.user));
+                // Safely extract the user payload to prevent undefined errors
+                const updatedUser = resultAction.payload?.user || resultAction.payload;
+                if (updatedUser) {
+                    // Rehydrate credentials safely. If accessToken is missing, authSlice shouldn't break.
+                    dispatch(setCredentials({ user: updatedUser, accessToken: user?.accessToken }));
+                }
                 clearDraft();
                 // Perform full reload so the secure cookie is processed by Next.js middleware
                 window.location.href = '/doctor/dashboard';

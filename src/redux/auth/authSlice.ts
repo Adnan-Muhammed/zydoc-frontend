@@ -90,6 +90,10 @@ const authSlice = createSlice({
                 (state: AuthState) => { state.isLoading = true; state.error = null; }
             )
             .addMatcher(
+                (action: { type: string }) => action.type.endsWith('/fulfilled'),
+                (state: AuthState) => { state.isLoading = false; }
+            )
+            .addMatcher(
                 (action: { type: string; payload?: unknown }) => action.type.endsWith('/rejected'),
                 (state: AuthState, action: { payload?: unknown }) => {
                     state.isLoading = false;

@@ -1,8 +1,12 @@
 
 // src/app/doctor/(protected)/profile-update/page.tsx
 import React from 'react';
-import CompleteDoctorProfileClient from './complete-profileClient';
- 
+import dynamic from 'next/dynamic';
+
+const CompleteDoctorProfileClient = dynamic(
+  () => import('./complete-profileClient'),
+  { ssr: false }
+);
 // You can add metadata here for search optimization / browser tab titles
 export const metadata = {
   title: 'Complete Professional Medical Profile',

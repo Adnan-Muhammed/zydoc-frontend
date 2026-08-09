@@ -31,17 +31,66 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
 
     socket.on('new_notification', (notification: any) => {
       dispatch(addRealTimeNotification(notification));
-      toast.success(notification.title || 'New Notification!', {
-        duration: 4000,
-        position: 'top-right',
-      });
+      
+      if (typeof document !== 'undefined') {
+        if (document.visibilityState === 'visible') {
+          // 1. Active Tab: Show in-app toast
+          toast.success(notification.title || 'New Notification!', {
+            duration: 4000,
+            position: 'top-right',
+          });
+        } else {
+          // 2. Background Tab: Trigger SYSTEM push notification
+          if (typeof window !== "undefined" && "Notification" in window) {
+            if (Notification.permission === "granted") {
+              new Notification(notification.title || "New Notification!", {
+                body: notification.message || notification.body,
+                icon: "/favicon.ico", // Ensure you have an icon, or it defaults
+              });
+            }
+          }
+          
+          // Play a programmatic beep sound
+          try {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+              const ctx = new AudioContextClass();
+              const osc = ctx.createOscillator();
+              const gainNode = ctx.createGain();
+              
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch (A5)
+              
+              // Fade out to avoid clicks
+              gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+              gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+              
+              osc.connect(gainNode);
+              gainNode.connect(ctx.destination);
+              
+              osc.start();
+              osc.stop(ctx.currentTime + 0.5); // 500ms beep
+            }
+          } catch (e) {
+            console.error("Audio playback failed", e);
+          }
+        }
+      }
     });
 
     socket.on('disconnect', () => {
       console.log('Disconnected from socket server');
     });
 
+    const handleBeforeUnload = () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       if (socketRef.current) {
         socketRef.current.disconnect();
       }

@@ -34,6 +34,7 @@ export const DOCTORS = {
     LIST: '/doctors',
     BY_ID: (id: string) => `/doctors/${id}`,
     UPDATE_PROFILE: '/doctors/profile',
+    UPDATE_FCM_TOKEN: '/doctor/fcm-token',  // mounted at /api/doctor/ in server.js
 } as const;
 
 export const APPOINTMENTS = {

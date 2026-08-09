@@ -41,7 +41,7 @@ export default function StepVerificationSection({
                     <div className="space-y-2 border-t border-slate-100 dark:border-[#24274d]/40 pt-4">
                         <input
                             type="file"
-                            accept=".pdf,image/*"
+                            accept=".pdf, image/*, .doc, .docx"
                             onChange={onMedicalCertificateChange}
                             className="w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white file:hover:bg-blue-700 file:cursor-pointer transition shadow-md"
                         />
@@ -69,7 +69,7 @@ export default function StepVerificationSection({
                     <div className="space-y-2 border-t border-slate-100 dark:border-[#24274d]/40 pt-4">
                         <input
                             type="file"
-                            accept=".pdf,image/*"
+                            accept=".pdf, image/*, .doc, .docx"
                             onChange={onGovernmentIdChange}
                             className="w-full text-xs sm:text-sm text-slate-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white file:hover:bg-blue-700 file:cursor-pointer transition shadow-md"
                         />
