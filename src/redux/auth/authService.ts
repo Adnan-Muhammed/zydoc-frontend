@@ -9,7 +9,7 @@ const login = async (credentials: { email: string; password: string }, isAdmin?:
     return res.data; 
 };
 
-const signup = async (userData: { name: string; email: string; password: string; role: string }) => {
+const signup = async (userData: { name: string; email: string; password: string; role: string; signupToken?: string }) => {
     const res = await axiosInstance.post('/auth/signup', userData, { withCredentials: true });
     return res.data;
 };

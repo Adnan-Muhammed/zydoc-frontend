@@ -47,6 +47,17 @@ const UnifiedLoginForm: React.FC = () => {
             // Full page navigation — forces server components to re-run so cookies are picked up
             window.location.href = `/${role}/dashboard`;
         } catch (err: unknown) {
+            if (typeof err === 'object' && err !== null && (err as any).requiresVerification) {
+                const payload = err as any;
+                sessionStorage.setItem('signup_email', payload.email || form.email);
+                sessionStorage.setItem('signup_role', 'patient'); // default role for view, we only need to show OTP UI
+                if (payload.signupToken) {
+                    sessionStorage.setItem('signupToken', payload.signupToken);
+                }
+                sessionStorage.setItem('show_otp_view', 'true');
+                window.location.href = '/signup';
+                return;
+            }
             setError(typeof err === 'string' ? err : 'Invalid email or password');
         }
     };
@@ -57,9 +68,7 @@ const UnifiedLoginForm: React.FC = () => {
         dispatch(loginWithGoogleUser(undefined))
             .unwrap()
             .then((res: any) => {
-                console.log('[DEBUG] Google login response payload:', res);
-                console.log('[DEBUG] accessToken in payload:', res?.accessToken);
-                console.log('[DEBUG] user.role in payload:', res?.user?.role);
+
                 const userRole = res?.user?.role || 'patient';
                 if (userRole === 'unassigned') {
                     setShowRoleSelector(true);
@@ -73,23 +82,10 @@ const UnifiedLoginForm: React.FC = () => {
 
     const handleRoleSelection = async (role: 'doctor' | 'patient') => {
 
-        console.log('hello');
-        
         setRoleLoading(true);
         setError(null);
         try {
-        console.log('hello2');
-
             const { setRoleUser } = await import('@/redux/auth/authThunk');
-        console.log('hello3');
-
-            // ── DIAGNOSTICS ──────────────────────────────────────────────
-            const { store } = await import('@/redux/store');
-            const reduxState = store.getState();
-            console.log('[DEBUG] Redux auth.accessToken before set-role:', reduxState.auth.accessToken);
-            console.log('[DEBUG] Redux auth.user before set-role:', reduxState.auth.user);
-            console.log('[DEBUG] Dispatching setRoleUser with role:', role);
-            // ─────────────────────────────────────────────────────────────
 
             await dispatch(setRoleUser({ role })).unwrap();
             window.location.href = `/${role}/profile-update`;
@@ -162,7 +158,7 @@ const UnifiedLoginForm: React.FC = () => {
                     {error}
                 </div>
             )}
-
+ 
             {/* Google OAuth */}
             <button
                 type="button"

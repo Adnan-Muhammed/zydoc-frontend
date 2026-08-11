@@ -1,7 +1,7 @@
 // src/components/forms/UnifiedSignupForm.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { signupUser, verifyOtp, resendOtp, loginWithGoogleUser } from '@/redux/auth/authThunk';
@@ -21,17 +21,71 @@ const UnifiedSignupForm: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
     const [timer, setTimer] = useState(0);
+    const [isMounted, setIsMounted] = useState(false);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Countdown timer for OTP resend throttle
+    const [showRoleSelector, setShowRoleSelector] = useState(false);
+    const [roleLoading, setRoleLoading] = useState(false);
+    const [showRoleMismatchModal, setShowRoleMismatchModal] = useState(false);
+    const [mismatchRedirectData, setMismatchRedirectData] = useState<{ actualRole: string; isProfileCompleted: boolean } | null>(null);
+
+    const startTimer = (duration: number = 60) => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        const expiryTime = Date.now() + duration * 1000;
+        sessionStorage.setItem('otp_expiry', expiryTime.toString());
+        setTimer(duration);
+
+        timerRef.current = setInterval(() => {
+            const remaining = Math.round((expiryTime - Date.now()) / 1000);
+            if (remaining <= 0) {
+                if (timerRef.current) clearInterval(timerRef.current);
+                sessionStorage.removeItem('otp_expiry');
+                setTimer(0);
+            } else {
+                setTimer(remaining);
+            }
+        }, 1000);
+    };
+
+    // Cleanup timer on unmount
     useEffect(() => {
-        if (timer <= 0) return;
-        const interval = setInterval(() => setTimer(t => t - 1), 1000);
-        return () => clearInterval(interval);
-    }, [timer]);
+        return () => {
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
+
+    // Restore state from session storage on mount
+    useEffect(() => {
+        setIsMounted(true);
+        const savedEmail = sessionStorage.getItem('signup_email');
+        const savedRole = sessionStorage.getItem('signup_role');
+        const isOtpView = sessionStorage.getItem('show_otp_view') === 'true';
+
+        if (isOtpView && savedEmail && savedRole) {
+            setForm(prev => ({ ...prev, email: savedEmail }));
+            setRole(savedRole as 'patient' | 'doctor');
+            setShowOtpView(true);
+
+            // Restore timer
+            const expiryStr = sessionStorage.getItem('otp_expiry');
+            if (expiryStr) {
+                const remaining = Math.round((parseInt(expiryStr, 10) - Date.now()) / 1000);
+                if (remaining > 0) {
+                    startTimer(remaining);
+                } else {
+                    sessionStorage.removeItem('otp_expiry');
+                }
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Sync Redux 2FA flag with local OTP view state
     useEffect(() => {
-        if (requires2FA) setShowOtpView(true);
+        if (requires2FA) {
+            setShowOtpView(true);
+            sessionStorage.setItem('show_otp_view', 'true');
+        }
     }, [requires2FA]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,11 +115,19 @@ const UnifiedSignupForm: React.FC = () => {
             return;
         }
 
-        dispatch(signupUser({ ...form, role }))
+        const signupToken = sessionStorage.getItem('signupToken') || undefined;
+
+        dispatch(signupUser({ ...form, role, signupToken }))
             .unwrap()
-            .then(() => {
+            .then((res: any) => {
+                sessionStorage.setItem('signup_email', form.email);
+                sessionStorage.setItem('signup_role', role);
+                if (res.signupToken) {
+                    sessionStorage.setItem('signupToken', res.signupToken);
+                }
+                sessionStorage.setItem('show_otp_view', 'true');
                 setShowOtpView(true);
-                setTimer(60);
+                startTimer();
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Signup failed'));
     };
@@ -75,27 +137,56 @@ const UnifiedSignupForm: React.FC = () => {
         dispatch(verifyOtp({ data: { email: form.email, otpCode }, isAdmin: false }))
             .unwrap()
             .then(() => {
+                sessionStorage.removeItem('signup_email');
+                sessionStorage.removeItem('signup_role');
+                sessionStorage.removeItem('show_otp_view');
+                sessionStorage.removeItem('signupToken');
                 router.replace(`/${role}/profile-update`);
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Invalid OTP code'));
     };
 
+    const executeRedirect = (actualRole: string, isProfileCompleted: boolean) => {
+        if (isProfileCompleted) {
+            window.location.href = `/${actualRole}/dashboard`;
+        } else {
+            window.location.href = `/${actualRole}/profile-update`;
+        }
+    };
+
     const handleOAuth = () => {
-        if (!role) return;
-        dispatch(loginWithGoogleUser(role))
+        dispatch(loginWithGoogleUser(role || undefined))
             .unwrap()
             .then((res: any) => {
-                // Determine redirect path based on actual role and onboarding status
-                const actualRole = res?.user?.role || role;
+                const actualRole = res?.user?.role;
                 const isProfileCompleted = res?.user?.isProfileCompleted;
 
-                if (isProfileCompleted) {
-                    router.replace(`/${actualRole}/dashboard`);
+                if (!actualRole || actualRole === 'unassigned') {
+                    setShowRoleSelector(true);
                 } else {
-                    router.replace(`/${actualRole}/profile-update`);
+                    if (role && actualRole !== role) {
+                        setMismatchRedirectData({ actualRole, isProfileCompleted });
+                        setShowRoleMismatchModal(true);
+                    } else {
+                        executeRedirect(actualRole, isProfileCompleted);
+                    }
                 }
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Google Login failed'));
+    };
+
+    const handleRoleSelection = async (selectedRole: 'doctor' | 'patient') => {
+        setRoleLoading(true);
+        setError(null);
+        try {
+            const { setRoleUser } = await import('@/redux/auth/authThunk');
+            await dispatch(setRoleUser({ role: selectedRole })).unwrap();
+            window.location.href = `/${selectedRole}/profile-update`;
+        } catch (err: any) {
+            console.error('[DEBUG] setRoleUser failed:', err);
+            setError(typeof err === 'string' ? err : 'Failed to set role. Please try again.');
+            setRoleLoading(false);
+        }
     };
 
     const handleResendOtp = () => {
@@ -104,11 +195,15 @@ const UnifiedSignupForm: React.FC = () => {
             .unwrap()
             .then((res: { code?: string }) => {
                 setGeneratedOtpCode(res.code ?? '');
-                setTimer(60);
+                startTimer();
                 setError(null);
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Failed to resend OTP'));
     };
+
+    if (!isMounted) {
+        return <div className="min-h-[400px] flex items-center justify-center text-slate-400"><i className="fas fa-spinner fa-spin text-2xl"></i></div>;
+    }
 
     // --- VIEW: OTP VERIFICATION ---
     if (showOtpView) {
@@ -119,6 +214,20 @@ const UnifiedSignupForm: React.FC = () => {
                     <p className="text-sm text-slate-500">
                         Enter the 6-digit code sent to <span className="font-semibold text-slate-700 dark:text-slate-300">{form.email}</span>
                     </p>
+                    <div className="mt-1">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                sessionStorage.removeItem('signup_email');
+                                sessionStorage.removeItem('signup_role');
+                                sessionStorage.removeItem('show_otp_view');
+                                setShowOtpView(false);
+                            }}
+                            className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                            Change Email
+                        </button>
+                    </div>
                 </div>
 
                 <div className="min-h-[48px] w-full">
@@ -157,6 +266,87 @@ const UnifiedSignupForm: React.FC = () => {
         );
     }
 
+    // --- VIEW: ROLE SELECTOR ---
+    if (showRoleSelector) {
+        return (
+            <div className="space-y-6 animate-fade-in text-center p-4">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Welcome to Zydoc!</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+                    To complete your account setup, please select how you'll be using the platform.
+                </p>
+
+                {error && (
+                    <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-100 dark:bg-red-900/20 dark:border-red-800 flex items-center gap-2">
+                        <i className="fas fa-exclamation-triangle"></i>
+                        {error}
+                    </div>
+                )}
+
+                <div className="space-y-4">
+                    <button
+                        type="button"
+                        onClick={() => handleRoleSelection('patient')}
+                        disabled={roleLoading}
+                        className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all text-left group disabled:opacity-50"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg text-blue-600 dark:text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                <i className="fas fa-user-injured text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">I am a Patient</h3>
+                            </div>
+                        </div>
+                        <i className="fas fa-chevron-right text-slate-400 group-hover:text-blue-500"></i>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => handleRoleSelection('doctor')}
+                        disabled={roleLoading}
+                        className="w-full flex items-center justify-between p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all text-left group disabled:opacity-50"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="bg-emerald-100 dark:bg-emerald-900/50 p-3 rounded-lg text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                                <i className="fas fa-user-md text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">I am a Doctor</h3>
+                            </div>
+                        </div>
+                        <i className="fas fa-chevron-right text-slate-400 group-hover:text-emerald-500"></i>
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // --- VIEW: ROLE MISMATCH MODAL ---
+    if (showRoleMismatchModal && mismatchRedirectData) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-6 overflow-hidden animate-slide-up">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 mx-auto mb-4">
+                        <i className="fas fa-info-circle text-xl"></i>
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">
+                        Account Exists
+                    </h3>
+                    <p className="text-slate-600 dark:text-slate-400 text-center mb-6">
+                        You originally registered as a <strong className="capitalize">{mismatchRedirectData.actualRole}</strong>. You are being redirected to your <strong className="capitalize">{mismatchRedirectData.actualRole}</strong> account.
+                    </p>
+                    <Button 
+                        type="button" 
+                        fullWidth 
+                        onClick={() => executeRedirect(mismatchRedirectData.actualRole, mismatchRedirectData.isProfileCompleted)}
+                    >
+                        OK, Continue
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     // --- VIEW: SIGNUP FORM ---
     return (
         <form onSubmit={handleSignup} className="space-y-4 animate-fade-in" noValidate>
@@ -187,8 +377,7 @@ const UnifiedSignupForm: React.FC = () => {
             {/* Google OAuth */}
             <button
                 type="button"
-                disabled={!role}
-                onClick={handleOAuth} 
+                onClick={handleOAuth}
                 className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />

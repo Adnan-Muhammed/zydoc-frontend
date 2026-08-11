@@ -2,6 +2,14 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import authService from './authService';
 
+const extractAuthError = (error: unknown, defaultMessage: string): any => {
+    const err = error as { response?: { data?: { message?: string, requiresVerification?: boolean, email?: string, signupToken?: string } }, message?: string };
+    if (err.response?.data?.requiresVerification) {
+        return err.response.data; // Return the whole object for unverified login recovery
+    }
+    return err.response?.data?.message || err.message || defaultMessage;
+};
+
 export const loginUser = createAsyncThunk(
     'auth/login',
     async (
@@ -14,8 +22,7 @@ export const loginUser = createAsyncThunk(
         try {
             return await authService.login(credentials, isAdmin);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            return rejectWithValue(err.response?.data?.message || 'Login failed');
+            return rejectWithValue(extractAuthError(error, 'Login failed'));
         }
     }
 );
@@ -26,20 +33,18 @@ export const loginWithGoogleUser = createAsyncThunk(
         try {
             return await authService.loginWithGoogle(role);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } }, message?: string };
-            return rejectWithValue(err.response?.data?.message || err.message || 'Google Login failed');
+            return rejectWithValue(extractAuthError(error, 'Google Login failed'));
         }
     }
 );
 
 export const signupUser = createAsyncThunk(
     'auth/signup',
-    async (userData: { name: string; email: string; password: string; role: string }, { rejectWithValue }) => {
+    async (userData: { name: string; email: string; password: string; role: string; signupToken?: string }, { rejectWithValue }) => {
         try {
             return await authService.signup(userData);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            return rejectWithValue(err.response?.data?.message || 'Signup failed');
+            return rejectWithValue(extractAuthError(error, 'Signup failed'));
         }
     }
 );
@@ -53,8 +58,7 @@ export const verifyOtp = createAsyncThunk(
         try {
             return await authService.verifyOtp(data, isAdmin);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            return rejectWithValue(err.response?.data?.message || 'Verification failed');
+            return rejectWithValue(extractAuthError(error, 'Verification failed'));
         }
     }
 );
@@ -65,8 +69,7 @@ export const resendOtp = createAsyncThunk(
         try {
             return await authService.resendOtp(userData);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            return rejectWithValue(err.response?.data?.message || 'Failed to resend OTP');
+            return rejectWithValue(extractAuthError(error, 'Failed to resend OTP'));
         }
     }
 );
@@ -80,22 +83,12 @@ export const checkAuth = createAsyncThunk('auth/checkAuth', async () => {
 });
 
 export const setRoleUser = createAsyncThunk(
-    
     'auth/setRole',
     async (data: { role: string }, { rejectWithValue }) => {
-
-        console.log("set role asyncthunk inside redux ");
-        
         try {
-        console.log("below try catch for setRole api")
-        console.log("return await authService.setRole(data) ",data);
-
             return await authService.setRole(data);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string } } };
-            console.log(err);
-            
-            return rejectWithValue(err.response?.data?.message || 'Failed to set role');
+            return rejectWithValue(extractAuthError(error, 'Failed to set role'));
         }
     }
 );
