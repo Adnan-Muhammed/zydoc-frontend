@@ -106,9 +106,15 @@ export default function CompleteDoctorProfileClient() {
             alert('Please fill out all required personal information fields.');
             return;
         }
-        if (currentStep === 2 && (!draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience)) {
-            alert('Please complete all professional credential details.');
-            return;
+        if (currentStep === 2) {
+            if (!draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
+                alert('Please complete all professional credential details.');
+                return;
+            }
+            if (!draft.qualifications || draft.qualifications.length === 0) {
+                alert('Please add at least one qualification by filling the details and clicking "Add Qualification".');
+                return;
+            }
         }
         if (currentStep === 3) {
             // @ts-ignore
