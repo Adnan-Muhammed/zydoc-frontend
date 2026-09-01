@@ -1,7 +1,7 @@
 import axiosInstance from '@/api/axiosInstance';
 
 export const appointmentService = {
-    lockSlot: async (payload: { doctorId: string; date: string; time: string; consultationType: string }) => {
+    lockSlot: async (payload: { doctorId: string; date: string; time: string; consultationType: string; patientType: string; notes?: string }) => {
         const res = await axiosInstance.post('/appointments/lock', payload);
         return res.data;
     },

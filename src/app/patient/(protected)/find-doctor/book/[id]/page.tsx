@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import BookingForm from "./BookingForm";
 import Link from "next/link";
 
-export default async function BookingPage({ params }: { params: { id: string } }) {
-  const doctor = await getDoctorById(params.id);
+export default async function BookingPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const doctor = await getDoctorById(id);
 
   if (!doctor) {
     notFound();
@@ -17,7 +18,7 @@ export default async function BookingPage({ params }: { params: { id: string } }
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="flex items-start justify-between gap-4">
           <Link
-            href={`/patient/find-doctor/${params.id}`}
+            href={`/patient/find-doctor/${id}`}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-indigo-600 hover:text-indigo-700 font-medium text-sm transition-colors"
           >
             <i className="fas fa-arrow-left text-xs" />

@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { getDoctorById } from "@/lib/doctors";
 import { notFound } from "next/navigation";
+import { formatTo12Hour } from "@/utils/timeFormat";
 
 interface WorkingHourSlot {
   start: string;
@@ -82,7 +83,7 @@ const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
               <span className="font-bold text-slate-600 text-[11px] uppercase tracking-wide">{DAY_LABELS[key] || key}</span>
             </div>
             <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg shrink-0">
-              {slot.start} – {slot.end}
+              {formatTo12Hour(slot.start)} – {formatTo12Hour(slot.end)}
             </span>
           </div>
         );

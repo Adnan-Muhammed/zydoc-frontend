@@ -3,7 +3,7 @@ import appointmentService from './appointmentService';
 
 export const lockSlot = createAsyncThunk(
     'appointment/lockSlot',
-    async (payload: { doctorId: string; date: string; time: string; consultationType: string; notes?: string }, thunkAPI) => {
+    async (payload: { doctorId: string; date: string; time: string; consultationType: string; patientType: string; notes?: string }, thunkAPI) => {
         try {
             return await appointmentService.lockSlot(payload);
         } catch (error: any) {
@@ -43,6 +43,9 @@ export const verifyPayment = createAsyncThunk(
         try {
             return await appointmentService.verifyPayment(payload);
         } catch (error: any) {
+            if (error.response?.data?.code) {
+                return thunkAPI.rejectWithValue(error.response.data);
+            }
             const message = error.response?.data?.message || error.message;
             return thunkAPI.rejectWithValue(message);
         }

@@ -2,7 +2,7 @@
  
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createAppointment, getAvailableSlots } from "@/lib/appointments";
+import { createAppointment, getAvailableSlots, extendLock } from "@/lib/appointments";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/redux/store";
 import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redux/features/appointment/appointmentThunk";
@@ -132,14 +132,32 @@ function generateHalfHourSlots(rawWH: any, consultationType: string, date: Date)
     if (!sch || !sch.active || !sch.start || !sch.end || sch.start === '00:00') return [];
 
     const slots: { time: string; status: "available"|"booked"|"past"|"locked"|"Locked"|"Booked"|string; available: boolean; isLocked?: boolean }[] = [];
-    const [startH, startM] = sch.start.split(':').map(Number);
-    const [endH, endM] = sch.end.split(':').map(Number);
+    const parseTimeStr = (tStr: string) => {
+        if (!tStr) return { h: 0, m: 0 };
+        const [time, modifier] = tStr.trim().split(/\s+/);
+        let [h, m] = time.split(':').map(Number);
+        if (isNaN(h)) h = 0;
+        if (isNaN(m)) m = 0;
+        if (modifier) {
+            if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
+            if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
+        }
+        return { h, m };
+    };
+
+    let startParsed = parseTimeStr(sch.start);
+    let endParsed = parseTimeStr(sch.end);
 
     let current = new Date(date);
-    current.setHours(startH, startM, 0, 0);
+    current.setHours(startParsed.h, startParsed.m, 0, 0);
 
     const end = new Date(date);
-    end.setHours(endH, endM, 0, 0);
+    end.setHours(endParsed.h, endParsed.m, 0, 0);
+
+    // Midnight crossing logic
+    if (end <= current) {
+        end.setDate(end.getDate() + 1);
+    }
 
     const now = new Date();
 
@@ -153,8 +171,12 @@ function generateHalfHourSlots(rawWH: any, consultationType: string, date: Date)
         slotEnd.setMinutes(slotEnd.getMinutes() + SLOT_DURATION);
         if (slotEnd > end) break;
 
-        const timeString = `${String(current.getHours()).padStart(2, '0')}:${String(current.getMinutes()).padStart(2, '0')}`;
-        const isPast = current < now;
+        const h24 = current.getHours();
+        const period = h24 >= 12 && h24 < 24 ? 'PM' : 'AM';
+        const hr12 = h24 % 12 || 12;
+        const timeString = `${String(hr12).padStart(2, '0')}:${String(current.getMinutes()).padStart(2, '0')} ${period}`;
+        const slotEndTime = new Date(current.getTime() + 30 * 60000);
+        const isPast = slotEndTime < now;
 
         slots.push({
             time: timeString,
@@ -190,6 +212,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     
     const dispatch = useDispatch<AppDispatch>();
     const { isSlotLocked, lockedSlotDetails } = useSelector((state: RootState) => state.appointment);
+    const { user } = useSelector((state: RootState) => state.auth);
+    const currentUserId = user?._id || user?.id;
     const paymentCompleted = useRef(false);
 
     const today = new Date();
@@ -197,9 +221,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     /* ── State ── */
     const [type, setType]         = useState<"video"|"physical">("video");
-    const [selectedDate, setSelectedDate] = useState<Date>(() =>
-        findNextWorkingDate(rawWH, "video")
-    );
+    const [patientType, setPatientType] = useState<"NEW" | "FOLLOW_UP" | "">("");
+    const [selectedDate, setSelectedDate] = useState<Date>(() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    });
     const [calendarYear,  setCalendarYear]  = useState(() => selectedDate.getFullYear());
     const [calendarMonth, setCalendarMonth] = useState(() => selectedDate.getMonth());
 
@@ -207,6 +234,15 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const [notes, setNotes]           = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError]           = useState("");
+
+    // Real-time clock to force elapsed time re-evaluation
+    const [currentTime, setCurrentTime] = useState(() => new Date());
+    
+    // Update the clock every 30 seconds
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+        return () => clearInterval(timer);
+    }, []);
 
     const [allSlots, setAllSlots]     = useState<{ time: string; status: "available"|"booked"|"past"|"locked"|"Locked"|"Booked"|string; available: boolean; isLocked?: boolean }[]>([]);
     const [doctorWorking, setDoctorWorking] = useState(true);
@@ -231,19 +267,34 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         String(selectedDate.getDate()).padStart(2, "0"),
     ].join("-");
 
+    // Check if the currently selected time is expired based on the patientType
+    let isSelectedTimeExpired = false;
+    if (time && patientType) {
+        const parseTimeStr = (tStr: string) => {
+            if (!tStr) return { h: 0, m: 0 };
+            const [tPart, modifier] = tStr.trim().split(/\s+/);
+            let [h, m] = tPart.split(':').map(Number);
+            if (isNaN(h)) h = 0;
+            if (isNaN(m)) m = 0;
+            if (modifier) {
+                if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
+                if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
+            }
+            return { h, m };
+        };
+        const { h, m } = parseTimeStr(time);
+        const exactAppTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), h, m, 0);
+        const elapsedMinutes = (new Date().getTime() - exactAppTime.getTime()) / 60000;
+        
+        if (patientType === "NEW" && elapsedMinutes > 10) isSelectedTimeExpired = true;
+        if (patientType === "FOLLOW_UP" && elapsedMinutes > 20) isSelectedTimeExpired = true;
+    }
+
     /* ── Default type ── */
     useEffect(() => {
         if (!videoEnabled && physicalEnabled) setType("physical");
         else if (videoEnabled)               setType("video");
     }, [videoEnabled, physicalEnabled]);
-
-    /* ── When type changes, re-jump to next valid date for that channel ── */
-    useEffect(() => {
-        const next = findNextWorkingDate(rawWH, type);
-        setSelectedDate(next);
-        setCalendarYear(next.getFullYear());
-        setCalendarMonth(next.getMonth());
-    }, [type]);
 
     /* ── Slot Lock Edge Case ── */
     const lockInfoRef = useRef({
@@ -254,7 +305,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         type: type 
     });
 
-    useEffect(() => {
+    useEffect(() => { 
         if (isSlotLocked) {
             lockInfoRef.current = {
                 isLocked: true,
@@ -325,11 +376,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
+        if (!patientType) { setError("Please select a Consultation Type (New or Follow-up)."); return; }
         if (!dateString || !time) { setError("Please select a date and time."); return; }
         setShowConfirmModal(true);
     };
 
-    const handlePayment = async (appointmentId: string) => {
+    const handlePayment = async (appointmentId: string, existingOrderId?: string) => {
         setIsPaymentLoading(true);
         const res = await loadRazorpayScript();
         if (!res) {
@@ -339,18 +391,33 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         }
 
         try {
-            // Generate Razorpay Order
-            const orderResult = await dispatch(createRazorpayOrder({ appointmentId })).unwrap();
-            
+            let orderId = existingOrderId;
+            let orderAmount = fee * 100;
+            let orderCurrency = 'INR';
+
+            if (!orderId) {
+                // Generate Razorpay Order
+                const orderResult = await dispatch(createRazorpayOrder({ appointmentId })).unwrap();
+                orderId = orderResult.id;
+                orderAmount = orderResult.amount;
+                orderCurrency = orderResult.currency;
+            }
+
+            let heartbeatInterval: NodeJS.Timeout;
+            const clearHeartbeat = () => {
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+            };
+
             // Configure Razorpay options
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                amount: orderResult.amount,
-                currency: orderResult.currency,
+                amount: orderAmount,
+                currency: orderCurrency,
                 name: "Zydoc Consultation",
                 description: "Consultation Fee",
-                order_id: orderResult.id,
+                order_id: orderId,
                 handler: async function (response: any) {
+                    clearHeartbeat();
                     try {
                         setIsPaymentLoading(true);
                         await dispatch(verifyPayment({
@@ -363,13 +430,18 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         setShowConfirmModal(false);
                         router.push("/patient/appointments");
                     } catch (err: any) {
-                        setModalError(err || "Payment verification failed.");
+                        if (err?.code === 'SLOT_EXPIRED_REFUNDED') {
+                            setModalError("Your slot expired and was booked by someone else. Your payment has been automatically refunded.");
+                        } else {
+                            setModalError(err?.message || err || "Payment verification failed.");
+                        }
                     } finally {
                         setIsPaymentLoading(false);
                     }
                 },
                 modal: {
                     ondismiss: function () {
+                        clearHeartbeat();
                         // Unlock the slot if user closes the payment window
                         dispatch(unlockSlot({
                             doctorId: doctor._id || doctor.id,
@@ -396,6 +468,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
             const paymentObject = new (window as any).Razorpay(options);
             paymentObject.open();
+
+            // Start heartbeat
+            heartbeatInterval = setInterval(async () => {
+                try {
+                    await extendLock(appointmentId);
+                } catch (e) {
+                    console.error("Failed to extend lock", e);
+                }
+            }, 60000);
+
         } catch (error: any) {
             console.error("Payment initiation failed:", error);
             setModalError(error || "Failed to initiate payment. Please try again.");
@@ -414,6 +496,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 date: dateString, 
                 time, 
                 consultationType: type,
+                patientType,
                 notes
             })).unwrap();
             lockSuccess = true;
@@ -474,15 +557,13 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const isPastDate  = (d: Date) => d < today;
     const isDrWorking = (d: Date) => isDoctorAvailableOn(d, rawWH, type);
 
-    /* ── Format time "14:00" → "2:00 PM" ── */
-    const fmtTime = (t: string) => {
-        const [h, m] = t.split(":").map(Number);
-        return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-    };
-
     const calendarDays   = buildCalendarDays();
     const hasAvailable   = allSlots.some(s => s.status === "available");
     const availableCount = allSlots.filter(s => s.status === "available").length;
+
+    // Check if the currently selected slot is Follow-up only
+    const selectedSlotObj = time ? allSlots.find((s: any) => s.time === time) : null;
+    const isSelectedSlotFollowUpOnly = selectedSlotObj?.isFollowUpOnly || false;
 
     /* ════════════════════════════════════════════════════════
        Render
@@ -496,9 +577,11 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 </div>
             )}
 
-            {/* ─── Consultation Type ─── */}
+
+
+            {/* ─── Consultation Method ─── */}
             <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Consultation Type</label>
+                <label className="text-sm font-semibold text-slate-700">Consultation Method</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {videoEnabled && (
                         <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
@@ -664,6 +747,76 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     </div>
                 </div>
 
+                {/* ─── Patient Type ─── */}
+                <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                    <div className="space-y-3">
+                        <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                <i className="fas fa-users text-indigo-600 text-xs" />
+                            </span>
+                            Consultation Type
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label className={`relative flex rounded-xl border p-4 transition-all
+                                ${isSelectedSlotFollowUpOnly ? "opacity-50 cursor-not-allowed bg-slate-50" : "cursor-pointer"}
+                                ${patientType === "NEW" ? "bg-indigo-50/60 border-indigo-300 shadow-sm" : isSelectedSlotFollowUpOnly ? "border-slate-200" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                                <input type="radio" name="patientType" value="NEW" className="sr-only"
+                                    disabled={isSelectedSlotFollowUpOnly}
+                                    checked={patientType === "NEW"} onChange={() => setPatientType("NEW")} />
+                                <div className="flex w-full items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center
+                                            ${patientType === "NEW" ? "bg-indigo-100" : "bg-slate-100"}`}>
+                                            <i className={`fas fa-user-plus text-sm ${patientType === "NEW" ? "text-indigo-600" : "text-slate-500"}`} />
+                                        </span>
+                                        <div className="text-sm">
+                                            <p className={`font-bold ${patientType === "NEW" ? "text-indigo-900" : "text-slate-900"}`}>
+                                                New Consultation
+                                            </p>
+                                            <p className={`text-xs mt-0.5 ${patientType === "NEW" ? "text-indigo-600" : "text-slate-400"}`}>
+                                                First time visit
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {patientType === "NEW" && (
+                                    <div className="absolute -inset-px rounded-xl border-2 border-indigo-500 pointer-events-none" />
+                                )}
+                                {isSelectedSlotFollowUpOnly && (
+                                    <span className="absolute top-2 right-3 text-[10px] font-bold text-slate-400">
+                                        Not available for selected time
+                                    </span>
+                                )}
+                            </label>
+
+                            <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
+                                ${patientType === "FOLLOW_UP" ? "bg-emerald-50/60 border-emerald-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                                <input type="radio" name="patientType" value="FOLLOW_UP" className="sr-only"
+                                    checked={patientType === "FOLLOW_UP"} onChange={() => setPatientType("FOLLOW_UP")} />
+                                <div className="flex w-full items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center
+                                            ${patientType === "FOLLOW_UP" ? "bg-emerald-100" : "bg-slate-100"}`}>
+                                            <i className={`fas fa-user-check text-sm ${patientType === "FOLLOW_UP" ? "text-emerald-600" : "text-slate-500"}`} />
+                                        </span>
+                                        <div className="text-sm">
+                                            <p className={`font-bold ${patientType === "FOLLOW_UP" ? "text-emerald-900" : "text-slate-900"}`}>
+                                                Follow-up
+                                            </p>
+                                            <p className={`text-xs mt-0.5 ${patientType === "FOLLOW_UP" ? "text-emerald-600" : "text-slate-400"}`}>
+                                                Returning patient
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {patientType === "FOLLOW_UP" && (
+                                    <div className="absolute -inset-px rounded-xl border-2 border-emerald-500 pointer-events-none" />
+                                )}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 {/* ── Time slots ── */}
                 <div className="p-5">
                     <div className="flex items-center justify-between mb-3">
@@ -711,22 +864,45 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 ${isSlotLocked ? "pointer-events-none opacity-75" : ""}`}>
                             {/* {console.log("BookingForm rendering slots:", allSlots)} */}
                             {allSlots.map((slotObj) => {
-                                const { time: slotTime, status, isLocked: apiIsLocked } = slotObj;
-                                console.log(`Slot time: ${slotTime}, Status: ${status}`);
+                                const { time: slotTime, status, isLocked: apiIsLocked, lockedBy, razorpayOrderId, appointmentId, isFollowUpOnly: apiIsFollowUpOnly, isExpired: apiIsExpired } = slotObj as any;
 
                                 const isAnyLocked = status === "locked" || status === "Locked" || apiIsLocked === true;
-                                const isLockedByMe = isAnyLocked && time === slotTime && isSlotLocked;
+                                const isPendingPayment = isAnyLocked && lockedBy === currentUserId;
+                                const isLockedByMe = (isAnyLocked && time === slotTime && isSlotLocked) || isPendingPayment;
                                 const isLockedByOther = isAnyLocked && !isLockedByMe;
                                 const isBooked = status === "booked" || status === "Booked";
                                 const isPst = status === "past";
-                                const isDisabled = isLockedByOther || isBooked || isPst;
-                                const isSelected = time === slotTime;
-                                const isAvailable = !isDisabled;
-
-                                const formatTimeStr = (t: string) => {
-                                    const [h, m] = t.split(":").map(Number);
-                                    return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+                                
+                                // Parse time to check elapsed time for frontend specific NEW patient rules
+                                const parseTimeStr = (tStr: string) => {
+                                    if (!tStr) return { h: 0, m: 0 };
+                                    const [t, modifier] = tStr.trim().split(/\s+/);
+                                    let [h, m] = t.split(':').map(Number);
+                                    if (isNaN(h)) h = 0;
+                                    if (isNaN(m)) m = 0;
+                                    if (modifier) {
+                                        if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
+                                        if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
+                                    }
+                                    return { h, m };
                                 };
+                                const { h, m } = parseTimeStr(slotTime);
+                                const exactAppTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), h, m, 0);
+                                const elapsedMinutes = (currentTime.getTime() - exactAppTime.getTime()) / 60000;
+                                
+                                const isTimeExpiredNew = patientType === "NEW" && elapsedMinutes > 10;
+                                const isTimeExpiredFollowUp = patientType === "FOLLOW_UP" && elapsedMinutes > 20;
+                                
+                                // Use both frontend dynamic logic AND explicit backend API flags (handles timezone drift)
+                                const isTimeExpired = isTimeExpiredNew || isTimeExpiredFollowUp || apiIsExpired || (elapsedMinutes > 20);
+
+                                const isDisabled = isLockedByOther || isBooked || isPst || isTimeExpired;
+                                const isSelected = time === slotTime && !isPendingPayment;
+                                const isAvailable = !isDisabled;
+                                
+                                // robust frontend fallback for follow-up only
+                                const frontendIsFollowUpOnly = elapsedMinutes > 10 && elapsedMinutes <= 20;
+                                const isFollowUpOnly = (apiIsFollowUpOnly || frontendIsFollowUpOnly) && !isDisabled && !isSelected;
 
                                 return (
                                     <button
@@ -734,36 +910,55 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         type="button"
                                         disabled={isDisabled}
                                         onClick={() => {
+                                            if (isPendingPayment && appointmentId && razorpayOrderId) {
+                                                handlePayment(appointmentId, razorpayOrderId);
+                                                return;
+                                            }
                                             if (isSlotLocked) return;
                                             if (isAvailable) setTime(slotTime);
                                         }}
                                         title={
-                                            isLockedByOther ? "Locked by another user"
+                                            isPendingPayment ? "Resume Payment"
+                                            : isLockedByOther ? "Locked by another user"
                                             : isLockedByMe ? "Locked for your payment"
                                             : isBooked ? "Already booked"
                                             : isPst  ? "Time has passed"
+                                            : isTimeExpired ? "Booking Closed"
                                             : "Click to select"
                                         }
                                         className={`
                                             relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200
-                                            ${isPst
+                                            ${(isPst || isTimeExpired)
                                                 ? "bg-slate-50/50 text-slate-300 border-slate-100 cursor-not-allowed"
+                                                : isPendingPayment
+                                                    ? "bg-amber-100 text-amber-800 border-amber-400 hover:bg-amber-200 shadow-sm"
                                                 : isLockedByOther
                                                     ? "bg-orange-50 text-orange-600 border-orange-400 font-semibold opacity-75 cursor-not-allowed pointer-events-none"
                                                 : isBooked
                                                     ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed opacity-50"
                                                 : isSelected
                                                     ? "bg-indigo-50 text-indigo-700 border-indigo-600 shadow-sm"
+                                                : isFollowUpOnly
+                                                    ? "bg-red-50 text-red-600 border-red-500 hover:bg-red-100/70 hover:shadow-sm"
                                                     : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-sm"
                                             }
                                         `}
                                     >
-                                        <span className={`text-sm font-bold flex items-center gap-1.5 ${isPst || isBooked || isLockedByOther ? 'opacity-70' : ''}`}>
-                                            {isAnyLocked && <i className="fas fa-lock text-[10px] opacity-70" />}
-                                            {formatTimeStr(slotTime)}
+                                        <span className={`text-sm font-bold flex items-center gap-1.5 ${(isPst || isTimeExpired) || isBooked || isLockedByOther ? 'opacity-70' : ''}`}>
+                                            {isAnyLocked && !isPendingPayment && <i className="fas fa-lock text-[10px] opacity-70" />}
+                                            {slotTime}
                                         </span>
                                         {isBooked && (
                                             <span className="text-[10px] font-black tracking-wider uppercase mt-1 text-slate-400">Booked</span>
+                                        )}
+                                        {isTimeExpired && !isBooked && !isLockedByOther && (
+                                            <span className="text-[10px] font-black tracking-wider uppercase mt-1 text-slate-400">Closed</span>
+                                        )}
+                                        {isFollowUpOnly && (
+                                            <span className="text-[9px] font-bold tracking-wider uppercase mt-1 text-red-600">Follow-up Only</span>
+                                        )}
+                                        {isPendingPayment && (
+                                            <span className="text-[10px] font-bold tracking-wider uppercase mt-1 text-amber-700">Resume</span>
                                         )}
                                     </button>
                                 );
@@ -776,7 +971,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         <div className="flex items-center gap-2.5 mt-4 px-4 py-3 bg-emerald-500 rounded-xl w-full">
                             <i className="fas fa-check-circle text-white text-base" />
                             <span className="text-white text-sm font-semibold">
-                                Selected Time: {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()} at {fmtTime(time)}
+                                Selected Time: {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()} at {time}
                             </span>
                             <button
                                 type="button"
@@ -795,6 +990,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             {[
                                 { color: "bg-indigo-600",  label: "Selected"  },
                                 { color: "bg-white border border-slate-300", label: "Available" },
+                                { color: "bg-red-50 border border-red-500", label: "Follow-up Only" },
                                 { color: "bg-orange-400",  label: "Locked"    },
                                 { color: "bg-slate-300",   label: "Booked"    },
                                 { color: "bg-slate-100",   label: "Past"      },
@@ -832,7 +1028,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 </div>
                 <button
                     type="submit"
-                    disabled={isSubmitting || !time || isSlotLocked || showConfirmModal}
+                    disabled={isSubmitting || !time || isSlotLocked || showConfirmModal || isSelectedTimeExpired}
                     className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-md
                                transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                 >
@@ -841,7 +1037,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             Confirming…
                         </span>
-                    ) : "Confirm Booking"}
+                    ) : isSelectedTimeExpired ? "Closed" : "Confirm Booking"}
                 </button>
             </div>
 
@@ -890,11 +1086,17 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     <div className="bg-slate-50 p-4 rounded-xl space-y-3 border border-slate-100">
                                         <div className="flex justify-between items-center">
                                             <span className="text-slate-500 text-sm">Time</span>
-                                            <span className="font-semibold text-slate-700">{fmtTime(time)}</span>
+                                            <span className="font-semibold text-slate-700">{time}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
                                             <span className="text-slate-500 text-sm">Type</span>
                                             <span className="font-semibold text-slate-700 capitalize">{type || 'Not specified'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500 text-sm">Consultation</span>
+                                            <span className="font-semibold text-slate-700 capitalize">
+                                                {patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : 'Not specified'}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between items-center pt-3 border-t border-slate-200">
                                             <span className="text-slate-500 text-sm font-medium">Total Fee</span>

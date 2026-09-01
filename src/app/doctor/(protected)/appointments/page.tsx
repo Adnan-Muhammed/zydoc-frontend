@@ -14,10 +14,43 @@ export default function DoctorAppointmentsPage() {
         dispatch(fetchDoctorAppointments());
     }, [dispatch]);
 
+    const getAppTimestamp = (app: any) => {
+        const appDate = new Date(app.appointmentDate);
+        if (!app.appointmentTime) return appDate.getTime();
+        
+        const [timePart, modifier] = app.appointmentTime.trim().split(/\s+/);
+        let [hours, minutes] = timePart.split(':').map(Number);
+        if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
+        if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
+        
+        return new Date(
+            appDate.getFullYear(),
+            appDate.getMonth(),
+            appDate.getDate(),
+            hours,
+            minutes,
+            0
+        ).getTime();
+    };
+
     // Separate into upcoming and past
     const now = new Date();
-    const upcoming = appointments.filter((app: any) => new Date(app.appointmentDate) >= now && app.status !== 'cancelled');
-    const past = appointments.filter((app: any) => new Date(app.appointmentDate) < now || app.status === 'cancelled');
+    
+    const isUpcoming = (app: any) => {
+        if (app.status === 'cancelled' || app.status === 'completed') return false;
+        
+        // Use a 60-minute buffer from the start time to account for extended calls
+        const exactAppEndTime = new Date(getAppTimestamp(app) + 60 * 60000);
+        return exactAppEndTime >= now;
+    };
+
+    const upcoming = appointments
+        .filter((app: any) => isUpcoming(app))
+        .sort((a: any, b: any) => getAppTimestamp(a) - getAppTimestamp(b));
+        
+    const past = appointments
+        .filter((app: any) => !isUpcoming(app))
+        .sort((a: any, b: any) => getAppTimestamp(b) - getAppTimestamp(a));
 
     if (isLoading) {
         return (
@@ -54,21 +87,12 @@ export default function DoctorAppointmentsPage() {
         return name.substring(0, 2).toUpperCase();
     };
 
-    const formatTime = (timeStr: string) => {
-        if (!timeStr) return '';
-        const [hours, minutes] = timeStr.split(':');
-        const h = parseInt(hours, 10);
-        const ampm = h >= 12 ? 'PM' : 'AM';
-        const h12 = h % 12 || 12;
-        return `${h12}:${minutes} ${ampm}`;
-    };
-
     const renderAppointmentCard = (app: any) => {
         const patientName = getPatientName(app.patientId);
         const initials = getPatientInitials(app.patientId);
 
         const date = new Date(app.appointmentDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-        const formattedTime = formatTime(app.appointmentTime);
+        const formattedTime = app.appointmentTime;
 
         let statusBadge = "bg-amber-100 text-amber-700";
         if (app.status === 'completed') statusBadge = "bg-emerald-100 text-emerald-700";
@@ -122,6 +146,11 @@ export default function DoctorAppointmentsPage() {
                         ) : (
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 flex items-center gap-1.5"><i className="fas fa-building"></i> In-Person</span>
                         )}
+                        {app.patientType === 'NEW' ? (
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 flex items-center gap-1.5"><i className="fas fa-user-plus"></i> New</span>
+                        ) : app.patientType === 'FOLLOW_UP' ? (
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 flex items-center gap-1.5"><i className="fas fa-user-check"></i> Follow-up</span>
+                        ) : null}
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-md capitalize ${statusBadge}`}>
                             {app.status}
                         </span>
@@ -155,7 +184,7 @@ export default function DoctorAppointmentsPage() {
             <div className="space-y-8">
                 <section>
                     <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
-                        <i className="fas fa-calendar-check text-indigo-500"></i> Upcoming Consultations
+                        <i className="fas fa-calendar-check text-indigo-500"></i> Upcoming & Current
                     </h2>
                     {upcoming.length > 0 ? (
                         <div className="space-y-4">
@@ -166,7 +195,7 @@ export default function DoctorAppointmentsPage() {
                             <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mx-auto mb-3">
                                 <i className="far fa-calendar-times text-slate-400 text-lg"></i>
                             </div>
-                            <h3 className="text-slate-700 font-bold mb-1">No upcoming appointments</h3>
+                            <h3 className="text-slate-700 font-bold mb-1">No upcoming or current appointments</h3>
                             <p className="text-sm text-slate-500">You don't have any scheduled patient consultations at the moment.</p>
                         </div>
                     )}
@@ -262,11 +291,15 @@ export default function DoctorAppointmentsPage() {
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                                         <div className="text-xs text-slate-500 mb-1"><i className="far fa-clock text-slate-400 mr-1"></i> Time</div>
-                                        <div className="font-semibold text-slate-800 text-sm">{formatTime(selectedAppointment.appointmentTime)}</div>
+                                        <div className="font-semibold text-slate-800 text-sm">{selectedAppointment.appointmentTime}</div>
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                        <div className="text-xs text-slate-500 mb-1"><i className="fas fa-stethoscope text-slate-400 mr-1"></i> Type</div>
+                                        <div className="text-xs text-slate-500 mb-1"><i className="fas fa-stethoscope text-slate-400 mr-1"></i> Method</div>
                                         <div className="font-semibold text-slate-800 text-sm capitalize">{selectedAppointment.consultationType === 'video' ? 'Online' : 'In-Person'}</div>
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                        <div className="text-xs text-slate-500 mb-1"><i className="fas fa-user text-slate-400 mr-1"></i> Visit Type</div>
+                                        <div className="font-semibold text-slate-800 text-sm capitalize">{selectedAppointment.patientType === 'NEW' ? 'New Consultation' : selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-up' : 'N/A'}</div>
                                     </div>
                                     <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                                         <div className="text-xs text-slate-500 mb-1"><i className="fas fa-wallet text-slate-400 mr-1"></i> Fee Paid</div>
@@ -358,9 +391,47 @@ export default function DoctorAppointmentsPage() {
                             {selectedAppointment.status === 'scheduled' && (
                                 <>
                                     {selectedAppointment.consultationType === 'video' ? (
-                                        <button disabled title="Feature in development" className="flex-1 bg-indigo-600/50 text-white py-2.5 rounded-lg font-bold cursor-not-allowed shadow-sm flex justify-center items-center">
-                                            <i className="fas fa-video mr-2"></i> Join Call
-                                        </button>
+                                        (() => {
+                                            const appTimeMs = getAppTimestamp(selectedAppointment);
+                                            const nowMs = new Date().getTime();
+                                            const diffMins = (appTimeMs - nowMs) / 1000 / 60;
+                                            // Grace period logic based on Patient Type
+                                            let maxMinsAfterStart = 30; // Default 30 mins
+                                            if (selectedAppointment.patientType === 'NEW') {
+                                                maxMinsAfterStart = 15; // Strict: Must join within first 15 mins of start
+                                            } else if (selectedAppointment.patientType === 'FOLLOW_UP') {
+                                                maxMinsAfterStart = 25; // Lenient: Can join up to 25 mins after start
+                                            }
+
+                                            // Call can be joined 15 mins early
+                                            const isReady = diffMins <= 15 && diffMins >= -maxMinsAfterStart;
+                                            const isExpired = diffMins < -maxMinsAfterStart;
+
+                                            if (isExpired) {
+                                                return (
+                                                    <button disabled title="Appointment time has expired" className="flex-1 bg-slate-100 text-slate-400 py-2.5 rounded-lg font-bold cursor-not-allowed shadow-sm flex justify-center items-center border border-slate-200">
+                                                        <i className="fas fa-video-slash mr-2"></i> Expired
+                                                    </button>
+                                                );
+                                            }
+
+                                            return isReady ? (
+                                                <Link
+                                                    href={`/doctor/consultation/${selectedAppointment._id}`}
+                                                    className="flex-1 bg-indigo-600 text-white py-2.5 rounded-lg font-bold shadow-sm flex justify-center items-center hover:bg-indigo-700 transition-colors"
+                                                >
+                                                    <i className="fas fa-video mr-2"></i> Join Call
+                                                </Link>
+                                            ) : (
+                                                <button
+                                                    disabled
+                                                    title="You can join 15 minutes before the scheduled time."
+                                                    className="flex-1 bg-indigo-600/50 text-white py-2.5 rounded-lg font-bold cursor-not-allowed shadow-sm flex justify-center items-center"
+                                                >
+                                                    <i className="fas fa-video mr-2"></i> Join Call
+                                                </button>
+                                            );
+                                        })()
                                     ) : (
                                         <button disabled title="Feature in development" className="flex-1 bg-emerald-600/50 text-white py-2.5 rounded-lg font-bold cursor-not-allowed shadow-sm flex justify-center items-center">
                                             <i className="fas fa-check mr-2"></i> Mark Completed

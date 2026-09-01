@@ -8,6 +8,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAppSelector } from '@/redux/hooks';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import { useAppointmentTracker } from '@/hooks/useAppointmentTracker';
  
 export default function AppShell({ 
     children,
@@ -20,6 +21,9 @@ export default function AppShell({
     const pathname = usePathname();
     const router = useRouter();
     const { user } = useAppSelector((state) => state.auth);
+    
+    // Initialize the global appointment tracker
+    useAppointmentTracker();
 
     // Check authorization to prevent content flash during redirect
     let isAuthorized = true;

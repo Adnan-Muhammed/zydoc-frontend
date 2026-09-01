@@ -69,3 +69,21 @@ export async function getAvailableSlots(doctorId: string, date: string, consulta
 
     return res.json();
 }
+
+export async function extendLock(slotId: string) {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/appointments/extend-lock`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+        },
+        body: JSON.stringify({ slotId }),
+        cache: 'no-store'
+    });
+
+    if (!res.ok) {
+        throw new Error('Failed to extend lock');
+    }
+
+    return res.json();
+}

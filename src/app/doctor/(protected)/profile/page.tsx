@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import React from "react";
 import Link from "next/link";
+import { formatTo12Hour } from "@/utils/timeFormat";
 
 // ─── Dummy Data Matching Your Exact Payload (With Certificates Added) ────────
 const DUMMY_BACKEND_USER = {
@@ -178,7 +179,7 @@ const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
               <span className="font-bold text-slate-600 text-[11px] uppercase tracking-wide">{DAY_LABELS[key] || key}</span>
             </div>
             <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg shrink-0">
-              {slot.start} – {slot.end}
+              {formatTo12Hour(slot.start)} – {formatTo12Hour(slot.end)}
             </span>
           </div>
         );
