@@ -1,22 +1,12 @@
-/**
- * useWebRTC.ts
- *
- * Hooks Layer — src/modules/video-call/hooks/
- *
- * Architecture Notes (per frontend_plan.md):
- *  - Uses Native RTCPeerConnection — no Agora, no third-party RTC libs.
- *  - Maintains its own dedicated socket connection for the call lifetime.
- *    This is intentional: the global useSocket is for notifications/chat;
- *    this socket is exclusively for WebRTC signaling.
- *  - All WebRTC state is local (useRef / useState). Do NOT lift to Redux.
- *  - The hook is symmetrical: both the doctor and patient run the same logic.
- *    The "offerer" role is determined by who receives the `peer_joined` event
- *    (i.e., the second person to join creates and sends the offer).
- */ 
+// src/modules/video-call/hooks/useWebRTC.ts
+"use client";
 
 import React, { useEffect, useRef, useCallback, useState } from "react";
+
+import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { TimerConfig } from "./useCallTimer";
+import { useCallTabSync } from "./useCallTabSync";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,10 +37,16 @@ interface UseWebRTCReturn {
   toggleAudio: () => void;
   toggleVideo: () => void;
   endCall: () => void;
+  cleanupMediaAndConnections: () => void;
   /** Timer Config from Server */
   timerConfig: TimerConfig | null;
   /** The active socket instance so parent components can listen to custom events */
   socket: Socket | null;
+  /** Multi-tab coordination states and actions */
+  isDuplicateTab: boolean;
+  isTakenOver: boolean;
+  requestTakeover: () => void;
+  reclaimCall: () => void;
 }
 
 // ─── STUN Servers ─────────────────────────────────────────────────────────────
@@ -74,6 +70,8 @@ export function useWebRTC({
   userId,
   role,
 }: UseWebRTCOptions): UseWebRTCReturn {
+  const router = useRouter();
+
   // ── Refs ────────────────────────────────────────────────────────────────
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -90,11 +88,64 @@ export function useWebRTC({
   
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-  
-  // Track socket in state so parent components can attach their own listeners
   const [socket, setSocket] = useState<Socket | null>(null);
-
+  
   const [timerConfig, setTimerConfig] = useState<TimerConfig | null>(null);
+
+  // ── Multi-Tab Coordination ─────────────────────────────────────────────
+  const {
+    isDuplicateTab,
+    isTakenOver,
+    isActiveTab,
+    requestTakeover,
+    reclaimCall,
+    setDuplicateDetected,
+    releaseTab,
+  } = useCallTabSync({
+    appointmentId,
+    userId,
+    enabled: !!appointmentId && !!userId,
+  });
+
+  // ── Stream Attachment Effects (Guarantees video plays reliably on re-renders) ──
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream]);
+
+  // ── Handle Tab Takeover Cleanup ──────────────────────────────────────────
+  useEffect(() => {
+    if (isTakenOver) {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => {
+          try {
+            t.stop();
+          } catch (e) {
+            console.warn("[useWebRTC] Error stopping track on takeover:", e);
+          }
+        });
+        localStreamRef.current = null;
+        setLocalStream(null);
+      }
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+      setRemoteStream(null);
+      setIsRemoteReady(false);
+      peerConnectionRef.current?.close();
+      peerConnectionRef.current = null;
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setSocket(null);
+    }
+  }, [isTakenOver]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -134,11 +185,10 @@ export function useWebRTC({
   // ── Main Effect ──────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!appointmentId || !userId) return;
-
-    // ── StrictMode guard ────────────────────────────────────────────────
-    if (activeCallSessions.has(appointmentId)) return;
-    activeCallSessions.add(appointmentId);
+    // Only initialize WebRTC & Socket if this tab is active and not a duplicate
+    if (!appointmentId || !userId || !isActiveTab || isDuplicateTab || isTakenOver) {
+      return;
+    }
 
     let isMounted = true;
 
@@ -191,6 +241,31 @@ export function useWebRTC({
         });
 
         // ── Step 3: Wire signaling events ─────────────────────────────
+
+        newSocket.on(
+          "join_rejected",
+          (payload: { reason?: string; code?: string; message?: string }) => {
+            console.warn("[useWebRTC] Server rejected join:", payload);
+            if (
+              payload?.code === "MULTIPLE_TABS_DETECTED" ||
+              payload?.reason === "ALREADY_IN_ROOM"
+            ) {
+              setDuplicateDetected();
+            } else {
+              setError(payload?.message || "Join rejected by server.");
+            }
+            if (localStreamRef.current) {
+              localStreamRef.current.getTracks().forEach((t) => {
+                try {
+                  t.stop();
+                } catch (e) {}
+              });
+              localStreamRef.current = null;
+              setLocalStream(null);
+            }
+            newSocket.disconnect();
+          }
+        );
 
         newSocket.on("peer_joined", async () => {
           console.log("[useWebRTC] Peer joined. Creating offer…");
@@ -263,7 +338,16 @@ export function useWebRTC({
         newSocket.on("call_error", (payload: { message: string }) => {
           console.error("[useWebRTC] Backend rejected join:", payload.message);
           if (isMounted) {
+            console.log(1);
+            
             setError(payload.message);
+            if (payload.message === 'This consultation has already ended.' || payload.message?.includes('expired') || payload.message?.includes('ended')) {
+              if (typeof window !== "undefined" && appointmentId) {
+                sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
+              }
+              const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+              router.replace(destination);
+            }
             setIsCallEnded(true);
           }
           newSocket.disconnect();
@@ -272,6 +356,17 @@ export function useWebRTC({
         newSocket.on("call_ended", (payload) => {
           console.log("[useWebRTC] Call officially ended by backend.", payload);
           setIsCallEnded(true);
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach((t) => {
+              try {
+                t.stop();
+              } catch (e) {
+                console.warn("[useWebRTC] Error stopping track:", e);
+              }
+            });
+            localStreamRef.current = null;
+            setLocalStream(null);
+          }
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = null;
           }
@@ -279,10 +374,15 @@ export function useWebRTC({
           setIsRemoteReady(false);
           peerConnectionRef.current?.close();
           peerConnectionRef.current = null;
+
+          if (typeof window !== "undefined") {
+            sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
+          }
           
           setTimeout(() => {
-            window.location.href = role === "doctor" ? "/doctor/dashboard" : "/patient/dashboard";
-          }, 3000);
+            const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+            router.replace(destination);
+          }, 2500);
         });
 
         newSocket.on("peer_left", () => {
@@ -328,7 +428,6 @@ export function useWebRTC({
 
     return () => {
       isMounted = false;
-      activeCallSessions.delete(appointmentId);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
       peerConnectionRef.current?.close();
@@ -337,7 +436,7 @@ export function useWebRTC({
       socketRef.current = null;
       setSocket(null);
     };
-  }, [appointmentId, userId, role, createPeerConnection]);
+  }, [appointmentId, userId, role, isActiveTab, isDuplicateTab, isTakenOver, createPeerConnection, setDuplicateDetected]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
   
@@ -361,29 +460,59 @@ export function useWebRTC({
     }
   }, []);
 
-  // const endCall = useCallback(() => {
-  //   if (socketRef.current) {
-  //     if (role === 'doctor') {
-  //       socketRef.current.emit("end_call", { appointmentId });
-  //     } else {
-  //       socketRef.current.disconnect();
-  //     }
-  //   }
-  //   // later we need to create here  review page logic for patient 
-  //   window.location.href = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
-  // }, [role, appointmentId]);
+  const cleanupMediaAndConnections = useCallback(() => {
+    // 1. Release active tab ownership
+    releaseTab();
+
+    // 2. Stop local media tracks immediately
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (err) {
+          console.warn("[useWebRTC] Failed to stop track:", err);
+        }
+      });
+      localStreamRef.current = null;
+      setLocalStream(null);
+    }
+
+    // 3. Close peer connection
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch (err) {
+        console.warn("[useWebRTC] Failed to close peer connection:", err);
+      }
+      peerConnectionRef.current = null;
+    }
+
+    // 4. Socket cleanup based on role
+    if (socketRef.current) {
+      try {
+        if (role === "doctor") {
+          socketRef.current.emit("end_call", { appointmentId });
+        }
+        socketRef.current.disconnect();
+      } catch (err) {
+        console.warn("[useWebRTC] Failed to disconnect socket:", err);
+      }
+      socketRef.current = null;
+      setSocket(null);
+    }
+  }, [role, appointmentId, releaseTab]);
 
   const endCall = useCallback(() => {
-    if (socketRef.current) {
-      if (role === 'doctor') {
-        socketRef.current.emit("end_call", { appointmentId });
-      } else {
-        socketRef.current.disconnect();
-      }
+    cleanupMediaAndConnections();
+    setIsCallEnded(true);
+
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
-    // later we need to create here  review page logic for patient 
-    window.location.href = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
-  }, [role, appointmentId]);
+
+    const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+    router.replace(destination);
+  }, [cleanupMediaAndConnections, role, appointmentId, router]);
 
   return {
     localVideoRef,
@@ -398,7 +527,13 @@ export function useWebRTC({
     toggleAudio,
     toggleVideo,
     endCall,
+    cleanupMediaAndConnections,
     timerConfig,
-    socket
+    socket,
+    isDuplicateTab,
+    isTakenOver,
+    requestTakeover,
+    reclaimCall,
   };
 }
+

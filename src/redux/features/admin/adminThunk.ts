@@ -48,3 +48,27 @@ export const getAuditLogs = createAsyncThunk(
         }
     }
 );
+
+export const fetchAdminTransactions = createAsyncThunk(
+    'admin/fetchTransactions',
+    async (payload: { page?: number; limit?: number } | undefined, { rejectWithValue }) => {
+        try {
+            const page = payload?.page || 1;
+            const limit = payload?.limit || 10;
+            return await adminService.fetchTransactions(page, limit);
+        } catch (error: any) {
+            return rejectWithValue(getErrorMessage(error, 'Failed to fetch transactions'));
+        }
+    }
+);
+
+export const settleTransaction = createAsyncThunk(
+    'admin/settleTransaction',
+    async (transactionId: string, { rejectWithValue }) => {
+        try {
+            return await adminService.settleTransaction(transactionId);
+        } catch (error: any) {
+            return rejectWithValue(getErrorMessage(error, 'Failed to settle transaction'));
+        }
+    }
+);

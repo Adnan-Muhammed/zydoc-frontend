@@ -1,4 +1,8 @@
+// src/modules/video-call/hooks/useCallTimer.ts
+"use client";
+
 import { useState, useEffect, useCallback } from 'react';
+
 
 export type TimerPhase = 'Normal' | 'Warning' | 'Extension' | 'WrapUp';
 

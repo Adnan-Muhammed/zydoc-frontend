@@ -28,6 +28,8 @@ export const ADMIN = {
     USERS: '/admin/users',
     APPROVE_DOCTOR: (doctorId: string) => `/admin/doctors/${doctorId}/approve`,
     LOGS: '/admin/logs',
+    TRANSACTIONS: '/admin/transactions',
+    SETTLE_TRANSACTION: (transactionId: string) => `/admin/transactions/${transactionId}/settle`,
 } as const;
 
 export const DOCTORS = {
@@ -35,6 +37,8 @@ export const DOCTORS = {
     BY_ID: (id: string) => `/doctors/${id}`,
     UPDATE_PROFILE: '/doctors/profile',
     UPDATE_FCM_TOKEN: '/doctor/fcm-token',  // mounted at /api/doctor/ in server.js
+    EARNINGS: '/doctor/earnings',
+    BANK_DETAILS: '/doctor/bank-details',
 } as const;
 
 export const APPOINTMENTS = {

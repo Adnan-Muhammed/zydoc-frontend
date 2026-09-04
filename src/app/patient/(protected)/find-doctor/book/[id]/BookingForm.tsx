@@ -8,7 +8,7 @@ import { AppDispatch, RootState } from "@/redux/store";
 import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redux/features/appointment/appointmentThunk";
 import SlotPicker from "@/components/patient/SlotPicker";
 
-/* ═══════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════ 
    Constants
 ═══════════════════════════════════════════════════════════════════ */
 const MONTH_NAMES = [
@@ -563,7 +563,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     // Check if the currently selected slot is Follow-up only
     const selectedSlotObj = time ? allSlots.find((s: any) => s.time === time) : null;
-    const isSelectedSlotFollowUpOnly = selectedSlotObj?.isFollowUpOnly || false;
+    const isSelectedSlotFollowUpOnly = (selectedSlotObj as any)?.isFollowUpOnly || false;
+
 
     /* ════════════════════════════════════════════════════════
        Render

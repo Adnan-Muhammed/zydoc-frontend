@@ -49,26 +49,26 @@ export default function AppShell({
         }
     }, [isAuthorized, user, router]);
 
-    return (
-        <div className="shell-layout">
-            {/* <div className="dashboard-layout"> */}
+    const isConsultation = pathname.includes('/consultation/');
 
-            {/* dashboard is styled  but shell is not styled */}
-            <Sidebar
-                role={role}
-                isOpen={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-            />
+    return (
+        <div className={`shell-layout ${isConsultation ? 'consultation-mode' : ''}`}>
+            {/* Hide left navigation during active consultation */}
+            {!isConsultation && (
+                <Sidebar
+                    role={role}
+                    isOpen={sidebarOpen}
+                    onClose={() => setSidebarOpen(false)}
+                />
+            )}
  
-            <div className="shell-main">
-                {/* <div className="dashboard-main"> */}
+            <div className={`shell-main ${isConsultation ? 'consultation-mode !ml-0' : ''}`}>
                 <Topbar
                     role={role}
+                    title={isConsultation ? 'Video Consultation' : undefined}
                     onToggleSidebar={() => setSidebarOpen(true)}
                 />
-                <main className="shell-content min-h-[652px]">
-                {/* <main className="shell-content min-h-[100vh]"> */}
-                    {/* <main className="dashboard-content"> */}
+                <main className={`shell-content ${isConsultation ? 'consultation-mode !p-0 !min-h-0' : 'min-h-[652px]'}`}>
                     {isAuthorized ? children : (
                         <div className="flex h-full w-full items-center justify-center min-h-[400px]">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -78,4 +78,4 @@ export default function AppShell({
             </div>
         </div>
     );
-}
+}

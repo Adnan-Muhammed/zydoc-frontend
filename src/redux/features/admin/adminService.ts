@@ -1,4 +1,5 @@
 import axiosInstance from '../../../api/axiosInstance';
+import { ADMIN } from '@/api/endpoints';
 
 export const adminService = {
     // --- Management Endpoints ---
@@ -19,6 +20,18 @@ export const adminService = {
 
     getAuditLogs: async () => {
         const res = await axiosInstance.get('/admin/logs');
+        return res.data;
+    },
+
+    fetchTransactions: async (page = 1, limit = 10) => {
+        const res = await axiosInstance.get(ADMIN.TRANSACTIONS, {
+            params: { page, limit }
+        });
+        return res.data;
+    },
+
+    settleTransaction: async (transactionId: string) => {
+        const res = await axiosInstance.patch(ADMIN.SETTLE_TRANSACTION(transactionId));
         return res.data;
     },
 };

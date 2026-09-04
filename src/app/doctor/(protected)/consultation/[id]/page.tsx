@@ -1,13 +1,9 @@
 // src/app/doctor/(protected)/consultation/[id]/page.tsx
-//
-// The actual consultation page for doctors.
-// - `params.id` is the MongoDB appointment _id, used as the signaling room key.
-// - The user's _id and role are read from Redux (hydrated from SSR by the layout).
-// - All WebRTC logic lives inside VideoCallRoom → useWebRTC.
 
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAppSelector } from '@/redux/hooks';
 import { VideoCallRoom } from '@/modules/video-call';
 
@@ -16,23 +12,47 @@ interface ConsultationPageProps {
 }
 
 export default function DoctorConsultationPage({ params }: ConsultationPageProps) {
+  const router = useRouter();
   const { user } = useAppSelector((state) => state.auth);
+  const [isBlockedReentry, setIsBlockedReentry] = useState(false);
+
+  // Guard against direct browser history back-navigation re-entry
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasJoinIntent = urlParams.get('join') === 'true';
+
+    if (hasJoinIntent) {
+      // Clear any prior exit flag so intentional re-joins work normally
+      sessionStorage.removeItem(`consultation_exited_${params.id}`);
+      // Remove ?join=true from URL history so browser Back button cannot bypass the guard
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // If previously exited and no join intent present, block back-navigation re-entry
+    const exitTimestamp = sessionStorage.getItem(`consultation_exited_${params.id}`);
+    if (exitTimestamp) {
+      setIsBlockedReentry(true);
+      router.replace('/doctor/dashboard');
+    }
+  }, [params.id, router]);
+
+  if (isBlockedReentry) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a] text-white/60">
+        <p className="text-sm">Consultation completed. Redirecting to dashboard…</p>
+      </div>
+    );
+  }
 
   // Guard: this should never render without a user because the layout enforces
   // auth via SSR, but defend client-side just in case hydration lags.
   if (!user) {
     return (
       <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: '#0a0a0a',
-          color: 'rgba(255,255,255,0.5)',
-          fontFamily: 'Inter, sans-serif',
-        }}
+        className="w-full h-full flex items-center justify-center bg-[#0a0a0a] text-white/50"
       >
         <div
           style={{

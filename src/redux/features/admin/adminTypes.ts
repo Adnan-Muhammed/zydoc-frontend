@@ -1,4 +1,5 @@
 // src/redux/features/admin/adminTypes.ts
+import { Transaction, Pagination } from '@/types';
 
 export interface SystemStats {
     totalUsers?: number;
@@ -27,6 +28,9 @@ export interface AdminState {
     stats: SystemStats | null;
     users: AdminUser[];
     logs: Record<string, unknown>[];
+    transactions: Transaction[];
+    transactionsPagination: Pagination | null;
     isLoading: boolean;
+    isSettlingPayout: boolean;
     error: string | null;
 }

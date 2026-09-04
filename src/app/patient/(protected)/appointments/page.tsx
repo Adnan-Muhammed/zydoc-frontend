@@ -169,7 +169,7 @@ export default function PatientAppointmentsPage() {
                 </div>
                 
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {app.consultationType === 'video' ? (
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 flex items-center gap-1.5"><i className="fas fa-video"></i> Video</span>
                         ) : (
@@ -183,11 +183,17 @@ export default function PatientAppointmentsPage() {
                         <span className={`text-xs font-bold px-2.5 py-1 rounded-md capitalize ${statusBadge}`}>
                             {app.status}
                         </span>
+                        
+                        {/* Payment Success Badge */}
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5">
+                            <i className="fas fa-check-circle text-emerald-500"></i> Paid
+                        </span>
                     </div>
                     
                     <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
-                        <div className="text-sm font-bold text-slate-800 mr-2">
-                            ₹{app.fee}
+                        <div className="flex flex-col items-start md:items-end mr-2">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Amount Paid</span>
+                            <span className="text-sm font-extrabold text-slate-800">₹{app.fee}</span>
                         </div>
                         
                         {app.consultationType === 'video' && app.status === 'scheduled' && (() => {
@@ -205,7 +211,12 @@ export default function PatientAppointmentsPage() {
                                             Starts in: <AppointmentTimer startTime={startTime} />
                                         </div>
                                         <Link 
-                                            href={`/patient/consultation/${app._id}`}
+                                            href={`/patient/consultation/${app._id}?join=true`}
+                                            onClick={() => {
+                                                if (typeof window !== 'undefined') {
+                                                    sessionStorage.removeItem(`consultation_exited_${app._id}`);
+                                                }
+                                            }}
                                             className="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm transition-colors"
                                         >
                                             Join
@@ -342,11 +353,15 @@ export default function PatientAppointmentsPage() {
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 p-4 rounded-xl">
-                                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Type & Fee</div>
-                                    <div className="font-medium text-slate-800 capitalize">
-                                        {selectedAppointment.patientType === 'NEW' ? 'New ' : selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-up ' : ''}{selectedAppointment.consultationType} Visit
-                                        <br/>
-                                        <span className="text-indigo-600">₹{selectedAppointment.fee}</span>
+                                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Fee & Payment</div>
+                                    <div className="font-medium text-slate-800">
+                                        <div className="flex items-center gap-1.5 font-bold text-emerald-700">
+                                            <span>₹{selectedAppointment.fee}</span>
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">Paid</span>
+                                        </div>
+                                        <span className="text-xs text-slate-500 capitalize">
+                                            {selectedAppointment.patientType === 'NEW' ? 'New ' : selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-up ' : ''}{selectedAppointment.consultationType} Visit
+                                        </span>
                                     </div>
                                 </div>
                             </div>

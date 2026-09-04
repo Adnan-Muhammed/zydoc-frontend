@@ -3,17 +3,11 @@
  *
  * Components Layer — src/modules/video-call/components/
  *
- * Layout: Picture-in-Picture (PiP)
- *  - Remote video fills the entire container (black background).
- *  - Local video is an absolute-positioned small floating tile at
- *    the bottom-right corner, with a subtle border and rounded corners.
- *
- * Usage:
- *   <VideoCallRoom
- *     appointmentId="abc123"
- *     userId={currentUser._id}
- *     role={currentUser.role}
- *   />
+ * Layout:
+ *  - Main container: Full height (100% of parent, no vertical scroll)
+ *  - Left Section (flex-1): Video call stage with remote video, PiP local tile,
+ *    and docked call controls at the bottom.
+ *  - Right Section (350px): Consultation Sidebar with Chat, Prescriptions, and Files.
  */
 
 "use client";
@@ -21,7 +15,11 @@
 import React, { useState, useEffect } from "react";
 import { useWebRTC } from "../hooks/useWebRTC";
 import { useCallTimer } from "../hooks/useCallTimer";
+import { usePreventCallExit } from "../hooks/usePreventCallExit";
 import CallControls from "./CallControls";
+import ConsultationSidebar from "./ConsultationSidebar";
+import CallExitConfirmModal from "./CallExitConfirmModal";
+import DuplicateTabFallback from "./DuplicateTabFallback";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,9 +48,29 @@ export default function VideoCallRoom({
     toggleAudio,
     toggleVideo,
     endCall,
+    cleanupMediaAndConnections,
     timerConfig,
-    socket
+    socket,
+    isDuplicateTab,
+    isTakenOver,
+    requestTakeover,
+    reclaimCall,
   } = useWebRTC({ appointmentId, userId, role });
+
+  const defaultRedirectUrl =
+    role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+
+  const {
+    isExitModalOpen,
+    requestExit,
+    cancelExit,
+    confirmExit,
+  } = usePreventCallExit({
+    isActive: !isCallEnded && !error && !isDuplicateTab && !isTakenOver,
+    onLeaveCall: cleanupMediaAndConnections,
+    defaultRedirectUrl,
+    appointmentId,
+  });
 
   const {
     elapsedSeconds,
@@ -65,8 +83,10 @@ export default function VideoCallRoom({
     formattedElapsed,
     formattedRemaining,
     startWrapUpCountdown,
-    extendCall
+    extendCall,
   } = useCallTimer(timerConfig);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const normalizedRole = role?.toLowerCase() || "";
   const showTimerToPatient = isWarningPhase;
@@ -86,16 +106,17 @@ export default function VideoCallRoom({
   // ── Socket Listener for Scenario 3 (Urgent Slot Booked) & Overtime Patient Arrival ──
   useEffect(() => {
     if (!socket) return;
-    
+
     const handleUrgentSlot = () => {
       console.log("[VideoCallRoom] Urgent slot booked! Triggering wrap-up countdown.");
       startWrapUpCountdown();
     };
 
-    const handlePatientArrived = () => {
-      // If we are already past the primary time (Extension phase) and a patient arrives, start countdown
-      if (phase === 'Extension') {
-        console.log("[VideoCallRoom] Next patient arrived during overtime! Triggering wrap-up countdown.");
+    const handlePatientArrived = (payload: any) => {
+      // Only trigger if this is for the NEXT patient (different appointmentId) and call is in extension
+      const isNextPatient = !payload?.appointmentId || payload.appointmentId !== appointmentId;
+      if (isNextPatient && (phase === "Extension" || isExtended)) {
+        console.log("[VideoCallRoom] Next patient arrived during overtime! Triggering 1-minute wrap-up countdown.");
         startWrapUpCountdown();
       }
     };
@@ -107,323 +128,234 @@ export default function VideoCallRoom({
       socket.off("urgent-slot-booked", handleUrgentSlot);
       socket.off("patient-arrived", handlePatientArrived);
     };
-  }, [socket, startWrapUpCountdown, phase]);
+  }, [socket, startWrapUpCountdown, phase, isExtended, appointmentId]);
+
+  // ── Multi-Tab Fallback States ─────────────────────────────────────────────
+  if (isDuplicateTab) {
+    return (
+      <DuplicateTabFallback
+        mode="duplicate"
+        role={role}
+        onTakeover={requestTakeover}
+      />
+    );
+  }
+
+  if (isTakenOver) {
+    return (
+      <DuplicateTabFallback
+        mode="taken_over"
+        role={role}
+        onReclaim={reclaimCall}
+      />
+    );
+  }
 
   // ── Error State ───────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div style={styles.errorContainer}>
-        <div style={styles.errorCard}>
-          <span style={styles.errorIcon}>📵</span>
-          <p style={styles.errorText}>{error}</p>
+      <div className="w-full h-full flex items-center justify-center bg-[#0a0a0a] p-6">
+        <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-white/5 border border-white/10 max-w-md text-center">
+          <span className="text-4xl">📵</span>
+          <p className="text-rose-300 text-sm leading-relaxed">{error}</p>
         </div>
       </div>
     );
   }
 
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={styles.roomContainer}>
-      {/* ── Remote Video (fills the room) ─────────────────────────────── */}
-      <video
-        ref={remoteVideoRef}
-        autoPlay
-        playsInline
-        style={styles.remoteVideo}
-        aria-label="Remote participant video"
-      />
-
-      {/* Waiting overlay — shown until the remote peer connects */}
-      {!isRemoteReady && !isCallEnded && (
-        <div style={styles.waitingOverlay}>
-          <div style={styles.waitingContent}>
-            <div style={styles.pulsingDot} />
-            <p style={styles.waitingText}>Waiting for the other participant…</p>
-          </div>
-        </div>
-      )}
-
-      {/* Call Ended Overlay */}
-      {isCallEnded && (
-        <div style={styles.waitingOverlay}>
-          <div style={styles.waitingContent}>
-            <span style={styles.errorIcon}>✅</span>
-            <p style={styles.waitingText}>Consultation Completed. Redirecting...</p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Local Video (PiP — bottom-right corner) ───────────────────── */}
-      <div style={styles.pipWrapper}>
+    <div className="w-full h-full flex flex-row overflow-hidden bg-[#090d16] relative select-none">
+      {/* ── Left Section: Video Stage (Flex-1) ───────────────────────────────── */}
+      <div 
+        className="flex-1 h-full min-w-0 relative overflow-hidden bg-black"
+        style={{ position: 'relative', width: '100%', height: '100%' }}
+      >
+        {/* ── Remote Video (fills available video area) ────────────────────── */}
         <video
-          ref={localVideoRef}
+          ref={remoteVideoRef}
           autoPlay
           playsInline
-          muted /* Always mute local — prevents audio feedback loop */
-          style={{
-            ...styles.localVideo,
-            opacity: localStream ? 1 : 0,
-          }}
-          aria-label="Your local video"
+          className="w-full h-full object-cover block bg-black"
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          aria-label="Remote participant video"
         />
-        {!localStream && (
-          <div style={styles.pipPlaceholder}>
-            <span style={styles.pipCameraIcon}>📷</span>
+
+        {/* Waiting overlay — shown until the remote peer connects */}
+        {!isRemoteReady && !isCallEnded && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-radial from-slate-900/95 to-black/98 z-10"
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+          >
+            <div className="flex flex-col items-center gap-4 text-center px-4">
+              <div className="w-16 h-16 rounded-full bg-indigo-500/20 border-2 border-indigo-400/60 animate-pulse flex items-center justify-center">
+                <i className="fas fa-video text-indigo-400 text-xl"></i>
+              </div>
+              <div>
+                <p className="text-slate-200 text-sm font-medium tracking-wide">
+                  Waiting for the other participant…
+                </p>
+                <p className="text-slate-500 text-xs mt-1">
+                  The consultation will connect automatically once both join.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Call Ended Overlay */}
+        {isCallEnded && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-black/90 z-20"
+            style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 20 }}
+          >
+            <div className="flex flex-col items-center gap-3 text-center">
+              <span className="text-4xl">✅</span>
+              <p className="text-white text-base font-semibold">
+                Consultation Completed. Redirecting...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Front Camera View (Local PiP — floating in bottom-right corner) ── */}
+        <div 
+          className="absolute bottom-[80px] right-3 sm:bottom-5 sm:right-5 w-[115px] h-[150px] sm:w-[220px] sm:h-[165px] md:w-[240px] md:h-[180px] rounded-xl sm:rounded-2xl overflow-hidden shadow-[0_12px_30px_rgba(0,0,0,0.6)] border-2 border-white/30 z-30 bg-slate-900 transition-all duration-300 hover:scale-105 hover:border-indigo-400/60 ring-1 ring-black/40"
+        >
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover block -scale-x-100 transition-opacity duration-300 ${
+              localStream ? "opacity-100" : "opacity-0"
+            }`}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: 'scaleX(-1)',
+              display: 'block',
+            }}
+            aria-label="Your local video"
+          />
+          {!localStream && (
+            <div 
+              className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-white/40 gap-1 p-2"
+            >
+              <i className="fas fa-video-slash text-base sm:text-xl"></i>
+              <span className="text-[9px] sm:text-[10px] text-slate-400">Camera Off</span>
+            </div>
+          )}
+          <div 
+            className="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-md px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] text-white/90 font-medium flex items-center gap-1"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>You</span>
+          </div>
+        </div>
+
+        {/* ── Call Controls (Fixed / Docked at Bottom Center of Video) ─────── */}
+        <CallControls
+          isAudioMuted={!isAudioEnabled}
+          isVideoOff={!isVideoEnabled}
+          onToggleAudio={toggleAudio}
+          onToggleVideo={toggleVideo}
+          onEndCall={() => requestExit()}
+        />
+
+        {/* ── Top Bar Overlay Elements ─────────────────────────────────────── */}
+        <div 
+          className="absolute top-4 left-4 right-4 flex items-center justify-between z-30 pointer-events-none"
+          style={{ position: 'absolute', top: '16px', left: '16px', right: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 30, pointerEvents: 'none' }}
+        >
+          {/* Status & Timer */}
+          <div className="flex items-center gap-2 pointer-events-auto" style={{ pointerEvents: 'auto', display: 'flex', gap: '8px' }}>
+            <div className="bg-black/60 backdrop-blur-md border border-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <span>Live Consultation</span>
+            </div>
+
+            {timerConfig && isTimerVisible && (
+              <div
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition-all duration-300 ${
+                  isWarningPhase
+                    ? "bg-red-500/90 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                    : "bg-black/60 text-white border border-white/10"
+                }`}
+              >
+                <i className="fas fa-clock mr-1 text-[10px]"></i>
+                {normalizedRole === "doctor" ? formattedElapsed : formattedRemaining}
+              </div>
+            )}
+          </div>
+
+          {/* Toggle Right Sidebar Button (Visible on all screens) */}
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            title={isSidebarOpen ? "Collapse Panel" : "Open Panel"}
+            className="pointer-events-auto bg-black/60 backdrop-blur-md border border-white/10 text-white hover:bg-indigo-600 hover:border-indigo-500 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all shadow-lg"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <i className={`fas ${isSidebarOpen ? "fa-columns" : "fa-sidebar"}`}></i>
+            <span>{isSidebarOpen ? "Hide Panel" : "Show Panel"}</span>
+          </button>
+        </div>
+
+        {/* ── Wrap-Up Alert (Scenario 3) ─────────────────────────────────── */}
+        {isWrapUpPhase && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-red-600 text-white px-6 py-3 rounded-xl font-bold shadow-2xl animate-pulse text-center text-xs sm:text-sm">
+            Next patient is waiting.<br />Consultation will auto-disconnect in {remainingSeconds}s
+          </div>
+        )}
+
+        {/* ── Doctor Extension Popup ──────────────────────────────────────── */}
+        {showExtensionPopup && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/75 z-50 p-4">
+            <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+              <h3 className="text-white text-base font-bold mb-2">Scheduled Time Completed</h3>
+              <p className="text-slate-300 text-xs mb-6 leading-relaxed">
+                The standard duration has finished. Would you like to extend or conclude the call?
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => requestExit()}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  End Call
+                </button>
+                <button
+                  onClick={extendCall}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Extend Time
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Call Controls (Mute/Video/End) ─────────────────────────────────── */}
-      <CallControls
-        isAudioMuted={!isAudioEnabled}
-        isVideoOff={!isVideoEnabled}
-        onToggleAudio={toggleAudio}
-        onToggleVideo={toggleVideo}
-        onEndCall={endCall}
+      {/* ── Right Section: Consultation Sidebar (350px fixed width) ────────── */}
+      {isSidebarOpen && (
+        <ConsultationSidebar
+          appointmentId={appointmentId}
+          userId={userId}
+          role={role}
+          socket={socket}
+          isOpen={isSidebarOpen}
+          onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        />
+      )}
+
+      {/* ── Call Exit Confirmation Modal ────────────────────────────────────── */}
+      <CallExitConfirmModal
+        isOpen={isExitModalOpen}
+        role={role}
+        onCancel={cancelExit}
+        onConfirm={confirmExit}
       />
-
-      {/* ── Timer Badge ────────────────────────────────────────────────────── */}
-      {timerConfig && isTimerVisible && (
-        <div 
-          className={`absolute top-4 right-4 z-50 rounded-full px-3 py-1 text-sm font-semibold backdrop-blur-sm transition-all duration-300 ${
-            isWarningPhase 
-              ? 'bg-red-500/90 text-white animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
-              : 'bg-black/50 text-white border border-white/20'
-          }`}
-        >
-          {normalizedRole === 'doctor' ? formattedElapsed : formattedRemaining}
-        </div>
-      )}
-
-      {/* ── Wrap-Up Alert (Scenario 3) ────────────────────────────────────── */}
-      {isWrapUpPhase && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white px-6 py-3 rounded-lg font-bold shadow-2xl animate-pulse text-center">
-          Next patient is waiting.<br/>Consultation will auto-disconnect in {remainingSeconds}s
-        </div>
-      )}
-
-      {/* ── Doctor Extension Popup ─────────────────────────────────────────── */}
-      {showExtensionPopup && (
-        <div style={styles.popupOverlay}>
-          <div style={styles.popupCard}>
-            <h3 style={styles.popupTitle}>Scheduled Time Completed</h3>
-            <p style={styles.popupText}>The 45 minutes have been completed. Do you want to end the call or extend?</p>
-            <div style={styles.popupActions}>
-              <button style={styles.btnEndCall} onClick={endCall}>End Call</button>
-              <button style={styles.btnExtend} onClick={extendCall}>Extend</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Embedded styles for animations */}
-      <style>{globalKeyframes}</style>
     </div>
   );
 }
-
-// ─── Styles (inline — no CSS Module dependency for portability) ───────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  // ── Room wrapper ──────────────────────────────────────────────────────────
-  roomContainer: {
-    position: "relative",
-    width: "100%",
-    height: "100vh",
-    backgroundColor: "#0a0a0a",
-    overflow: "hidden",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  // ── Remote video ─────────────────────────────────────────────────────────
-  remoteVideo: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-    backgroundColor: "#0a0a0a",
-  },
-
-  // ── Waiting overlay ───────────────────────────────────────────────────────
-  waitingOverlay: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background:
-      "radial-gradient(ellipse at center, rgba(20,20,30,0.95) 0%, rgba(0,0,0,0.98) 100%)",
-    zIndex: 10,
-  },
-  waitingContent: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "20px",
-  },
-  pulsingDot: {
-    width: "64px",
-    height: "64px",
-    borderRadius: "50%",
-    backgroundColor: "rgba(99, 179, 237, 0.25)",
-    border: "2px solid rgba(99, 179, 237, 0.6)",
-    animation: "pulse 2s ease-in-out infinite",
-  },
-  waitingText: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: "1rem",
-    fontFamily:
-      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    fontWeight: 400,
-    letterSpacing: "0.02em",
-    margin: 0,
-  },
-
-  // ── PiP local video wrapper ───────────────────────────────────────────────
-  pipWrapper: {
-    position: "absolute",
-    bottom: "28px",
-    right: "28px",
-    width: "200px",
-    height: "150px",
-    borderRadius: "16px",
-    overflow: "hidden",
-    boxShadow:
-      "0 8px 32px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.12)",
-    zIndex: 20,
-    backgroundColor: "#1a1a2e",
-    transition: "box-shadow 0.3s ease",
-  },
-  localVideo: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-    transform: "scaleX(-1)", // Mirror the local video (feels more natural)
-    transition: "opacity 0.4s ease",
-  },
-  pipPlaceholder: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#1a1a2e",
-  },
-  pipCameraIcon: {
-    fontSize: "2rem",
-    opacity: 0.4,
-  },
-
-  // ── Error state ───────────────────────────────────────────────────────────
-  errorContainer: {
-    width: "100%",
-    height: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#0a0a0a",
-  },
-  errorCard: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "16px",
-    padding: "40px 48px",
-    borderRadius: "20px",
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    maxWidth: "400px",
-    textAlign: "center",
-  },
-  errorIcon: {
-    fontSize: "3rem",
-  },
-  errorText: {
-    color: "rgba(255, 180, 180, 0.9)",
-    fontSize: "0.95rem",
-    fontFamily:
-      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  
-
-
-  // ── Extension Popup ───────────────────────────────────────────────────────
-  popupOverlay: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.75)",
-    zIndex: 50,
-  },
-  popupCard: {
-    backgroundColor: "#1a1a2e",
-    padding: "32px",
-    borderRadius: "16px",
-    border: "1px solid rgba(255,255,255,0.1)",
-    maxWidth: "400px",
-    textAlign: "center",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.8)",
-  },
-  popupTitle: {
-    color: "#fff",
-    fontFamily: "'Inter', sans-serif",
-    fontSize: "1.25rem",
-    margin: "0 0 16px 0",
-  },
-  popupText: {
-    color: "rgba(255,255,255,0.8)",
-    fontFamily: "'Inter', sans-serif",
-    fontSize: "1rem",
-    lineHeight: 1.5,
-    margin: "0 0 24px 0",
-  },
-  popupActions: {
-    display: "flex",
-    gap: "16px",
-    justifyContent: "center",
-  },
-  btnEndCall: {
-    padding: "10px 20px",
-    backgroundColor: "#e53e3e",
-    color: "#fff",
-    border: "none",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "'Inter', sans-serif",
-  },
-  btnExtend: {
-    padding: "10px 20px",
-    backgroundColor: "transparent",
-    color: "#fff",
-    border: "1px solid rgba(255,255,255,0.3)",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    fontFamily: "'Inter', sans-serif",
-  }
-};
-
-// ── Keyframe animation (injected once via <style>) ────────────────────────────
-const globalKeyframes = `
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 0.7;
-    }
-    50% {
-      transform: scale(1.15);
-      opacity: 1;
-    }
-  }
-
-`;

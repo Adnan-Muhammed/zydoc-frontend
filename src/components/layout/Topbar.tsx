@@ -5,7 +5,7 @@ import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import { useSocket } from '../../hooks/useSocket';
 import { fetchNotifications, markNotificationRead } from '../../redux/features/notification/notificationThunk';
 import { NotificationItem } from '../../redux/features/notification/notificationService';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const timeAgo = (date: string | Date) => {
@@ -85,12 +85,24 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
 
   const recentNotifications = notifications.filter(n => !n.isRead).slice(0, 5);
 
+  const pathname = usePathname();
+  const isConsultation = pathname?.includes('/consultation/');
+
   return (
     <header className="dashboard-topbar flex justify-between w-full h-16 bg-white border-b border-slate-200 px-4 sm:px-6 sticky top-0 z-40">
       <div className="topbar-left flex items-center gap-3 sm:gap-4 h-full">
-        <button className="topbar-menu-btn text-slate-500 hover:text-slate-800" onClick={onToggleSidebar}>
-          <i className="fas fa-bars text-lg"></i>
-        </button>
+        {!isConsultation ? (
+          <button className="topbar-menu-btn text-slate-500 hover:text-slate-800" onClick={onToggleSidebar}>
+            <i className="fas fa-bars text-lg"></i>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 text-indigo-600 font-bold text-base mr-1">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-sm shadow-sm">
+              <i className="fas fa-stethoscope"></i>
+            </div>
+            <span className="hidden sm:inline text-slate-900 font-bold">Docti<span className="text-indigo-600">fy</span></span>
+          </div>
+        )}
         <h2 className="topbar-page-title text-base sm:text-lg font-semibold text-slate-800 m-0 whitespace-nowrap truncate max-w-[150px] sm:max-w-none">
           {displayTitle}
         </h2>

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import SettingsMatrixClient from './SettingsMatrixClient';
@@ -27,7 +28,11 @@ export default async function SettingsMatrixPage() {
         // The new endpoint returns { success: true, profile: { ... } }
         const user = data.profile ?? data.user ?? data;
  
-        return <SettingsMatrixClient initialData={user} />;
+        return (
+            <Suspense fallback={<div className="min-h-screen bg-[#eef0f8] p-8 text-center text-slate-500">Loading settings...</div>}>
+                <SettingsMatrixClient initialData={user} />
+            </Suspense>
+        );
     } catch (error) {
         console.error('Error fetching user data:', error);
         redirect('/doctor/dashboard');

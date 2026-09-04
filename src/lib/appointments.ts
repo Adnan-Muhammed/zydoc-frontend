@@ -1,7 +1,7 @@
 // Fetches use the native `fetch` API since these run server-side and in client
 // components that don't need the shared axiosInstance interceptors.
 
-const getAuthHeaders = (): Record<string, string> => {
+const getAuthHeaders = (): Record<string, string> => { 
     let token = '';
     // Look for accessToken in cookies if running on client
     if (typeof document !== 'undefined') {

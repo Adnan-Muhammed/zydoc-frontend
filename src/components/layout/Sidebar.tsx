@@ -81,7 +81,6 @@ function getDoctorNav(isDoctorLocked: boolean): NavSection[] {
             links: [
                 { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings', disabled: isDoctorLocked },
                 { href: '/doctor/profile', icon: 'fas fa-address-card', label: 'Profile', disabled: isDoctorLocked },
-                { href: '/doctor/settings', icon: 'fas fa-gear', label: 'Settings', disabled: isDoctorLocked },
             ],
         },
     ];

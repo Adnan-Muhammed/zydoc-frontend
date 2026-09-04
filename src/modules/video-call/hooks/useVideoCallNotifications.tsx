@@ -52,7 +52,10 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
             onClick={() => {
               toast.dismiss(t.id);
               if (appointmentId) {
-                router.push(`/doctor/consultation/${appointmentId}`);
+                if (typeof window !== 'undefined') {
+                  sessionStorage.removeItem(`consultation_exited_${appointmentId}`);
+                }
+                router.push(`/doctor/consultation/${appointmentId}?join=true`);
               }
             }}
             className="cursor-pointer font-medium"

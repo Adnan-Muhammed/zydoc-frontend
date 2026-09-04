@@ -46,16 +46,28 @@ export const useAppointmentTracker = () => {
         };
     }, [socket, dispatch]);
 
-    // 2. Timer Logic
+    // 2. Timer Logic (Decoupled from active consultation rooms)
     useEffect(() => {
-        // Only run timer if we have upcoming appointments
+        // If doctor is in an active video call, NEVER run auto-redirects
+        const isInActiveCall = pathname?.includes('/consultation/');
         if (!doctorAppointments || doctorAppointments.length === 0) return;
 
         const checkAppointments = () => {
             const nextAppt = doctorAppointments[0]; // The nearest upcoming appointment due to Redux sorting
             
-            // Skip if it's already in an active state
-            if (nextAppt.status === 'Time Reached' || nextAppt.status === 'Patient Joined' || nextAppt.status === 'Patient Disconnected') {
+            // Skip if it's already in an active or terminal state
+            if (
+                nextAppt.status === 'Time Reached' || 
+                nextAppt.status === 'Patient Joined' || 
+                nextAppt.status === 'Patient Disconnected' ||
+                nextAppt.status === 'completed' ||
+                nextAppt.status === 'cancelled'
+            ) {
+                return;
+            }
+
+            // Skip if doctor is currently in the consultation room for this specific appointment
+            if (pathname === `/doctor/consultation/${nextAppt._id}`) {
                 return;
             }
 
@@ -87,13 +99,18 @@ export const useAppointmentTracker = () => {
 
             // If current time has reached or passed the appointment time
             if (now >= exactApptTime) {
+                // Silently update Redux status so dashboard badges reflect reality
                 dispatch(updateAppointmentStatus({
                     appointmentId: nextAppt._id,
                     status: 'Time Reached'
                 }));
 
-                // Auto-redirect if the doctor is on an unrelated page
-                if (pathname !== '/doctor/dashboard' && pathname !== '/doctor/appointments') {
+                // ONLY redirect if the doctor is NOT on an active consultation page
+                if (
+                    !isInActiveCall &&
+                    pathname !== '/doctor/dashboard' && 
+                    pathname !== '/doctor/appointments'
+                ) {
                     router.push('/doctor/dashboard');
                 }
             }

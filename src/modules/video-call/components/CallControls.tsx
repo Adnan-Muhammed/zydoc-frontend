@@ -18,90 +18,43 @@ export default function CallControls({
   onEndCall,
 }: CallControlsProps) {
   return (
-    <div style={styles.container}>
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-4 bg-slate-950/85 backdrop-blur-xl px-3.5 py-2 sm:px-6 sm:py-3 rounded-full border border-white/15 shadow-[0_15px_35px_rgba(0,0,0,0.6)] z-40 transition-all">
+      {/* Audio Toggle */}
       <button
         onClick={onToggleAudio}
-        style={{
-          ...styles.button,
-          backgroundColor: isAudioMuted ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
-        }}
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white transition-all text-sm sm:text-base border border-white/10 ${
+          isAudioMuted
+            ? "bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30"
+            : "bg-white/10 hover:bg-white/20"
+        }`}
         title={isAudioMuted ? "Unmute Audio" : "Mute Audio"}
       >
         <i className={`fas ${isAudioMuted ? "fa-microphone-slash" : "fa-microphone"}`}></i>
       </button>
 
+      {/* Video Toggle */}
       <button
         onClick={onToggleVideo}
-        style={{
-          ...styles.button,
-          backgroundColor: isVideoOff ? "#ef4444" : "rgba(255, 255, 255, 0.1)",
-        }}
+        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white transition-all text-sm sm:text-base border border-white/10 ${
+          isVideoOff
+            ? "bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-600/30"
+            : "bg-white/10 hover:bg-white/20"
+        }`}
         title={isVideoOff ? "Turn On Camera" : "Turn Off Camera"}
       >
         <i className={`fas ${isVideoOff ? "fa-video-slash" : "fa-video"}`}></i>
       </button>
 
-      <div style={styles.divider}></div>
+      <div className="w-[1px] h-6 sm:h-8 bg-white/20 mx-0.5 sm:mx-1"></div>
 
+      {/* End Call Button */}
       <button
         onClick={onEndCall}
-        style={styles.endCallButton}
+        className="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white px-4 py-2 sm:px-6 sm:py-3 rounded-full font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-rose-600/40 transition-all border border-rose-500/40"
       >
         <i className="fas fa-phone-slash"></i>
-        End Call
+        <span>End Call</span>
       </button>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    position: "absolute",
-    bottom: "28px",
-    left: "50%",
-    transform: "translateX(-50%)",
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-    backgroundColor: "rgba(15, 23, 42, 0.8)",
-    backdropFilter: "blur(12px)",
-    padding: "12px 24px",
-    borderRadius: "9999px",
-    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    zIndex: 50,
-  },
-  button: {
-    width: "48px",
-    height: "48px",
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    border: "none",
-    color: "#ffffff",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-    fontSize: "1.1rem",
-  },
-  divider: {
-    width: "1px",
-    height: "32px",
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    margin: "0 8px",
-  },
-  endCallButton: {
-    backgroundColor: "#ef4444",
-    color: "#ffffff",
-    padding: "12px 24px",
-    borderRadius: "9999px",
-    fontWeight: "bold",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    border: "none",
-    cursor: "pointer",
-    transition: "background-color 0.2s ease",
-    boxShadow: "0 4px 14px 0 rgba(239, 68, 68, 0.39)",
-  },
-};

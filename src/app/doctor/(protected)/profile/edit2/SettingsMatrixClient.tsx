@@ -1,12 +1,8 @@
-
-
-
-
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
  
 import BasicInfoSection from './BasicInfoSection';
 import ConsultationSection from './ConsultationSection';
@@ -14,11 +10,21 @@ import QualificationsSection from './QualificationsSection';
 import PreferencesSection from './PreferencesSection';
 import ScheduleSection from './ScheduleSection';
 import CertificatesSection from './CertificatesSection';
+import BankDetailsSection from './BankDetailsSection';
 
 export default function SettingsMatrixClient({ initialData }: { initialData: any }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    
     // 1. Establish state to track the active section (defaults to 'basic')
     const [activeSection, setActiveSection] = useState('basic');
+
+    useEffect(() => {
+        const sectionParam = searchParams.get('section');
+        if (sectionParam && ['basic', 'consultation', 'qualifications', 'preferences', 'schedule', 'certificates', 'bank'].includes(sectionParam)) {
+            setActiveSection(sectionParam);
+        }
+    }, [searchParams]);
 
     // Section definitions for the radio buttons
     const sections = [
@@ -27,7 +33,8 @@ export default function SettingsMatrixClient({ initialData }: { initialData: any
         { id: 'qualifications', label: 'Qualifications' },
         { id: 'preferences', label: 'Preferences' },
         { id: 'schedule', label: 'Schedule' },
-        { id: 'certificates', label: 'Certificates' }
+        { id: 'certificates', label: 'Certificates' },
+        { id: 'bank', label: 'Bank Details' },
     ];
 
     return (
@@ -135,6 +142,10 @@ export default function SettingsMatrixClient({ initialData }: { initialData: any
                     
                     {activeSection === 'certificates' && (
                         <CertificatesSection initialData={[initialData?.medicalCertificateUrl, initialData?.governmentIdUrl].filter(Boolean)} />
+                    )}
+
+                    {activeSection === 'bank' && (
+                        <BankDetailsSection initialData={initialData} />
                     )}
                 </div>
  

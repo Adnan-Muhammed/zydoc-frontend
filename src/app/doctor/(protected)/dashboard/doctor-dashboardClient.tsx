@@ -319,7 +319,14 @@ export default function DoctorDashboardPage() {
                   <div className="mt-6 flex flex-wrap gap-4">
                     <button
                       disabled={!nextAppt}
-                      onClick={() => nextAppt && router.push(`/doctor/consultation/${nextAppt._id}`)}
+                      onClick={() => {
+                        if (nextAppt) {
+                          if (typeof window !== 'undefined') {
+                            sessionStorage.removeItem(`consultation_exited_${nextAppt._id}`);
+                          }
+                          router.push(`/doctor/consultation/${nextAppt._id}?join=true`);
+                        }
+                      }}
                       className={`flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${hoverClass}`}
                     >
                       {isPulsing && <span className="relative flex h-3 w-3"><span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${pulseColor} opacity-75`}></span><span className={`relative inline-flex rounded-full h-3 w-3 ${pulseDotColor}`}></span></span>}
