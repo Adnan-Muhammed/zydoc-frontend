@@ -1,3 +1,5 @@
+import axiosInstance from '@/api/axiosInstance';
+
 // Fetches use the native `fetch` API since these run server-side and in client
 // components that don't need the shared axiosInstance interceptors.
 
@@ -15,7 +17,7 @@ export async function createAppointment(data: {
     doctorId: string;
     appointmentDate: string;
     appointmentTime: string;
-    consultationType: 'video' | 'physical';
+    consultationType: 'online' | 'offline' | 'video' | 'physical';
     fee: number;
     notes?: string;
 }) {
@@ -87,3 +89,38 @@ export async function extendLock(slotId: string) {
 
     return res.json();
 }
+
+export async function toggleDoctorSlotOverride(date: string, time: string, action: 'close' | 'open', reason?: string) {
+    try {
+        const res = await axiosInstance.post('/appointments/doctor/slot-override', { date, time, action, reason });
+        return res.data;
+    } catch (err: any) {
+        return {
+            success: false,
+            message: err.response?.data?.message || err.message || 'Failed to update slot status'
+        };
+    }
+}
+
+export async function manualBookDoctorSlot(payload: {
+    date: string;
+    time: string;
+    patientName: string;
+    opNumber?: string;
+    patientPhone?: string;
+    patientType?: 'NEW' | 'FOLLOW_UP';
+    notes?: string;
+    fee?: number;
+}) {
+    try {
+        const res = await axiosInstance.post('/appointments/doctor/manual-book', payload);
+        return res.data;
+    } catch (err: any) {
+        return {
+            success: false,
+            message: err.response?.data?.message || err.message || 'Failed to manually book slot'
+        };
+    }
+}
+
+

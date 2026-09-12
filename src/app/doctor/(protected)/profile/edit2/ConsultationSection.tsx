@@ -4,18 +4,29 @@ import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
 import { useRouter } from 'next/navigation';
 
-export default function ConsultationSection({ initialData }: { initialData: any }) {
+export default function ConsultationSection({ 
+    initialData, 
+    onUpdate 
+}: { 
+    initialData: any; 
+    onUpdate?: (data: any) => void; 
+}) { 
     const router = useRouter();
-    const extractVideo = (data: any) => ({ enabled: data?.enableVideo ?? false, fee: data?.videoFee ?? '0' });
-    const extractPhysical = (data: any) => ({ 
-        enabled: data?.enablePhysical ?? false,
-        fee: data?.physicalFee ?? '0',
-        clinicName: data?.clinicName ?? '',
-        clinicAddress: data?.clinicAddress ?? ''
+
+    const extractVideo = (data: any) => ({
+        enabled: data?.online?.enabled ?? data?.video?.enabled ?? data?.enableVideo ?? false,
+        fee: String(data?.online?.fee ?? data?.video?.fee ?? data?.videoFee ?? '0')
     });
- 
-    const [video, setVideo] = useState(extractVideo(initialData));
-    const [physical, setPhysical] = useState(extractPhysical(initialData));
+
+    const extractPhysical = (data: any) => ({
+        enabled: data?.offline?.enabled ?? data?.physical?.enabled ?? data?.enablePhysical ?? false,
+        fee: String(data?.offline?.fee ?? data?.physical?.fee ?? data?.physicalFee ?? '0'),
+        clinicName: data?.offline?.clinicName ?? data?.physical?.clinicName ?? data?.clinicName ?? '',
+        clinicAddress: data?.offline?.clinicAddress ?? data?.physical?.clinicAddress ?? data?.clinicAddress ?? ''
+    });
+
+    const [video, setVideo] = useState(() => extractVideo(initialData));
+    const [physical, setPhysical] = useState(() => extractPhysical(initialData));
 
     useEffect(() => {
         setVideo(extractVideo(initialData));
@@ -27,29 +38,40 @@ export default function ConsultationSection({ initialData }: { initialData: any 
     const handleSave = async () => {
         setLoading(true); 
         try {
-            const payload = { 
-                enableVideo: video.enabled, 
-                videoFee: video.fee, 
-                enablePhysical: physical.enabled, 
-                physicalFee: physical.fee, 
-                clinicName: physical.clinicName, 
-                clinicAddress: physical.clinicAddress 
+            const payload = {
+                online: {
+                    enabled: Boolean(video.enabled),
+                    fee: Number(video.fee) || 0,
+                },
+                offline: {
+                    enabled: Boolean(physical.enabled),
+                    fee: Number(physical.fee) || 0,
+                    clinicName: physical.clinicName.trim(),
+                    clinicAddress: physical.clinicAddress.trim(),
+                },
+                // Include legacy flat keys for full backwards-compatibility
+                enableVideo: Boolean(video.enabled),
+                videoFee: Number(video.fee) || 0,
+                enablePhysical: Boolean(physical.enabled),
+                physicalFee: Number(physical.fee) || 0,
+                clinicName: physical.clinicName.trim(),
+                clinicAddress: physical.clinicAddress.trim()
             };
+
             const res = await axiosInstance.patch('/doctor/profile/consultation', payload);
              
             if (res.data?.success) {
-                alert('Consultation pathways saved!');
-                if (res.data.profile?.consultationSettings) {
-                    setVideo({
-                        enabled: res.data.profile.consultationSettings.video?.enabled ?? false,
-                        fee: res.data.profile.consultationSettings.video?.fee ?? '0'
-                    });
-                    setPhysical({
-                        enabled: res.data.profile.consultationSettings.physical?.enabled ?? false,
-                        fee: res.data.profile.consultationSettings.physical?.fee ?? '0',
-                        clinicName: res.data.profile.consultationSettings.physical?.clinicName ?? '',
-                        clinicAddress: res.data.profile.consultationSettings.physical?.clinicAddress ?? ''
-                    });
+                alert('Consultation channels saved successfully!');
+                const cs = res.data.profile?.consultationSettings || res.data.user?.consultationSettings || {
+                    online: payload.online,
+                    offline: payload.offline,
+                };
+                if (cs) {
+                    setVideo(extractVideo(cs));
+                    setPhysical(extractPhysical(cs));
+                }
+                if (onUpdate) {
+                    onUpdate({ consultationSettings: cs });
                 }
                 router.refresh();
             } else {

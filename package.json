@@ -2,7 +2,7 @@
   "name": "zydoc-frontend",
   "version": "0.1.0",
   "private": true,
-  "type":"module",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,6 +14,7 @@
     "@reduxjs/toolkit": "^2.12.0",
     "chart.js": "^4.5.1",
     "firebase": "^12.16.0",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.11.0",
     "next": "14.2.35",
     "react": "^18",

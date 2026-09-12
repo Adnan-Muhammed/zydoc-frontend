@@ -291,7 +291,7 @@ export default function EarningsClient() {
                     const apptObj = tx.appointmentId;
                     const apptDate = typeof apptObj === 'object' ? apptObj?.appointmentDate : tx.createdAt;
                     const apptTime = typeof apptObj === 'object' ? apptObj?.appointmentTime : '';
-                    const visitType = typeof apptObj === 'object' ? apptObj?.consultationType : 'video';
+                    const visitType = typeof apptObj === 'object' ? apptObj?.consultationType : 'online';
 
                     return (
                       <tr key={tx._id} className="hover:bg-slate-50/70 transition-colors">

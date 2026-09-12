@@ -41,4 +41,30 @@ export interface UploadedFile {
   url?: string;
 }
 
-export type TabType = 'chat' | 'notes' | 'prescriptions' | 'files';
+export interface PatientInfoData {
+  name: string;
+  bloodGroup?: string;
+  gender?: string;
+  dateOfBirth?: string | Date | null;
+  phone?: string;
+  allergies: string[];
+  chronicConditions: string[];
+  currentMedications: string[];
+  emergencyContact?: {
+    name?: string;
+    relationship?: string;
+    phone?: string;
+  } | null;
+}
+
+export interface PastConsultationNote {
+  appointmentId: string;
+  date: string | Date;
+  time?: string;
+  doctorName: string;
+  specialty?: string;
+  clinicalNotes: string;
+  prescriptions?: PrescriptionItem[];
+}
+
+export type TabType = 'patient-info' | 'notes' | 'prescriptions' | 'chat' | 'files';

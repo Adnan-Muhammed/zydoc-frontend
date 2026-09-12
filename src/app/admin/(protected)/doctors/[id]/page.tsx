@@ -356,23 +356,23 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
                                 <div className="info-item">
                                     <div className="info-label">Video Consultation</div>
                                     <div className="info-value">
-                                        {doctor?.consultationSettings?.video?.enabled ? (
-                                            <span className="text-green-600 font-medium">Enabled (₹{doctor?.consultationSettings?.video?.fee || 0})</span>
+                                        {(doctor?.consultationSettings?.online?.enabled ?? doctor?.consultationSettings?.video?.enabled) ? (
+                                            <span className="text-green-600 font-medium">Enabled (₹{doctor?.consultationSettings?.online?.fee ?? doctor?.consultationSettings?.video?.fee ?? 0})</span>
                                         ) : 'Disabled'}
                                     </div>
                                 </div>
                                 <div className="info-item">
                                     <div className="info-label">Physical Consultation</div>
                                     <div className="info-value">
-                                        {doctor?.consultationSettings?.physical?.enabled ? (
-                                            <span className="text-green-600 font-medium">Enabled (₹{doctor?.consultationSettings?.physical?.fee || 0})</span>
+                                        {(doctor?.consultationSettings?.offline?.enabled ?? doctor?.consultationSettings?.physical?.enabled) ? (
+                                            <span className="text-green-600 font-medium">Enabled (₹{doctor?.consultationSettings?.offline?.fee ?? doctor?.consultationSettings?.physical?.fee ?? 0})</span>
                                         ) : 'Disabled'}
                                     </div>
                                 </div>
-                                {doctor?.consultationSettings?.physical?.enabled && (
+                                {(doctor?.consultationSettings?.offline?.enabled ?? doctor?.consultationSettings?.physical?.enabled) && (
                                     <div className="info-item" style={{ gridColumn: '1 / -1' }}>
                                         <div className="info-label">Clinic Details</div>
-                                        <div className="info-value">{doctor?.consultationSettings?.physical?.clinicName} - {doctor?.consultationSettings?.physical?.clinicAddress}</div>
+                                        <div className="info-value">{(doctor?.consultationSettings?.offline?.clinicName ?? doctor?.consultationSettings?.physical?.clinicName) || 'N/A'} - {(doctor?.consultationSettings?.offline?.clinicAddress ?? doctor?.consultationSettings?.physical?.clinicAddress) || 'N/A'}</div>
                                     </div>
                                 )}
                             </div>
@@ -386,11 +386,15 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
                                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                                             const slot = doctor?.workingHours?.online?.[day];
                                             const labelMap: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+                                            const hasSlots = Array.isArray(slot) ? slot.length > 0 : !!slot?.active;
+                                            const slotText = Array.isArray(slot) 
+                                                ? slot.map(s => `${s.start} - ${s.end}`).join(', ') 
+                                                : (slot?.start && slot?.end ? `${slot.start} - ${slot.end}` : '');
                                             return (
                                                 <div key={'online-'+day} className="p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs">
                                                     <div className="font-semibold text-gray-700 mb-1">{labelMap[day]}</div>
-                                                    {slot?.active ? (
-                                                        <div className="text-gray-600">{slot.start} - {slot.end}</div>
+                                                    {hasSlots ? (
+                                                        <div className="text-gray-600 font-medium">{slotText}</div>
                                                     ) : (
                                                         <div className="text-red-400">Not Available</div>
                                                     )}
@@ -406,11 +410,15 @@ export default function DoctorDetailPage({ params }: { params: { id: string } })
                                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => {
                                             const slot = doctor?.workingHours?.offline?.[day];
                                             const labelMap: Record<string, string> = { monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun' };
+                                            const hasSlots = Array.isArray(slot) ? slot.length > 0 : !!slot?.active;
+                                            const slotText = Array.isArray(slot) 
+                                                ? slot.map(s => `${s.start} - ${s.end}`).join(', ') 
+                                                : (slot?.start && slot?.end ? `${slot.start} - ${slot.end}` : '');
                                             return (
                                                 <div key={'offline-'+day} className="p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs">
                                                     <div className="font-semibold text-gray-700 mb-1">{labelMap[day]}</div>
-                                                    {slot?.active ? (
-                                                        <div className="text-gray-600">{slot.start} - {slot.end}</div>
+                                                    {hasSlots ? (
+                                                        <div className="text-gray-600 font-medium">{slotText}</div>
                                                     ) : (
                                                         <div className="text-red-400">Not Available</div>
                                                     )}

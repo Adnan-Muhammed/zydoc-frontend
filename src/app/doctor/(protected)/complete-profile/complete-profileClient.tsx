@@ -15,6 +15,7 @@ import StepIdentitySection from './_components/StepIdentitySection';
 import StepCredentialsSection from './_components/StepCredentialsSection';
 import StepVerificationSection from './_components/StepVerificationSection';
 import StepScheduleSection from './_components/StepScheduleSection';
+import { validateFullSchedule } from '@/utils/scheduleValidator';
 
 // ─── Storage Key ──────────────────────────────────────────────────────────────
 
@@ -153,9 +154,9 @@ export default function CompleteDoctorProfileClient() {
                 alert('Please provide a Telehealth fee.');
                 return;
             }
-            const hasOnlineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => draft.workingHours.online[day as keyof typeof draft.workingHours.online]?.active);
+            const hasOnlineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => (draft.workingHours.online[day as keyof typeof draft.workingHours.online]?.length || 0) > 0);
             if (!hasOnlineDays) {
-                alert('Please select at least one available day for Telehealth consultation.');
+                alert('Please configure at least one active availability shift for Telehealth consultation.');
                 return;
             }
         }
@@ -169,11 +170,17 @@ export default function CompleteDoctorProfileClient() {
                 alert('Please provide your Clinic Title and Address for In-Person visits.');
                 return;
             }
-            const hasOfflineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => draft.workingHours.offline[day as keyof typeof draft.workingHours.offline]?.active);
+            const hasOfflineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => (draft.workingHours.offline[day as keyof typeof draft.workingHours.offline]?.length || 0) > 0);
             if (!hasOfflineDays) {
-                alert('Please select at least one available day for In-Person consultation.');
+                alert('Please configure at least one active availability shift for In-Person consultation.');
                 return;
             }
+        }
+
+        const scheduleError = validateFullSchedule(draft.workingHours, Number(draft.slotDuration) || 15);
+        if (scheduleError) {
+            alert(`Schedule Validation Error:\n${scheduleError}`);
+            return;
         }
         
         // --- FILE INTEGRITY VALIDATION (In case of page reload restoring draft but losing files) ---
@@ -214,6 +221,12 @@ export default function CompleteDoctorProfileClient() {
                 formData.append('qualificationCertificates', file, `${id}___${file.name}`);
             });
 
+            // Helper to strip internal UI client IDs from time block items
+            const sanitizeBlocks = (blocks: any[] = []) =>
+                (blocks || [])
+                    .filter(b => b && b.start && b.end)
+                    .map(b => ({ start: b.start, end: b.end }));
+
             // Standardize Nested Profile Payload
             const profileData = {
                 firstName: draft.firstName,
@@ -222,11 +235,21 @@ export default function CompleteDoctorProfileClient() {
                 specialty: draft.specialty,
                 licenseNumber: draft.licenseNumber,
                 yearsOfExperience: Number(draft.yearsOfExperience),
+                slotDuration: Number(draft.slotDuration) || 15,
+                timezone: draft.timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Kolkata') || 'Asia/Kolkata',
                 bio: draft.bio,
                 expertiseTags: draft.expertiseTags,
                 languages: draft.selectedLanguages,
                 qualifications: draft.qualifications,
                 consultationSettings: {
+                    online: { enabled: draft.enableVideo, fee: Number(draft.videoFee) },
+                    offline: {
+                        enabled: draft.enablePhysical,
+                        fee: Number(draft.physicalFee),
+                        clinicName: draft.clinicName,
+                        clinicAddress: draft.clinicAddress,
+                    },
+                    // Legacy backwards compatibility aliases
                     video: { enabled: draft.enableVideo, fee: Number(draft.videoFee) },
                     physical: {
                         enabled: draft.enablePhysical,
@@ -237,22 +260,22 @@ export default function CompleteDoctorProfileClient() {
                 },
                 workingHours: {
                     online: {
-                        monday: draft.workingHours.online.monday,
-                        tuesday: draft.workingHours.online.tuesday,
-                        wednesday: draft.workingHours.online.wednesday,
-                        thursday: draft.workingHours.online.thursday,
-                        friday: draft.workingHours.online.friday,
-                        saturday: draft.workingHours.online.saturday,
-                        sunday: draft.workingHours.online.sunday,
+                        monday: sanitizeBlocks(draft.workingHours.online.monday),
+                        tuesday: sanitizeBlocks(draft.workingHours.online.tuesday),
+                        wednesday: sanitizeBlocks(draft.workingHours.online.wednesday),
+                        thursday: sanitizeBlocks(draft.workingHours.online.thursday),
+                        friday: sanitizeBlocks(draft.workingHours.online.friday),
+                        saturday: sanitizeBlocks(draft.workingHours.online.saturday),
+                        sunday: sanitizeBlocks(draft.workingHours.online.sunday),
                     },
                     offline: {
-                        monday: draft.workingHours.offline.monday,
-                        tuesday: draft.workingHours.offline.tuesday,
-                        wednesday: draft.workingHours.offline.wednesday,
-                        thursday: draft.workingHours.offline.thursday,
-                        friday: draft.workingHours.offline.friday,
-                        saturday: draft.workingHours.offline.saturday,
-                        sunday: draft.workingHours.offline.sunday,
+                        monday: sanitizeBlocks(draft.workingHours.offline.monday),
+                        tuesday: sanitizeBlocks(draft.workingHours.offline.tuesday),
+                        wednesday: sanitizeBlocks(draft.workingHours.offline.wednesday),
+                        thursday: sanitizeBlocks(draft.workingHours.offline.thursday),
+                        friday: sanitizeBlocks(draft.workingHours.offline.friday),
+                        saturday: sanitizeBlocks(draft.workingHours.offline.saturday),
+                        sunday: sanitizeBlocks(draft.workingHours.offline.sunday),
                     }
                 },
             };

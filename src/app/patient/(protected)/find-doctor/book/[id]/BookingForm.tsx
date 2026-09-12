@@ -2,14 +2,14 @@
  
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createAppointment, getAvailableSlots, extendLock } from "@/lib/appointments";
+import { getAvailableSlots, extendLock } from "@/lib/appointments";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/redux/store";
 import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redux/features/appointment/appointmentThunk";
-import SlotPicker from "@/components/patient/SlotPicker";
+import SlotPicker, { Slot } from "@/components/patient/SlotPicker";
 
 /* ═══════════════════════════════════════════════════════════════════ 
-   Constants
+   Constants  
 ═══════════════════════════════════════════════════════════════════ */
 const MONTH_NAMES = [
     "January","February","March","April","May","June",
@@ -17,177 +17,49 @@ const MONTH_NAMES = [
 ]; 
 const DAY_LABELS  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const DAY_NAMES_JS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
-const DAY_KEYS     = ["monday","tuesday","wednesday","thursday","friday","saturday","sunday","mondayToFriday"];
 
 /* ═══════════════════════════════════════════════════════════════════
-   WorkingHours helpers (mirrors backend resolveWorkingHours exactly)
+   WorkingHours helpers (Checks doctor's working blocks)
 ═══════════════════════════════════════════════════════════════════ */
-function resolveWorkingHours(rawWH: any, consultationType: string) {
-    const channelKey = consultationType === "physical" ? "offline" : "online";
-    const channelObj: any = rawWH?.[channelKey] || {};
-
-    // New nested format: channel object has day-level keys with start/end
-    const channelHasDays = DAY_KEYS.some(k => channelObj[k]?.start !== undefined);
-    if (channelHasDays) return channelObj;
-
-    // Old flat format: workingHours itself has day-level keys
-    const flatHasDays = DAY_KEYS.some(k => rawWH?.[k]?.start !== undefined);
-    if (flatHasDays) return rawWH;
-
-    return {};
-}
-
 function isDoctorAvailableOn(date: Date, rawWH: any, consultationType: string): boolean {
-    const wh = resolveWorkingHours(rawWH, consultationType);
-    const hasAnyConfig = Object.keys(wh).length > 0;
-    const jsDay   = date.getDay();
+    if (!rawWH) return false;
+    const channelKey = (consultationType === "physical" || consultationType === "offline") ? "offline" : "online";
+    const channelSchedule = rawWH?.[channelKey] || (rawWH?.online || rawWH?.offline ? null : rawWH) || {};
+    const jsDay = date.getDay();
     const dayName = DAY_NAMES_JS[jsDay] as string;
-    const isWeekday = jsDay >= 1 && jsDay <= 5;
 
-    if (!hasAnyConfig) return isWeekday; // MVP fallback: open Mon–Fri
+    let dayConfig = channelSchedule[dayName];
+    const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(dayName);
+    const isDayEmpty = !dayConfig || (Array.isArray(dayConfig) && dayConfig.length === 0) || (typeof dayConfig === 'object' && !dayConfig.active);
 
-    let sch: any = wh[dayName];
-    if ((!sch || !sch.active) && isWeekday && wh.mondayToFriday?.active) {
-        sch = wh.mondayToFriday;
+    if (isDayEmpty) {
+        if (isWeekday && channelSchedule.mondayToFriday) {
+            dayConfig = channelSchedule.mondayToFriday;
+        } else if (channelSchedule.fullWeek) {
+            dayConfig = channelSchedule.fullWeek;
+        }
     }
-    if (!sch) return isWeekday;
-    return sch.active === true;
+
+    if (Array.isArray(dayConfig)) {
+        return dayConfig.length > 0 && dayConfig.some((b: any) => b && b.start && b.end);
+    }
+    if (dayConfig && typeof dayConfig === "object") {
+        return !!dayConfig.active && !!dayConfig.start && !!dayConfig.end;
+    }
+    return false;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Find next working date
-   - Checks the RECURRING weekly pattern: mondayToFriday covers every
-     Mon–Fri throughout the entire year; saturday covers every Saturday.
-   - Skips today if the doctor's shift end time has already passed.
-   - Scans up to 60 days ahead.
-═══════════════════════════════════════════════════════════════════ */
-
-/**
- * Returns the local end-of-shift time for a given date, or null if the
- * day has no schedule. Used to decide whether today still has future slots.
- */
-function getDayEndTime(rawWH: any, consultationType: string, d: Date): Date | null {
-    const wh = resolveWorkingHours(rawWH, consultationType);
-    const dayName  = DAY_NAMES_JS[d.getDay()] as string;
-    const isWeekday = d.getDay() >= 1 && d.getDay() <= 5;
-
-    let sch: any = wh[dayName];
-    if ((!sch || !sch.active) && isWeekday && wh.mondayToFriday?.active)
-        sch = wh.mondayToFriday;
-
-    // MVP fallback for unconfigured weekdays
-    const hasAnyActive = Object.values(wh).some((s: any) => s?.active === true);
-    if (!sch?.active && !hasAnyActive && isWeekday)
-        sch = { end: '17:00' };
-
-    if (!sch?.end || sch.end === '00:00') return null;
-
-    const [endH, endM] = sch.end.split(':').map(Number);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), endH, endM, 0, 0);
-}
-
-function findNextWorkingDate(rawWH: any, consultationType: string): Date {
-    const now   = new Date();
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < 60; i++) {
+function findNextWorkingDate(rawWH: any, consultationType: string, today: Date, maxDate: Date): Date {
+    for (let i = 0; i <= 14; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() + i);
+        if (d > maxDate) break;
 
-        // Skip if the doctor doesn't work on this day-of-week at all
-        // (mondayToFriday covers every Monday–Friday of the year;
-        //  saturday covers every Saturday of the year, etc.)
-        if (!isDoctorAvailableOn(d, rawWH, consultationType)) continue;
-
-        // For today only: skip if the shift end time has already passed
-        if (i === 0) {
-            const shiftEnd = getDayEndTime(rawWH, consultationType, d);
-            if (shiftEnd && now >= shiftEnd) continue;
+        if (isDoctorAvailableOn(d, rawWH, consultationType)) {
+            return d;
         }
-
-        return d;
     }
-    return today; // absolute fallback
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Generate Half Hour Slots
-═══════════════════════════════════════════════════════════════════ */
-function generateHalfHourSlots(rawWH: any, consultationType: string, date: Date) {
-    const wh = resolveWorkingHours(rawWH, consultationType);
-    const dayName = DAY_NAMES_JS[date.getDay()] as string;
-    const isWeekday = date.getDay() >= 1 && date.getDay() <= 5;
-
-    let sch: any = wh[dayName];
-    if ((!sch || !sch.active) && isWeekday && wh.mondayToFriday?.active) {
-        sch = wh.mondayToFriday;
-    }
-
-    const hasAnyActive = Object.values(wh).some((s: any) => s?.active === true);
-    if (!sch?.active && !hasAnyActive && isWeekday) {
-        sch = { start: '09:00', end: '17:00', active: true };
-    }
-
-    if (!sch || !sch.active || !sch.start || !sch.end || sch.start === '00:00') return [];
-
-    const slots: { time: string; status: "available"|"booked"|"past"|"locked"|"Locked"|"Booked"|string; available: boolean; isLocked?: boolean }[] = [];
-    const parseTimeStr = (tStr: string) => {
-        if (!tStr) return { h: 0, m: 0 };
-        const [time, modifier] = tStr.trim().split(/\s+/);
-        let [h, m] = time.split(':').map(Number);
-        if (isNaN(h)) h = 0;
-        if (isNaN(m)) m = 0;
-        if (modifier) {
-            if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
-            if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
-        }
-        return { h, m };
-    };
-
-    let startParsed = parseTimeStr(sch.start);
-    let endParsed = parseTimeStr(sch.end);
-
-    let current = new Date(date);
-    current.setHours(startParsed.h, startParsed.m, 0, 0);
-
-    const end = new Date(date);
-    end.setHours(endParsed.h, endParsed.m, 0, 0);
-
-    // Midnight crossing logic
-    if (end <= current) {
-        end.setDate(end.getDate() + 1);
-    }
-
-    const now = new Date();
-
-    const SLOT_DURATION = 30;
-    const BUFFER = 10;
-    const TOTAL_STEP = SLOT_DURATION + BUFFER;
-
-    while (current < end) {
-        // If adding the slot duration exceeds the end time, break
-        const slotEnd = new Date(current);
-        slotEnd.setMinutes(slotEnd.getMinutes() + SLOT_DURATION);
-        if (slotEnd > end) break;
-
-        const h24 = current.getHours();
-        const period = h24 >= 12 && h24 < 24 ? 'PM' : 'AM';
-        const hr12 = h24 % 12 || 12;
-        const timeString = `${String(hr12).padStart(2, '0')}:${String(current.getMinutes()).padStart(2, '0')} ${period}`;
-        const slotEndTime = new Date(current.getTime() + 30 * 60000);
-        const isPast = slotEndTime < now;
-
-        slots.push({
-            time: timeString,
-            status: isPast ? "past" : "available",
-            available: !isPast
-        });
-
-        current.setMinutes(current.getMinutes() + TOTAL_STEP);
-    }
-
-    return slots;
+    return today;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -207,46 +79,55 @@ const loadRazorpayScript = () => {
    Component
 ═══════════════════════════════════════════════════════════════════ */
 export default function BookingForm({ doctor }: { doctor: any }) {
-    const router  = useRouter();
-    const rawWH   = doctor.workingHours || {};
+    const router = useRouter();
+    const rawWH = doctor.workingHours || {};
     
     const dispatch = useDispatch<AppDispatch>();
-    const { isSlotLocked, lockedSlotDetails } = useSelector((state: RootState) => state.appointment);
+    const { isSlotLocked } = useSelector((state: RootState) => state.appointment);
     const { user } = useSelector((state: RootState) => state.auth);
     const currentUserId = user?._id || user?.id;
     const paymentCompleted = useRef(false);
 
+    // 14-Day Rolling Window Boundaries
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const maxBookingDate = new Date(today);
+    maxBookingDate.setDate(today.getDate() + 14);
+    maxBookingDate.setHours(23, 59, 59, 999);
+
+    /* ── Channel Availability ── */
+    const isOnlineEnabled = doctor.consultationSettings?.online?.enabled ?? doctor.consultationSettings?.video?.enabled ?? true;
+    const onlineFee = doctor.consultationSettings?.online?.fee ?? doctor.consultationSettings?.video?.fee ?? 0;
+    const isOfflineEnabled = doctor.consultationSettings?.offline?.enabled ?? doctor.consultationSettings?.physical?.enabled ?? false;
+    const offlineFee = doctor.consultationSettings?.offline?.fee ?? doctor.consultationSettings?.physical?.fee ?? 0;
+
     /* ── State ── */
-    const [type, setType]         = useState<"video"|"physical">("video");
-    const [patientType, setPatientType] = useState<"NEW" | "FOLLOW_UP" | "">("");
+    const [type, setType] = useState<"online" | "offline">(isOnlineEnabled ? "online" : "offline");
+    const [patientType, setPatientType] = useState<"NEW" | "FOLLOW_UP" | "">("NEW");
+    
     const [selectedDate, setSelectedDate] = useState<Date>(() => {
-        const d = new Date();
-        d.setHours(0, 0, 0, 0);
-        return d;
+        return findNextWorkingDate(rawWH, isOnlineEnabled ? "online" : "offline", today, maxBookingDate);
     });
-    const [calendarYear,  setCalendarYear]  = useState(() => selectedDate.getFullYear());
+    
+    const [calendarYear, setCalendarYear] = useState(() => selectedDate.getFullYear());
     const [calendarMonth, setCalendarMonth] = useState(() => selectedDate.getMonth());
 
-    const [time, setTime]             = useState("");
-    const [notes, setNotes]           = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError]           = useState("");
+    const [time, setTime] = useState("");
+    const [notes, setNotes] = useState("");
+    const [error, setError] = useState("");
 
-    // Real-time clock to force elapsed time re-evaluation
-    const [currentTime, setCurrentTime] = useState(() => new Date());
-    
-    // Update the clock every 30 seconds
-    useEffect(() => {
-        const timer = setInterval(() => setCurrentTime(new Date()), 30000);
-        return () => clearInterval(timer);
-    }, []);
-
-    const [allSlots, setAllSlots]     = useState<{ time: string; status: "available"|"booked"|"past"|"locked"|"Locked"|"Booked"|string; available: boolean; isLocked?: boolean }[]>([]);
+    const [allSlots, setAllSlots] = useState<Slot[]>([]);
     const [doctorWorking, setDoctorWorking] = useState(true);
     const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+    
+    // Timezone states (Auto-detected patient IANA timezone and doctor's operating timezone)
+    const [patientTimezone] = useState<string>(() => {
+        return typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+    });
+    const [doctorTimezone, setDoctorTimezone] = useState<string>(() => {
+        return doctor?.timezone || "Asia/Kolkata";
+    });
     
     // Modal states
     const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -254,47 +135,19 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
-    const videoEnabled   = doctor.consultationSettings?.video?.enabled    ?? false;
-    const videoFee       = doctor.consultationSettings?.video?.fee        || 0;
-    const physicalEnabled = doctor.consultationSettings?.physical?.enabled ?? false;
-    const physicalFee    = doctor.consultationSettings?.physical?.fee     || 0;
-
     /* ── Derived ── */
-    const fee = type === "video" ? videoFee : physicalFee;
+    const fee = type === "online" ? onlineFee : offlineFee;
     const dateString = [
         selectedDate.getFullYear(),
         String(selectedDate.getMonth() + 1).padStart(2, "0"),
         String(selectedDate.getDate()).padStart(2, "0"),
     ].join("-");
 
-    // Check if the currently selected time is expired based on the patientType
-    let isSelectedTimeExpired = false;
-    if (time && patientType) {
-        const parseTimeStr = (tStr: string) => {
-            if (!tStr) return { h: 0, m: 0 };
-            const [tPart, modifier] = tStr.trim().split(/\s+/);
-            let [h, m] = tPart.split(':').map(Number);
-            if (isNaN(h)) h = 0;
-            if (isNaN(m)) m = 0;
-            if (modifier) {
-                if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
-                if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
-            }
-            return { h, m };
-        };
-        const { h, m } = parseTimeStr(time);
-        const exactAppTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), h, m, 0);
-        const elapsedMinutes = (new Date().getTime() - exactAppTime.getTime()) / 60000;
-        
-        if (patientType === "NEW" && elapsedMinutes > 10) isSelectedTimeExpired = true;
-        if (patientType === "FOLLOW_UP" && elapsedMinutes > 20) isSelectedTimeExpired = true;
-    }
-
-    /* ── Default type ── */
+    /* ── Default channel selection ── */
     useEffect(() => {
-        if (!videoEnabled && physicalEnabled) setType("physical");
-        else if (videoEnabled)               setType("video");
-    }, [videoEnabled, physicalEnabled]);
+        if (!isOnlineEnabled && isOfflineEnabled) setType("offline");
+        else if (isOnlineEnabled) setType("online");
+    }, [isOnlineEnabled, isOfflineEnabled]);
 
     /* ── Slot Lock Edge Case ── */
     const lockInfoRef = useRef({
@@ -346,38 +199,77 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         };
     }, [dispatch]);
 
-    /* ── Fetch slots ── */
+    /* ── Fetch slots directly from backend API ── */
     const fetchSlots = useCallback(async (preserveTime = false) => {
         setIsLoadingSlots(true);
         if (!preserveTime) setTime("");
         setDoctorWorking(true);
         try {
             const res = await getAvailableSlots(doctor._id || doctor.id, dateString, type);
-            if (res.success && res.allSlots && res.allSlots.length > 0) {
-                setAllSlots(res.allSlots);
+            if (res.success) {
+                const slotsData = res.allSlots || [];
+                setAllSlots(slotsData);
                 setDoctorWorking(res.doctorWorking !== false);
+                if (res.doctorTimezone) {
+                    setDoctorTimezone(res.doctorTimezone);
+                }
+                // If preserving time, make sure the chosen slot is still available and not on break
+                if (preserveTime) {
+                    setTime((prevTime) => {
+                        if (!prevTime) return "";
+                        const matching = slotsData.find((s: any) => s.time === prevTime);
+                        if (!matching || matching.status !== "available" || matching.isBreak) {
+                            return "";
+                        }
+                        return prevTime;
+                    });
+                }
             } else {
-                const generated = generateHalfHourSlots(rawWH, type, selectedDate);
-                setAllSlots(generated);
-                setDoctorWorking(generated.length > 0);
+                setAllSlots([]);
+                setDoctorWorking(false);
             }
         } catch {
-            const generated = generateHalfHourSlots(rawWH, type, selectedDate);
-            setAllSlots(generated);
-            setDoctorWorking(generated.length > 0);
+            setAllSlots([]);
+            setDoctorWorking(false);
         } finally {
             setIsLoadingSlots(false);
         }
-    }, [dateString, type, doctor._id, doctor.id, rawWH, selectedDate]);
+    }, [dateString, type, doctor._id, doctor.id]);
 
-    useEffect(() => { fetchSlots(); }, [fetchSlots]);
+    useEffect(() => { 
+        fetchSlots(); 
+    }, [fetchSlots]);
+
+    // Refresh slot availability when patient returns to or focuses the tab
+    useEffect(() => {
+        const handleFocus = () => {
+            if (!isSlotLocked && !showConfirmModal) {
+                fetchSlots(true);
+            }
+        };
+
+        window.addEventListener('focus', handleFocus);
+        document.addEventListener('visibilitychange', handleFocus);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleFocus);
+        };
+    }, [fetchSlots, isSlotLocked, showConfirmModal]);
 
     /* ── Submit ── */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError("");
         if (!patientType) { setError("Please select a Consultation Type (New or Follow-up)."); return; }
-        if (!dateString || !time) { setError("Please select a date and time."); return; }
+        if (!dateString || !time) { setError("Please select an available appointment slot."); return; }
+
+        const chosenSlot = allSlots.find(s => s.time === time);
+        if (!chosenSlot || chosenSlot.status !== 'available' || chosenSlot.isBreak) {
+            setError("The selected slot is unavailable or closed by the doctor. Please choose an active slot.");
+            return;
+        }
+
         setShowConfirmModal(true);
     };
 
@@ -396,7 +288,6 @@ export default function BookingForm({ doctor }: { doctor: any }) {
             let orderCurrency = 'INR';
 
             if (!orderId) {
-                // Generate Razorpay Order
                 const orderResult = await dispatch(createRazorpayOrder({ appointmentId })).unwrap();
                 orderId = orderResult.id;
                 orderAmount = orderResult.amount;
@@ -408,13 +299,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 if (heartbeatInterval) clearInterval(heartbeatInterval);
             };
 
-            // Configure Razorpay options
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
                 amount: orderAmount,
                 currency: orderCurrency,
-                name: "Zydoc Consultation",
-                description: "Consultation Fee",
+                name: "Zydoc Healthcare",
+                description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
                 order_id: orderId,
                 handler: async function (response: any) {
                     clearHeartbeat();
@@ -431,7 +321,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         router.push("/patient/appointments");
                     } catch (err: any) {
                         if (err?.code === 'SLOT_EXPIRED_REFUNDED') {
-                            setModalError("Your slot expired and was booked by someone else. Your payment has been automatically refunded.");
+                            setModalError("Your slot lock expired and was booked by another patient. Any amount charged has been refunded.");
                         } else {
                             setModalError(err?.message || err || "Payment verification failed.");
                         }
@@ -442,7 +332,6 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 modal: {
                     ondismiss: function () {
                         clearHeartbeat();
-                        // Unlock the slot if user closes the payment window
                         dispatch(unlockSlot({
                             doctorId: doctor._id || doctor.id,
                             date: dateString,
@@ -450,7 +339,6 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             consultationType: type
                         }));
                         
-                        // Revert local grid state so the slot appears available again
                         setAllSlots(prev => prev.map(slotObj => 
                             slotObj.time === time 
                                 ? { ...slotObj, status: "available", isLocked: false } 
@@ -462,14 +350,14 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     }
                 },
                 theme: {
-                    color: "#4f46e5" // indigo-600
+                    color: "#4f46e5"
                 }
             };
 
             const paymentObject = new (window as any).Razorpay(options);
             paymentObject.open();
 
-            // Start heartbeat
+            // Heartbeat lock extension
             heartbeatInterval = setInterval(async () => {
                 try {
                     await extendLock(appointmentId);
@@ -497,51 +385,70 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 time, 
                 consultationType: type,
                 patientType,
-                notes
+                notes,
+                patientTimezone,
+                doctorTimezone,
+                // Forward the pre-computed UTC timestamps from the slot object when available.
+                // The backend uses these as the authoritative slot boundaries instead of
+                // re-deriving them from the display time string.
+                ...(allSlots.find(s => s.time === time)?.startTimeUTC && {
+                    startTimeUTC: allSlots.find(s => s.time === time)!.startTimeUTC,
+                    endTimeUTC:   allSlots.find(s => s.time === time)!.endTimeUTC,
+                }),
             })).unwrap();
             lockSuccess = true;
             
-            // Instantly update the local grid to show the locked status
             setAllSlots(prev => prev.map(slotObj => 
                 slotObj.time === time 
                     ? { ...slotObj, status: "Locked", isLocked: true } 
                     : slotObj
             ));
         } catch (err: any) {
-            setModalError('unfortunately, This slot was just locked by another user');
+            setModalError(err?.message || 'Unfortunately, this slot was just locked or booked by another patient.');
             setIsLocking(false);
-            fetchSlots(true); // Preserve time to keep the modal open!
+            fetchSlots(true);
             return;
         }
 
         if (lockSuccess && lockResult) {
-            // Extract the appointmentId from the locked slot response
             const appointmentId = lockResult._id || lockResult.appointmentId || lockResult.id;
-            
             if (appointmentId) {
                 await handlePayment(appointmentId);
             } else {
-                setModalError("Could not retrieve appointment ID from the lock response.");
+                setModalError("Could not retrieve appointment confirmation details.");
             }
-            
             setIsLocking(false);
         } 
     };
 
-    /* ── Calendar helpers ── */
+    /* ── 14-Day Calendar helpers ── */
+    const canGoPrevMonth = !(calendarMonth === today.getMonth() && calendarYear === today.getFullYear());
+    const canGoNextMonth = !(calendarMonth === maxBookingDate.getMonth() && calendarYear === maxBookingDate.getFullYear());
+
     const goToPrevMonth = () => {
-        if (calendarMonth === 0) { setCalendarYear(y => y - 1); setCalendarMonth(11); }
-        else setCalendarMonth(m => m - 1);
+        if (!canGoPrevMonth) return;
+        if (calendarMonth === 0) { 
+            setCalendarYear(y => y - 1); 
+            setCalendarMonth(11); 
+        } else {
+            setCalendarMonth(m => m - 1);
+        }
     };
+
     const goToNextMonth = () => {
-        if (calendarMonth === 11) { setCalendarYear(y => y + 1); setCalendarMonth(0); }
-        else setCalendarMonth(m => m + 1);
+        if (!canGoNextMonth) return;
+        if (calendarMonth === 11) { 
+            setCalendarYear(y => y + 1); 
+            setCalendarMonth(0); 
+        } else {
+            setCalendarMonth(m => m + 1);
+        }
     };
 
     const buildCalendarDays = (): (Date | null)[] => {
         const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
-        const startDow     = (firstOfMonth.getDay() + 6) % 7; // Mon=0
-        const daysInMonth  = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+        const startDow = (firstOfMonth.getDay() + 6) % 7; // Mon=0
+        const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
         const cells: (Date | null)[] = [];
         for (let i = 0; i < startDow; i++) cells.push(null);
         for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(calendarYear, calendarMonth, d));
@@ -551,93 +458,95 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     const isSameDay = (a: Date, b: Date) =>
         a.getFullYear() === b.getFullYear() &&
-        a.getMonth()    === b.getMonth()    &&
-        a.getDate()     === b.getDate();
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
 
-    const isPastDate  = (d: Date) => d < today;
+    const isPastDate = (d: Date) => d < today;
+    const isBeyond14Days = (d: Date) => d > maxBookingDate;
     const isDrWorking = (d: Date) => isDoctorAvailableOn(d, rawWH, type);
 
-    const calendarDays   = buildCalendarDays();
-    const hasAvailable   = allSlots.some(s => s.status === "available");
-    const availableCount = allSlots.filter(s => s.status === "available").length;
+    const calendarDays = buildCalendarDays();
+    const availableCount = allSlots.filter(s => s.status === "available" && !s.isBreak).length;
 
-    // Check if the currently selected slot is Follow-up only
-    const selectedSlotObj = time ? allSlots.find((s: any) => s.time === time) : null;
-    const isSelectedSlotFollowUpOnly = (selectedSlotObj as any)?.isFollowUpOnly || false;
-
-
-    /* ════════════════════════════════════════════════════════
-       Render
-    ════════════════════════════════════════════════════════ */
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-                <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100 flex items-center gap-2">
+                <div className="p-3.5 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100 flex items-center gap-2">
                     <i className="fas fa-exclamation-circle" />
-                    {error}
+                    <span>{error}</span>
                 </div>
             )}
-
-
 
             {/* ─── Consultation Method ─── */}
             <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700">Consultation Method</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {videoEnabled && (
+                    {isOnlineEnabled && (
                         <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                            ${type === "video" ? "bg-indigo-50/60 border-indigo-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                            <input type="radio" name="consultationType" value="video" className="sr-only"
-                                checked={type === "video"} onChange={() => setType("video")} />
+                            ${type === "online" ? "bg-indigo-50/60 border-indigo-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                            <input 
+                                type="radio" 
+                                name="consultationType" 
+                                value="online" 
+                                className="sr-only"
+                                checked={type === "online"} 
+                                onChange={() => setType("online")} 
+                            />
                             <div className="flex w-full items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                        ${type === "video" ? "bg-indigo-100" : "bg-slate-100"}`}>
-                                        <i className={`fas fa-video text-sm ${type === "video" ? "text-indigo-600" : "text-slate-500"}`} />
+                                        ${type === "online" ? "bg-indigo-100" : "bg-slate-100"}`}>
+                                        <i className={`fas fa-video text-sm ${type === "online" ? "text-indigo-600" : "text-slate-500"}`} />
                                     </span>
                                     <div className="text-sm">
-                                        <p className={`font-bold ${type === "video" ? "text-indigo-900" : "text-slate-900"}`}>
-                                            Online Consultation
+                                        <p className={`font-bold ${type === "online" ? "text-indigo-900" : "text-slate-900"}`}>
+                                            Telehealth Video Call
                                         </p>
-                                        <p className={`text-xs mt-0.5 ${type === "video" ? "text-indigo-600" : "text-slate-400"}`}>
-                                            Video Call
+                                        <p className={`text-xs mt-0.5 ${type === "online" ? "text-indigo-600" : "text-slate-400"}`}>
+                                            Online Virtual Visit
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`text-base font-bold ${type === "video" ? "text-indigo-600" : "text-slate-600"}`}>
-                                    ₹{videoFee}
+                                <div className={`text-base font-bold ${type === "online" ? "text-indigo-600" : "text-slate-600"}`}>
+                                    ₹{onlineFee}
                                 </div>
                             </div>
-                            {type === "video" && (
+                            {type === "online" && (
                                 <div className="absolute -inset-px rounded-xl border-2 border-indigo-500 pointer-events-none" />
                             )}
                         </label>
                     )}
-                    {physicalEnabled && (
+                    {isOfflineEnabled && (
                         <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                            ${type === "physical" ? "bg-emerald-50/60 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                            <input type="radio" name="consultationType" value="physical" className="sr-only"
-                                checked={type === "physical"} onChange={() => setType("physical")} />
+                            ${type === "offline" ? "bg-emerald-50/60 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                            <input 
+                                type="radio" 
+                                name="consultationType" 
+                                value="offline" 
+                                className="sr-only"
+                                checked={type === "offline"} 
+                                onChange={() => setType("offline")} 
+                            />
                             <div className="flex w-full items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                        ${type === "physical" ? "bg-emerald-100" : "bg-slate-100"}`}>
-                                        <i className={`fas fa-hospital text-sm ${type === "physical" ? "text-emerald-600" : "text-slate-500"}`} />
+                                        ${type === "offline" ? "bg-emerald-100" : "bg-slate-100"}`}>
+                                        <i className={`fas fa-hospital text-sm ${type === "offline" ? "text-emerald-600" : "text-slate-500"}`} />
                                     </span>
                                     <div className="text-sm">
-                                        <p className={`font-bold ${type === "physical" ? "text-emerald-900" : "text-slate-900"}`}>
-                                            Clinic Visit
+                                        <p className={`font-bold ${type === "offline" ? "text-emerald-900" : "text-slate-900"}`}>
+                                            In-Person Clinic Visit
                                         </p>
-                                        <p className={`text-xs mt-0.5 ${type === "physical" ? "text-emerald-600" : "text-slate-400"}`}>
-                                            In Person
+                                        <p className={`text-xs mt-0.5 ${type === "offline" ? "text-emerald-600" : "text-slate-400"}`}>
+                                            Physical Consultation
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`text-base font-bold ${type === "physical" ? "text-emerald-600" : "text-slate-600"}`}>
-                                    ₹{physicalFee}
+                                <div className={`text-base font-bold ${type === "offline" ? "text-emerald-600" : "text-slate-600"}`}>
+                                    ₹{offlineFee}
                                 </div>
                             </div>
-                            {type === "physical" && (
+                            {type === "offline" && (
                                 <div className="absolute -inset-px rounded-xl border-2 border-emerald-500 pointer-events-none" />
                             )}
                         </label>
@@ -648,27 +557,37 @@ export default function BookingForm({ doctor }: { doctor: any }) {
             {/* ─── Date + Time card ─── */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
 
-                {/* ── Calendar ── */}
+                {/* ── Calendar (14-Day Rolling Window) ── */}
                 <div className="p-5 border-b border-slate-100">
-                    {/* Header row */}
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                <i className="fas fa-calendar-alt text-indigo-600 text-xs" />
-                            </span>
-                            Select Date
-                        </h2>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
+                                    <i className="fas fa-calendar-alt text-indigo-600 text-xs" />
+                                </span>
+                                Select Date
+                            </h2>
+                            <p className="text-[11px] text-slate-400 mt-0.5">Booking available up to 14 days in advance</p>
+                        </div>
                         <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-slate-700">
                                 {MONTH_NAMES[calendarMonth]} {calendarYear}
                             </span>
                             <div className="flex gap-1">
-                                <button type="button" onClick={goToPrevMonth}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+                                <button 
+                                    type="button" 
+                                    onClick={goToPrevMonth}
+                                    disabled={!canGoPrevMonth}
+                                    className={`w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 transition-colors ${!canGoPrevMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600'}`}
+                                >
                                     <i className="fas fa-chevron-left text-[10px]" />
                                 </button>
-                                <button type="button" onClick={goToNextMonth}
-                                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+                                <button 
+                                    type="button" 
+                                    onClick={goToNextMonth}
+                                    disabled={!canGoNextMonth}
+                                    className={`w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 transition-colors ${!canGoNextMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600'}`}
+                                >
                                     <i className="fas fa-chevron-right text-[10px]" />
                                 </button>
                             </div>
@@ -687,11 +606,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         {calendarDays.map((day, idx) => {
                             if (!day) return <div key={`e-${idx}`} />;
 
-                            const past      = isPastDate(day);
-                            const drOff     = !past && !isDrWorking(day);
-                            const disabled  = past || drOff;
-                            const selected  = isSameDay(day, selectedDate);
-                            const isToday   = isSameDay(day, today);
+                            const past = isPastDate(day);
+                            const outOfWindow = isBeyond14Days(day);
+                            const drOff = !past && !outOfWindow && !isDrWorking(day);
+                            const disabled = past || outOfWindow;
+                            const selected = isSameDay(day, selectedDate);
+                            const isToday = isSameDay(day, today);
 
                             return (
                                 <button
@@ -703,30 +623,30 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         setCalendarYear(day.getFullYear());
                                         setCalendarMonth(day.getMonth());
                                     }}
-                                    title={drOff ? "Doctor not working" : past ? "Past date" : ""}
+                                    title={outOfWindow ? "Outside 14-day booking window" : drOff ? "Doctor not scheduled" : past ? "Past date" : "Select date"}
                                     className={`
                                         mx-auto flex flex-col items-center justify-center w-11 h-12 rounded-xl
                                         transition-all duration-150
-                                        ${past
-                                            ? "text-slate-300 cursor-not-allowed"
+                                        ${past || outOfWindow
+                                            ? "text-slate-300 cursor-not-allowed opacity-50"
                                             : drOff
                                                 ? "bg-slate-50 text-slate-300 cursor-not-allowed border border-dashed border-slate-200"
                                                 : selected
-                                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 font-bold"
                                                     : isToday
-                                                        ? "border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                                                        ? "border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-bold"
                                                         : "text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-100"
                                         }
                                     `}
                                 >
-                                    <span className={`text-sm leading-none font-bold`}>
+                                    <span className="text-sm leading-none font-bold">
                                         {day.getDate()}
                                     </span>
                                     <span className={`text-[9px] leading-none mt-0.5 font-medium
-                                        ${past ? "text-slate-300" : drOff ? "text-slate-300" : selected ? "text-indigo-200" : "text-slate-400"}`}>
-                                        {drOff ? "Closed" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
+                                        ${past || outOfWindow ? "text-slate-300" : drOff ? "text-slate-300" : selected ? "text-indigo-200" : "text-slate-400"}`}>
+                                        {drOff ? "Closed" : outOfWindow ? "—" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
                                     </span>
-                                </button>
+                                </button> 
                             );
                         })}
                     </div>
@@ -734,11 +654,11 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     {/* Calendar legend */}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 pt-3 border-t border-slate-50">
                         {[
-                            { color: "bg-indigo-600",   label: "Selected" },
-                            { color: "bg-white border border-indigo-300", label: "Today" },
-                            { color: "bg-white border border-slate-200",  label: "Available" },
+                            { color: "bg-indigo-600", label: "Selected" },
+                            { color: "bg-white border-2 border-indigo-300", label: "Today" },
+                            { color: "bg-white border border-slate-200", label: "Available" },
                             { color: "bg-slate-100 border border-dashed border-slate-300", label: "Closed" },
-                            { color: "bg-slate-100",    label: "Past" },
+                            { color: "bg-slate-100", label: "Out of Window" },
                         ].map(({ color, label }) => (
                             <span key={label} className="flex items-center gap-1 text-[10px] text-slate-500">
                                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
@@ -748,22 +668,26 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     </div>
                 </div>
 
-                {/* ─── Patient Type ─── */}
+                {/* ─── Patient Consultation Type ─── */}
                 <div className="p-5 border-b border-slate-100 bg-slate-50/50">
                     <div className="space-y-3">
                         <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
                             <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
                                 <i className="fas fa-users text-indigo-600 text-xs" />
                             </span>
-                            Consultation Type
+                            Visit Classification
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label className={`relative flex rounded-xl border p-4 transition-all
-                                ${isSelectedSlotFollowUpOnly ? "opacity-50 cursor-not-allowed bg-slate-50" : "cursor-pointer"}
-                                ${patientType === "NEW" ? "bg-indigo-50/60 border-indigo-300 shadow-sm" : isSelectedSlotFollowUpOnly ? "border-slate-200" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                                <input type="radio" name="patientType" value="NEW" className="sr-only"
-                                    disabled={isSelectedSlotFollowUpOnly}
-                                    checked={patientType === "NEW"} onChange={() => setPatientType("NEW")} />
+                            <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
+                                ${patientType === "NEW" ? "bg-indigo-50/60 border-indigo-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                                <input 
+                                    type="radio" 
+                                    name="patientType" 
+                                    value="NEW" 
+                                    className="sr-only"
+                                    checked={patientType === "NEW"} 
+                                    onChange={() => setPatientType("NEW")} 
+                                />
                                 <div className="flex w-full items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center
@@ -775,7 +699,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                                 New Consultation
                                             </p>
                                             <p className={`text-xs mt-0.5 ${patientType === "NEW" ? "text-indigo-600" : "text-slate-400"}`}>
-                                                First time visit
+                                                First-time appointment
                                             </p>
                                         </div>
                                     </div>
@@ -783,17 +707,18 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 {patientType === "NEW" && (
                                     <div className="absolute -inset-px rounded-xl border-2 border-indigo-500 pointer-events-none" />
                                 )}
-                                {isSelectedSlotFollowUpOnly && (
-                                    <span className="absolute top-2 right-3 text-[10px] font-bold text-slate-400">
-                                        Not available for selected time
-                                    </span>
-                                )}
                             </label>
 
                             <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
                                 ${patientType === "FOLLOW_UP" ? "bg-emerald-50/60 border-emerald-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                                <input type="radio" name="patientType" value="FOLLOW_UP" className="sr-only"
-                                    checked={patientType === "FOLLOW_UP"} onChange={() => setPatientType("FOLLOW_UP")} />
+                                <input 
+                                    type="radio" 
+                                    name="patientType" 
+                                    value="FOLLOW_UP" 
+                                    className="sr-only"
+                                    checked={patientType === "FOLLOW_UP"} 
+                                    onChange={() => setPatientType("FOLLOW_UP")} 
+                                />
                                 <div className="flex w-full items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center
@@ -802,10 +727,10 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         </span>
                                         <div className="text-sm">
                                             <p className={`font-bold ${patientType === "FOLLOW_UP" ? "text-emerald-900" : "text-slate-900"}`}>
-                                                Follow-up
+                                                Follow-Up Visit
                                             </p>
                                             <p className={`text-xs mt-0.5 ${patientType === "FOLLOW_UP" ? "text-emerald-600" : "text-slate-400"}`}>
-                                                Returning patient
+                                                Returning follow-up
                                             </p>
                                         </div>
                                     </div>
@@ -818,323 +743,150 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     </div>
                 </div>
 
-                {/* ── Time slots ── */}
+                {/* ── Time slots (SlotPicker Component Integration) ── */}
                 <div className="p-5">
                     <div className="flex items-center justify-between mb-3">
                         <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                             <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
                                 <i className="fas fa-clock text-indigo-600 text-xs" />
                             </span>
-                            Select Time
+                            Select Time Slot
                             <span className="text-[11px] font-normal text-slate-400">
                                 — {MONTH_NAMES[selectedDate.getMonth()].slice(0,3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
                             </span>
                         </h2>
-                        {hasAvailable && !isLoadingSlots && (
+                        {availableCount > 0 && !isLoadingSlots && (
                             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                {availableCount} slot{availableCount !== 1 ? "s" : ""} free
+                                {availableCount} slot{availableCount !== 1 ? "s" : ""} available
                             </span>
                         )}
                     </div>
 
-                    {/* Slots area */}
-                    {isLoadingSlots ? (
-                        <div className="flex items-center gap-2 text-slate-400 text-sm py-6 justify-center">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-600 border-t-transparent" />
-                            Checking availability…
-                        </div>
-                    ) : !doctorWorking ? (
-                        <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                            <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                                <i className="fas fa-calendar-xmark text-amber-500 text-sm" />
-                            </span>
-                            <div>
-                                <p className="text-amber-700 text-sm font-semibold">Doctor not available on this day</p>
-                                <p className="text-amber-600 text-xs mt-0.5">Please choose a different date from the calendar above.</p>
-                            </div>
-                        </div>
-                    ) : allSlots.length === 0 ? (
-                        <div className="flex flex-col items-center py-8 text-center">
-                            <span className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                                <i className="far fa-calendar-times text-slate-400 text-xl" />
-                            </span>
-                            <p className="text-slate-600 text-sm font-semibold">No slots configured</p>
-                            <p className="text-slate-400 text-xs mt-1">Try a different date or consultation type.</p>
-                        </div>
-                    ) : (
-                        <div className={`grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 ${isSlotLocked ? "pointer-events-none opacity-75" : ""}`}>
-                            {/* {console.log("BookingForm rendering slots:", allSlots)} */}
-                            {allSlots.map((slotObj) => {
-                                const { time: slotTime, status, isLocked: apiIsLocked, lockedBy, razorpayOrderId, appointmentId, isFollowUpOnly: apiIsFollowUpOnly, isExpired: apiIsExpired } = slotObj as any;
-
-                                const isAnyLocked = status === "locked" || status === "Locked" || apiIsLocked === true;
-                                const isPendingPayment = isAnyLocked && lockedBy === currentUserId;
-                                const isLockedByMe = (isAnyLocked && time === slotTime && isSlotLocked) || isPendingPayment;
-                                const isLockedByOther = isAnyLocked && !isLockedByMe;
-                                const isBooked = status === "booked" || status === "Booked";
-                                const isPst = status === "past";
-                                
-                                // Parse time to check elapsed time for frontend specific NEW patient rules
-                                const parseTimeStr = (tStr: string) => {
-                                    if (!tStr) return { h: 0, m: 0 };
-                                    const [t, modifier] = tStr.trim().split(/\s+/);
-                                    let [h, m] = t.split(':').map(Number);
-                                    if (isNaN(h)) h = 0;
-                                    if (isNaN(m)) m = 0;
-                                    if (modifier) {
-                                        if (modifier.toUpperCase() === 'PM' && h < 12) h += 12;
-                                        if (modifier.toUpperCase() === 'AM' && h === 12) h = 0;
-                                    }
-                                    return { h, m };
-                                };
-                                const { h, m } = parseTimeStr(slotTime);
-                                const exactAppTime = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), h, m, 0);
-                                const elapsedMinutes = (currentTime.getTime() - exactAppTime.getTime()) / 60000;
-                                
-                                const isTimeExpiredNew = patientType === "NEW" && elapsedMinutes > 10;
-                                const isTimeExpiredFollowUp = patientType === "FOLLOW_UP" && elapsedMinutes > 20;
-                                
-                                // Use both frontend dynamic logic AND explicit backend API flags (handles timezone drift)
-                                const isTimeExpired = isTimeExpiredNew || isTimeExpiredFollowUp || apiIsExpired || (elapsedMinutes > 20);
-
-                                const isDisabled = isLockedByOther || isBooked || isPst || isTimeExpired;
-                                const isSelected = time === slotTime && !isPendingPayment;
-                                const isAvailable = !isDisabled;
-                                
-                                // robust frontend fallback for follow-up only
-                                const frontendIsFollowUpOnly = elapsedMinutes > 10 && elapsedMinutes <= 20;
-                                const isFollowUpOnly = (apiIsFollowUpOnly || frontendIsFollowUpOnly) && !isDisabled && !isSelected;
-
-                                return (
-                                    <button
-                                        key={slotTime}
-                                        type="button"
-                                        disabled={isDisabled}
-                                        onClick={() => {
-                                            if (isPendingPayment && appointmentId && razorpayOrderId) {
-                                                handlePayment(appointmentId, razorpayOrderId);
-                                                return;
-                                            }
-                                            if (isSlotLocked) return;
-                                            if (isAvailable) setTime(slotTime);
-                                        }}
-                                        title={
-                                            isPendingPayment ? "Resume Payment"
-                                            : isLockedByOther ? "Locked by another user"
-                                            : isLockedByMe ? "Locked for your payment"
-                                            : isBooked ? "Already booked"
-                                            : isPst  ? "Time has passed"
-                                            : isTimeExpired ? "Booking Closed"
-                                            : "Click to select"
-                                        }
-                                        className={`
-                                            relative flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all duration-200
-                                            ${(isPst || isTimeExpired)
-                                                ? "bg-slate-50/50 text-slate-300 border-slate-100 cursor-not-allowed"
-                                                : isPendingPayment
-                                                    ? "bg-amber-100 text-amber-800 border-amber-400 hover:bg-amber-200 shadow-sm"
-                                                : isLockedByOther
-                                                    ? "bg-orange-50 text-orange-600 border-orange-400 font-semibold opacity-75 cursor-not-allowed pointer-events-none"
-                                                : isBooked
-                                                    ? "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed opacity-50"
-                                                : isSelected
-                                                    ? "bg-indigo-50 text-indigo-700 border-indigo-600 shadow-sm"
-                                                : isFollowUpOnly
-                                                    ? "bg-red-50 text-red-600 border-red-500 hover:bg-red-100/70 hover:shadow-sm"
-                                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-sm"
-                                            }
-                                        `}
-                                    >
-                                        <span className={`text-sm font-bold flex items-center gap-1.5 ${(isPst || isTimeExpired) || isBooked || isLockedByOther ? 'opacity-70' : ''}`}>
-                                            {isAnyLocked && !isPendingPayment && <i className="fas fa-lock text-[10px] opacity-70" />}
-                                            {slotTime}
-                                        </span>
-                                        {isBooked && (
-                                            <span className="text-[10px] font-black tracking-wider uppercase mt-1 text-slate-400">Booked</span>
-                                        )}
-                                        {isTimeExpired && !isBooked && !isLockedByOther && (
-                                            <span className="text-[10px] font-black tracking-wider uppercase mt-1 text-slate-400">Closed</span>
-                                        )}
-                                        {isFollowUpOnly && (
-                                            <span className="text-[9px] font-bold tracking-wider uppercase mt-1 text-red-600">Follow-up Only</span>
-                                        )}
-                                        {isPendingPayment && (
-                                            <span className="text-[10px] font-bold tracking-wider uppercase mt-1 text-amber-700">Resume</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* Green confirmation banner — matches screenshot 3 */}
-                    {time && (
-                        <div className="flex items-center gap-2.5 mt-4 px-4 py-3 bg-emerald-500 rounded-xl w-full">
-                            <i className="fas fa-check-circle text-white text-base" />
-                            <span className="text-white text-sm font-semibold">
-                                Selected Time: {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()} at {time}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setTime("")}
-                                className="ml-auto text-white/70 hover:text-white transition-colors"
-                                title="Clear selection"
-                            >
-                                <i className="fas fa-times text-xs" />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Slot legend */}
-                    {allSlots.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4 pt-3 border-t border-slate-50">
-                            {[
-                                { color: "bg-indigo-600",  label: "Selected"  },
-                                { color: "bg-white border border-slate-300", label: "Available" },
-                                { color: "bg-red-50 border border-red-500", label: "Follow-up Only" },
-                                { color: "bg-orange-400",  label: "Locked"    },
-                                { color: "bg-slate-300",   label: "Booked"    },
-                                { color: "bg-slate-100",   label: "Past"      },
-                            ].map(({ color, label }) => (
-                                <span key={label} className="flex items-center gap-1 text-[10px] text-slate-500">
-                                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
-                                    {label}
-                                </span>
-                            ))}
-                        </div>
-                    )}
+                    <SlotPicker
+                        allSlots={allSlots}
+                        selectedTime={time}
+                        onTimeSelect={(selectedSlotTime) => {
+                            if (isSlotLocked) return;
+                            setTime(selectedSlotTime);
+                        }}
+                        isLoading={isLoadingSlots}
+                        doctorWorking={doctorWorking}
+                        fee={fee}
+                        consultationType={type}
+                        onPaymentResume={(appId, orderId) => handlePayment(appId, orderId)}
+                        currentUserId={currentUserId}
+                        isSlotLocked={isSlotLocked}
+                        doctorTimezone={doctorTimezone}
+                        patientTimezone={patientTimezone}
+                    />
                 </div>
             </div>
 
-            {/* ─── Notes ─── */}
-            <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700">
-                    Reason for visit
-                    <span className="font-normal text-slate-400 ml-1">(Optional)</span>
+            {/* ─── Notes / Reason for visit ─── */}
+            <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                    <i className="fas fa-notes-medical text-indigo-500 text-xs" />
+                    Symptoms & Medical Notes (Optional)
                 </label>
                 <textarea
                     rows={3}
                     value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Briefly describe your symptoms or reason for consultation…"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors resize-none text-sm"
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Briefly describe your symptoms or reason for the consultation..."
+                    className="w-full text-sm rounded-xl border border-slate-200 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400 resize-none shadow-sm"
                 />
             </div>
 
-            {/* ─── Submit bar ─── */}
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
-                <div>
-                    <p className="text-xs text-slate-400">Total to pay</p>
-                    <p className="text-2xl font-bold text-slate-800">₹{fee}</p>
-                </div>
-                <button
-                    type="submit"
-                    disabled={isSubmitting || !time || isSlotLocked || showConfirmModal || isSelectedTimeExpired}
-                    className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-md
-                               transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
-                >
-                    {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Confirming…
-                        </span>
-                    ) : isSelectedTimeExpired ? "Closed" : "Confirm Booking"}
-                </button>
-            </div>
+            {/* ─── Submit button ─── */}
+            <button
+                type="submit"
+                disabled={!time || isSlotLocked}
+                className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+                <i className="fas fa-lock text-xs" />
+                <span>Book & Proceed to Payment (₹{fee})</span>
+            </button>
 
-            {/* ─── Confirmation Modal ─── */}
-            {showConfirmModal && time && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                        {modalError ? (
-                            <div className="p-6 text-center">
-                                <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <i className="fas fa-lock text-2xl" />
-                                </div>
-                                <h4 className="text-lg font-bold text-slate-800 mb-2">slot is anavailable</h4>
-                                <p className="text-sm text-slate-500 mb-6">{modalError}</p>
-                                <button
-                                    type="button"
-                                    onClick={() => {
+            {/* ─── Confirmation & Payment Modal ─── */}
+            {showConfirmModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <i className="fas fa-shield-halved text-indigo-600" />
+                                Confirm Appointment Slot
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isPaymentLoading && !isLocking) {
                                         setShowConfirmModal(false);
                                         setModalError(null);
-                                        fetchSlots();
-                                    }}
-                                    className="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 transition-colors"
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="p-6">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-lg font-bold text-slate-800">Confirm Booking</h3>
-                                    <button 
-                                        type="button"
-                                        onClick={() => {
-                                            if (!isLocking) {
-                                                setShowConfirmModal(false);
-                                            }
-                                        }}
-                                        disabled={isLocking}
-                                        className="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
-                                    >
-                                        <i className="fas fa-times"></i>
-                                    </button>
-                                </div>
-                                
-                                <div className="space-y-4 mb-6">
-                                    <div className="bg-slate-50 p-4 rounded-xl space-y-3 border border-slate-100">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500 text-sm">Time</span>
-                                            <span className="font-semibold text-slate-700">{time}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500 text-sm">Type</span>
-                                            <span className="font-semibold text-slate-700 capitalize">{type || 'Not specified'}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-slate-500 text-sm">Consultation</span>
-                                            <span className="font-semibold text-slate-700 capitalize">
-                                                {patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : 'Not specified'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-center pt-3 border-t border-slate-200">
-                                            <span className="text-slate-500 text-sm font-medium">Total Fee</span>
-                                            <span className="font-bold text-indigo-600">₹{fee || 0}</span>
-                                        </div>
-                                    </div>
-                                    <p className="text-xs text-slate-500 text-center">
-                                        Your slot will be locked for 5 minutes to complete the payment.
-                                    </p>
-                                </div>
+                                    }
+                                }}
+                                disabled={isPaymentLoading || isLocking}
+                                className="text-slate-400 hover:text-slate-600 p-1"
+                            >
+                                <i className="fas fa-times" />
+                            </button>
+                        </div>
 
-                                <div className="flex gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setShowConfirmModal(false);
-                                        }}
-                                        disabled={isLocking}
-                                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors disabled:opacity-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleProceedToPay}
-                                        disabled={isLocking || isPaymentLoading}
-                                        className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70"
-                                    >
-                                        {(isLocking || isPaymentLoading) ? (
-                                            <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {isPaymentLoading ? "Loading..." : "Locking..."}</>
-                                        ) : (
-                                            "Proceed to Pay"
-                                        )}
-                                    </button>
-                                </div>
+                        {modalError && (
+                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100">
+                                {modalError}
                             </div>
                         )}
+
+                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl text-xs text-slate-600 border border-slate-100">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-medium">Doctor:</span>
+                                <span className="font-bold text-slate-800">Dr. {doctor.firstName} {doctor.lastName}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-medium">Date & Time:</span>
+                                <span className="font-bold text-slate-800">{dateString} at {time}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-medium">Channel:</span>
+                                <span className="font-bold text-slate-800 capitalize">{type === "online" ? "Telehealth (Online)" : "In-Person (Offline)"}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-slate-200/60 pt-2 text-sm font-bold text-slate-800">
+                                <span>Total Fee:</span>
+                                <span className="text-indigo-600">₹{fee}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                disabled={isLocking || isPaymentLoading}
+                                onClick={() => {
+                                    setShowConfirmModal(false);
+                                    setModalError(null);
+                                }}
+                                className="w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isLocking || isPaymentLoading}
+                                onClick={handleProceedToPay}
+                                className="w-1/2 py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5 transition"
+                            >
+                                {isLocking || isPaymentLoading ? (
+                                    <>
+                                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                                        <span>Processing…</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-credit-card text-xs" />
+                                        <span>Pay Now</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

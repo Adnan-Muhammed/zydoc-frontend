@@ -114,10 +114,7 @@ export default function PatientProfilePage() {
                                     <i className="fas fa-clipboard-list text-xl"></i>
                                 </div>
                                 <h3 className="text-slate-900 dark:text-white font-medium mb-1">No medical history added</h3>
-                                <p className="text-slate-500 text-sm mb-4">Add your allergies and conditions to help doctors provide better care.</p>
-                                <Link href="/patient/profile-update">
-                                    <Button variant="secondary" size="sm" icon={<i className="fas fa-plus"></i>}>Add Medical History</Button>
-                                </Link>
+                                <p className="text-slate-500 text-sm">No allergies or existing conditions recorded.</p>
                             </div>
                         ) : (
                             <div className="space-y-4">

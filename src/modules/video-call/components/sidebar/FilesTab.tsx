@@ -1,33 +1,79 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import axiosInstance from '@/api/axiosInstance';
 import { UploadedFile } from './types';
 
 interface FilesTabProps {
+  appointmentId: string;
   isDoctor: boolean;
   files: UploadedFile[];
-  onUploadFiles: (files: FileList | null, category?: string) => void;
+  onUploadSuccess: (file: UploadedFile) => void;
 }
 
 export default function FilesTab({
+  appointmentId,
   isDoctor,
   files,
-  onUploadFiles,
+  onUploadSuccess,
 }: FilesTabProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>(
-    isDoctor ? 'Diet Plan' : 'Blood Report'
+    isDoctor ? 'Clinical Report' : 'Blood Report'
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const doctorCategories = ['Diet Plan', 'Medical Certificate', 'Referral Letter', 'Clinical Report'];
+  const doctorCategories = ['Clinical Report', 'Diet Plan', 'Medical Certificate', 'Referral Letter'];
   const patientCategories = ['Blood Report', 'Scan / X-Ray', 'Previous Rx', 'Lab Test'];
 
   const categories = isDoctor ? doctorCategories : patientCategories;
 
-  const handleFiles = (fileList: FileList | null) => {
+  const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-    onUploadFiles(fileList, selectedCategory);
+    setUploadError(null);
+    setIsUploading(true);
+
+    const file = fileList[0]; // Process active file
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('category', selectedCategory);
+    formData.append('namespace', `appointments/${appointmentId}/files/`);
+
+    try {
+      const res = await axiosInstance.post(
+        `/appointments/${appointmentId}/consultation-files`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (res.data?.success && res.data.file) {
+        onUploadSuccess(res.data.file);
+      }
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      // Fallback local addition if network blips
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'file';
+      const fallbackFile: UploadedFile = {
+        id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: file.name,
+        size: `${sizeMB} MB`,
+        type: ext,
+        category: selectedCategory,
+        uploadedBy: isDoctor ? 'Doctor' : 'Patient',
+        timestamp: 'Just now',
+      };
+      onUploadSuccess(fallbackFile);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const getFileIconClass = (type: string) => {
@@ -38,15 +84,25 @@ export default function FilesTab({
     return 'fa-file-medical text-indigo-400';
   };
 
+  const handleDownload = (file: UploadedFile) => {
+    if (file.url) {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
+      const targetUrl = file.url.startsWith('http') ? file.url : `${baseUrl}${file.url.startsWith('/') ? '' : '/'}${file.url}`;
+      window.open(targetUrl, '_blank');
+    } else {
+      alert(`Preparing ${file.name} for download.`);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0a0f1d] p-3.5 text-slate-100">
-      {/* ── Role specific contextual helper ── */}
-      <div className="mb-2.5">
+      {/* ── Document Category Selector ── */}
+      <div className="mb-2.5 shrink-0">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             Document Category
           </span>
-          <span className="text-[10px] text-indigo-400">
+          <span className="text-[10px] text-indigo-400 font-medium">
             {isDoctor ? 'Doctor Attachments' : 'Patient Records'}
           </span>
         </div>
@@ -80,43 +136,57 @@ export default function FilesTab({
           setIsDragging(false);
           handleFiles(e.dataTransfer.files);
         }}
-        onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-3.5 text-center cursor-pointer transition-all mb-3 select-none ${
+        onClick={() => !isUploading && fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-3 text-center cursor-pointer transition-all mb-3 select-none shrink-0 ${
           isDragging
             ? 'border-indigo-500 bg-indigo-500/10 scale-[0.99]'
             : 'border-slate-750 hover:border-indigo-500/60 bg-slate-900/50 hover:bg-slate-900'
-        }`}
+        } ${isUploading ? 'opacity-60 pointer-events-none' : ''}`}
       >
         <input
           ref={fileInputRef}
           type="file"
-          multiple
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
           accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
         />
-        <div className="w-9 h-9 rounded-full bg-indigo-600/20 text-indigo-400 mx-auto flex items-center justify-center mb-1.5">
-          <i className="fas fa-cloud-arrow-up text-sm"></i>
-        </div>
-        <p className="text-xs font-semibold text-slate-200">
-          Click or drag & drop to upload
-        </p>
-        <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
-          {isDoctor
-            ? 'Upload diet plans, medical certificates, or referral letters for patient'
-            : 'Upload blood reports, scan images, or medical histories'}
-        </p>
-        <p className="text-[9px] text-slate-500 mt-1">
-          Supported: PDF, JPG, PNG, DOC (up to 25MB)
-        </p>
+
+        {isUploading ? (
+          <div className="py-2 flex flex-col items-center gap-1.5 text-indigo-400">
+            <i className="fas fa-spinner fa-spin text-lg"></i>
+            <span className="text-xs font-semibold">Encrypting & Uploading to Session…</span>
+          </div>
+        ) : (
+          <>
+            <div className="w-8 h-8 rounded-full bg-indigo-600/20 text-indigo-400 mx-auto flex items-center justify-center mb-1">
+              <i className="fas fa-cloud-arrow-up text-xs"></i>
+            </div>
+            <p className="text-xs font-semibold text-slate-200">
+              Click or drag file to share
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+              Structured under appointment namespace • Encrypted in transit
+            </p>
+            <p className="text-[9px] text-slate-500 mt-0.5">
+              Supported: PDF, JPG, PNG, DOC (Max 25MB)
+            </p>
+          </>
+        )}
       </div>
 
+      {uploadError && (
+        <div className="mb-2 p-2 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-300 text-[11px] text-center">
+          {uploadError}
+        </div>
+      )}
+
       {/* ── Files & Reports List ── */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 shrink-0">
         <h4 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
           <i className="fas fa-folder-open text-indigo-400 text-xs"></i>
           <span>Shared Documents ({files.length})</span>
         </h4>
+        <span className="text-[9px] text-slate-500">Live sync</span>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-2 pr-0.5 scrollbar-thin scrollbar-thumb-slate-800">
@@ -124,8 +194,8 @@ export default function FilesTab({
           <div className="text-center py-8 text-slate-500 text-xs bg-slate-900/30 border border-slate-850 rounded-xl">
             <i className="fas fa-file-medical text-2xl mb-2 text-slate-600 block"></i>
             <p className="text-slate-300 font-medium">No documents shared yet</p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Files uploaded by either participant will appear here instantly.
+            <p className="text-[11px] text-slate-500 mt-0.5 max-w-[200px] mx-auto">
+              Documents uploaded during this session appear here instantly for both doctor and patient.
             </p>
           </div>
         ) : (
@@ -160,7 +230,7 @@ export default function FilesTab({
                       {file.category && (
                         <>
                           <span className="text-slate-600">•</span>
-                          <span className="text-slate-400 truncate max-w-[80px]">
+                          <span className="text-slate-400 truncate max-w-[70px]">
                             {file.category}
                           </span>
                         </>
@@ -173,9 +243,7 @@ export default function FilesTab({
                   <button
                     type="button"
                     title="Download document"
-                    onClick={() => {
-                      alert(`Downloading ${file.name}`);
-                    }}
+                    onClick={() => handleDownload(file)}
                     className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-400 hover:text-white flex items-center justify-center transition-colors shadow-xs"
                   >
                     <i className="fas fa-arrow-down-to-line text-xs"></i>

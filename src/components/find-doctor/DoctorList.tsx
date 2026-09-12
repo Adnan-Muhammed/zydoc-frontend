@@ -44,7 +44,7 @@ const STATIC_SPECIALTIES = [
     "Neurology",
     "Orthopedics",
     "Gynecology"
-].sort();
+].sort(); 
 
 export default function DoctorList({ doctors, pagination, basePath }: Props) {
     const router = useRouter();
@@ -130,15 +130,15 @@ export default function DoctorList({ doctors, pagination, basePath }: Props) {
                     <div className="filter-options">
                         {[
                             { id: 'all', label: 'All Types' },
-                            { id: 'video', label: 'Online (Video)' },
-                            { id: 'physical', label: 'In-person (Physical)' },
+                            { id: 'online', label: 'Online (Video)' },
+                            { id: 'offline', label: 'In-person (Physical)' },
                         ].map(t => (
                             <div className="filter-option" key={t.id}>
                                 <input
                                     type="radio"
                                     id={`type-${t.id}`}
                                     name="consultationType"
-                                    checked={consultationType === t.id}
+                                    checked={consultationType === t.id || (t.id === 'online' && consultationType === 'video') || (t.id === 'offline' && consultationType === 'physical')}
                                     onChange={() => updateFilter('consultationType', t.id)}
                                 />
                                 <label htmlFor={`type-${t.id}`}>{t.label}</label>
@@ -267,23 +267,23 @@ export default function DoctorList({ doctors, pagination, basePath }: Props) {
                                             <div className="fee-split">
                                                 <div className="fee-item">
                                                     <i className="fas fa-video fee-icon"></i>
-                                                    <span>Online: <strong>${doc.videoFee}</strong></span>
+                                                    <span>Online: <strong>₹{doc.videoFee}</strong></span>
                                                 </div>
                                                 <div className="fee-item">
-                                                    <i className="fas fa-building fee-icon"></i>
-                                                    <span>In-person: <strong>${doc.physicalFee}</strong></span>
+                                                    <i className="fas fa-building-medical fee-icon"></i>
+                                                    <span>In-person: <strong>₹{doc.physicalFee}</strong></span>
                                                 </div>
                                             </div>
                                         ) : doc.videoFee !== null ? (
                                             <div className="fee-single">
                                                 <i className="fas fa-video fee-icon"></i>
-                                                <span>Online: <strong>${doc.videoFee}</strong></span>
+                                                <span>Online: <strong>₹{doc.videoFee}</strong></span>
                                                 <span className="fee-label"> / session</span>
                                             </div>
                                         ) : doc.physicalFee !== null ? (
                                             <div className="fee-single">
-                                                <i className="fas fa-building fee-icon"></i>
-                                                <span>In-person: <strong>${doc.physicalFee}</strong></span>
+                                                <i className="fas fa-building-medical fee-icon"></i>
+                                                <span>In-person: <strong>₹{doc.physicalFee}</strong></span>
                                                 <span className="fee-label"> / session</span>
                                             </div>
                                         ) : (

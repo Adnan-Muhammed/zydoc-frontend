@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useCallback, useState } from "react";
 
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { TimerConfig } from "./useCallTimer";
+import { TimerConfig, ExtensionState } from "./useCallTimer";
 import { useCallTabSync } from "./useCallTabSync";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -17,6 +17,7 @@ interface UseWebRTCOptions {
   userId: string;
   /** "doctor" | "patient" — forwarded to the server for logging. */
   role: string;
+  onCallEnded?: () => void;
 }
 
 interface UseWebRTCReturn {
@@ -69,6 +70,7 @@ export function useWebRTC({
   appointmentId,
   userId,
   role,
+  onCallEnded,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const router = useRouter();
 
@@ -335,6 +337,37 @@ export function useWebRTC({
           setTimerConfig(payload);
         });
 
+        // ── Extension Events ─────────────────────────────────────────────
+        // Server emits extension_granted after doctor clicks Extend.
+        // Contains the calculated deadline (Condition A or B).
+        newSocket.on("extension_granted", (payload: ExtensionState) => {
+          console.log("[useWebRTC] Extension granted:", payload);
+          setTimerConfig((prev) => prev ? {
+            ...prev,
+            isAlreadyExtended: true,
+            maxExtensionMinutes: payload.maxExtensionMinutes,
+          } : prev);
+          // The actual deadline handling is done via handleExtensionGranted
+          // in useCallTimer, which VideoCallRoom wires up.
+        });
+
+        // Server emits extension_denied if wrap-up is already active
+        newSocket.on("extension_denied", (payload: { reason: string; message: string }) => {
+          console.warn("[useWebRTC] Extension denied:", payload);
+        });
+
+        // Server emits extension_deadline_updated when a next patient joins
+        // the waiting room and tightens the existing extension deadline.
+        newSocket.on("extension_deadline_updated", (payload) => {
+          console.log("[useWebRTC] Extension deadline updated:", payload);
+        });
+
+        // Bug 11: Update timerConfig dynamically when urgent-slot-booked is received
+        newSocket.on("urgent-slot-booked", (payload) => {
+          console.log("[useWebRTC] Received urgent-slot-booked:", payload);
+          setTimerConfig((prev) => prev ? { ...prev, isNextSlotBooked: true, nextSlotStatus: 'PATIENT_LATE' } : prev);
+        });
+
         newSocket.on("call_error", (payload: { message: string }) => {
           console.error("[useWebRTC] Backend rejected join:", payload.message);
           if (isMounted) {
@@ -343,9 +376,10 @@ export function useWebRTC({
             setError(payload.message);
             if (payload.message === 'This consultation has already ended.' || payload.message?.includes('expired') || payload.message?.includes('ended')) {
               if (typeof window !== "undefined" && appointmentId) {
+                sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
                 sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
               }
-              const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+              const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
               router.replace(destination);
             }
             setIsCallEnded(true);
@@ -376,14 +410,47 @@ export function useWebRTC({
           peerConnectionRef.current = null;
 
           if (typeof window !== "undefined") {
+            sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
           }
           
           setTimeout(() => {
-            const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
-            router.replace(destination);
+            if (onCallEnded) {
+              onCallEnded();
+            } else {
+              const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+              router.replace(destination);
+            }
           }, 2500);
         });
+
+        // force_end_call: server-enforced hard cut (Online→Offline strict termination)
+        newSocket.on("force_end_call", (payload) => {
+          console.log("[useWebRTC] force_end_call received from server. Hard-terminating call.", payload);
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+            localStreamRef.current = null;
+            setLocalStream(null);
+          }
+          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+          setRemoteStream(null);
+          setIsRemoteReady(false);
+          peerConnectionRef.current?.close();
+          peerConnectionRef.current = null;
+          setIsCallEnded(true);
+          // Patient cannot rejoin after force_end_call
+          if (typeof window !== "undefined") {
+            sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+            sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
+          }
+          if (onCallEnded) {
+            onCallEnded();
+          } else {
+            const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+            router.replace(destination);
+          }
+        });
+
 
         newSocket.on("peer_left", () => {
           console.log("[useWebRTC] Peer left the call.");
@@ -487,32 +554,71 @@ export function useWebRTC({
       peerConnectionRef.current = null;
     }
 
-    // 4. Socket cleanup based on role
+    // 4. Socket cleanup: Disconnect cleanly without emitting end_call (which is reserved strictly for endCall)
     if (socketRef.current) {
       try {
-        if (role === "doctor") {
-          socketRef.current.emit("end_call", { appointmentId });
-        }
-        socketRef.current.disconnect();
+        const sock = socketRef.current;
+        setTimeout(() => {
+          try {
+            sock.disconnect();
+          } catch (_) {}
+        }, 300);
       } catch (err) {
         console.warn("[useWebRTC] Failed to disconnect socket:", err);
       }
       socketRef.current = null;
       setSocket(null);
     }
-  }, [role, appointmentId, releaseTab]);
+  }, [releaseTab]);
 
   const endCall = useCallback(() => {
-    cleanupMediaAndConnections();
-    setIsCallEnded(true);
+    // Explicit call termination: emit end_call to backend to mark appointment completed
+    const isDoctor = role?.toLowerCase() === "doctor";
+    if (socketRef.current) {
+      try {
+        if (isDoctor) {
+          socketRef.current.emit("end_call", { appointmentId });
+        } else {
+          socketRef.current.emit("leave_room", { appointmentId });
+        }
+      } catch (err) {
+        console.warn("[useWebRTC] Failed to emit end_call/leave_room in endCall:", err);
+      }
+    }
+
+    // Dual-channel reliability: call backend REST endpoint as doctor to guarantee completion
+    if (isDoctor && appointmentId) {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
+        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/appointments/${appointmentId}/end-call`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          credentials: "include"
+        }).catch((e) => console.warn("[useWebRTC] Fallback end-call REST failed:", e));
+      } catch (e) {}
+    }
 
     if (typeof window !== "undefined") {
+      sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
       sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
 
-    const destination = role === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
-    router.replace(destination);
-  }, [cleanupMediaAndConnections, role, appointmentId, router]);
+    // Buffer to ensure WebSocket packet flushes before local media teardown & navigation
+    setTimeout(() => {
+      cleanupMediaAndConnections();
+      setIsCallEnded(true);
+
+      if (onCallEnded) {
+        onCallEnded();
+      } else {
+        const destination = isDoctor ? "/doctor/dashboard" : "/patient/appointments";
+        router.replace(destination);
+      }
+    }, 150);
+  }, [cleanupMediaAndConnections, role, appointmentId, router, onCallEnded]);
 
   return {
     localVideoRef,

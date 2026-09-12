@@ -153,7 +153,13 @@ const OLD_DISPLAY_DAYS = ['mondayToFriday', 'saturday', 'sunday'];
 const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
   if (!scheduleObj) return null;
   const daysToRender = isOldFormat ? OLD_DISPLAY_DAYS : DISPLAY_DAYS;
-  const activeDays = daysToRender.filter(day => scheduleObj[day]?.active);
+  
+  const isDayActive = (val: any) => {
+    if (Array.isArray(val)) return val.length > 0;
+    return !!val?.active;
+  };
+
+  const activeDays = daysToRender.filter(day => isDayActive(scheduleObj[day]));
   
   if (activeDays.length === 0) {
     return (
@@ -166,20 +172,24 @@ const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
   return (
     <div className="space-y-2">
       {daysToRender.map((key) => {
-        const slot = scheduleObj[key];
-        if (!slot?.active) return null;
+        const val = scheduleObj[key];
+        if (!isDayActive(val)) return null;
+
+        const timeString = Array.isArray(val)
+          ? val.map(b => `${formatTo12Hour(b.start)} – ${formatTo12Hour(b.end)}`).join(', ')
+          : `${formatTo12Hour(val.start)} – ${formatTo12Hour(val.end)}`;
 
         return (
           <div
             key={key}
-            className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-slate-100 bg-white text-xs shadow-sm shadow-slate-100/50"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-slate-100 bg-white text-xs shadow-sm shadow-slate-100/50"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
               <span className="font-bold text-slate-600 text-[11px] uppercase tracking-wide">{DAY_LABELS[key] || key}</span>
             </div>
-            <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg shrink-0">
-              {formatTo12Hour(slot.start)} – {formatTo12Hour(slot.end)}
+            <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg text-right">
+              {timeString}
             </span>
           </div>
         );
@@ -238,12 +248,12 @@ export default async function DoctorProfilePage() {
     ? d.avatarUrl 
     : "https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=256&h=256";
 
-  const videoEnabled: boolean = d.consultationSettings?.video?.enabled ?? false;
-  const videoFee: number = Number(d.consultationSettings?.video?.fee ?? 0);
-  const physicalEnabled: boolean = d.consultationSettings?.physical?.enabled ?? false;
-  const physicalFee: number = Number(d.consultationSettings?.physical?.fee ?? 0);
-  const clinicName: string = d.consultationSettings?.physical?.clinicName ?? "";
-  const clinicAddress: string = d.consultationSettings?.physical?.clinicAddress ?? "";
+  const videoEnabled: boolean = d.consultationSettings?.online?.enabled ?? d.consultationSettings?.video?.enabled ?? false;
+  const videoFee: number = Number(d.consultationSettings?.online?.fee ?? d.consultationSettings?.video?.fee ?? 0);
+  const physicalEnabled: boolean = d.consultationSettings?.offline?.enabled ?? d.consultationSettings?.physical?.enabled ?? false;
+  const physicalFee: number = Number(d.consultationSettings?.offline?.fee ?? d.consultationSettings?.physical?.fee ?? 0);
+  const clinicName: string = d.consultationSettings?.offline?.clinicName ?? d.consultationSettings?.physical?.clinicName ?? "";
+  const clinicAddress: string = d.consultationSettings?.offline?.clinicAddress ?? d.consultationSettings?.physical?.clinicAddress ?? "";
 
   const workingHours: WorkingHours = d.workingHours ?? {
     mondayToFriday: { start: "09:00", end: "17:00", active: false },
@@ -510,7 +520,7 @@ export default async function DoctorProfilePage() {
             <Card title="Availability Schedule" icon="fa-clock">
               <div className="space-y-6">
                 {/* Online Schedule */}
-                {(workingHours.online || (!workingHours.online && !workingHours.offline)) && (
+                {videoEnabled && (workingHours.online || (!workingHours.online && !workingHours.offline)) && (
                   <div>
                     {workingHours.online && (
                       <div className="flex items-center gap-2 mb-3">
@@ -523,7 +533,7 @@ export default async function DoctorProfilePage() {
                 )}
 
                 {/* Offline Schedule */}
-                {workingHours.offline && (
+                {physicalEnabled && workingHours.offline && (
                   <div>
                     <div className="flex items-center gap-2 mb-3 mt-2">
                       <i className="fas fa-user-doctor text-indigo-400 text-xs" />
@@ -544,6 +554,12 @@ export default async function DoctorProfilePage() {
                       </div>
                     )}
                     {renderSchedule(workingHours.offline, false)}
+                  </div>
+                )}
+
+                {!videoEnabled && !physicalEnabled && (
+                  <div className="flex items-center justify-center p-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+                    <span className="text-xs text-slate-400 font-medium">Currently unavailable</span>
                   </div>
                 )}
               </div>

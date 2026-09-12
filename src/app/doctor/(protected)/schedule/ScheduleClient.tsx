@@ -1,282 +1,1562 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useAppSelector } from '@/redux/hooks';
-import axiosInstance from '@/api/axiosInstance';
-import SlotPicker from "@/components/patient/SlotPicker"; // We can reuse this!
- 
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchDoctorProfile } from '@/redux/features/doctor/doctorThunk';
+import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
+import { getAvailableSlots, toggleDoctorSlotOverride, manualBookDoctorSlot } from "@/lib/appointments";
+
+/* ═══════════════════════════════════════════════════════════════════
+   Constants & Helpers (Matching BookingForm.tsx Exactly)
+═══════════════════════════════════════════════════════════════════ */
 const MONTH_NAMES = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December",
-]; 
-const DAY_LABELS  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+];
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_NAMES_JS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+export interface DoctorSlot {
+    time: string;
+    status: 'available' | 'booked' | 'past' | 'locked' | 'Locked' | 'Booked' | 'unavailable' | 'break' | 'closed' | string;
+    available?: boolean;
+    type?: 'mixed' | 'online' | 'offline' | 'physical' | string;
+    bookedType?: 'video' | 'online' | 'physical' | 'offline' | string;
+    isLocked?: boolean;
+    lockedBy?: string | null;
+    razorpayOrderId?: string | null;
+    appointmentId?: string | null;
+    isBookable?: boolean;
+    isExpired?: boolean;
+    isFollowUpOnly?: boolean;
+    isBreak?: boolean;
+    breakReason?: string;
+    shiftIndex?: number;
+    shiftName?: string;
+    shiftStart?: string;
+    shiftEnd?: string;
+    shiftType?: 'mixed' | 'online' | 'offline' | string;
+    isManualBooking?: boolean;
+    manualPatientDetails?: {
+        name?: string;
+        opNumber?: string;
+        phone?: string;
+        notes?: string;
+    };
+}
+
+function isDoctorAvailableOn(date: Date, rawWH: any): boolean {
+    if (!rawWH) return false;
+    const jsDay = date.getDay();
+    const dayName = DAY_NAMES_JS[jsDay] as string;
+
+    const checkChannel = (channelKey: 'online' | 'offline') => {
+        const channelSchedule = rawWH[channelKey] || (rawWH.online || rawWH.offline ? null : rawWH);
+        if (!channelSchedule) return false;
+        let dayConfig = channelSchedule[dayName];
+        const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(dayName);
+        const isDayEmpty = !dayConfig || (Array.isArray(dayConfig) && dayConfig.length === 0) || (typeof dayConfig === 'object' && !dayConfig.active);
+
+        if (isDayEmpty) {
+            if (isWeekday && channelSchedule.mondayToFriday) {
+                dayConfig = channelSchedule.mondayToFriday;
+            } else if (channelSchedule.fullWeek) {
+                dayConfig = channelSchedule.fullWeek;
+            }
+        }
+
+        if (Array.isArray(dayConfig)) {
+            return dayConfig.length > 0 && dayConfig.some((b: any) => b && b.start && b.end);
+        }
+        if (dayConfig && typeof dayConfig === "object") {
+            return !!dayConfig.active && !!dayConfig.start && !!dayConfig.end;
+        }
+        return false;
+    };
+
+    return checkChannel('online') || checkChannel('offline');
+}
+
+function findNextWorkingDate(rawWH: any, today: Date, maxDate: Date): Date {
+    for (let i = 0; i <= 14; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        if (d > maxDate) break;
+
+        if (isDoctorAvailableOn(d, rawWH)) {
+            return d;
+        }
+    }
+    return today;
+}
+
+function normalizeSlotTime(timeStr: string) {
+    if (!timeStr) return "";
+    const trimmed = timeStr.trim().toUpperCase();
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+    if (!match) return trimmed;
+    let [_, hStr, mStr, ampm] = match;
+    let h = parseInt(hStr, 10);
+    if (!ampm) {
+        ampm = h >= 12 ? "PM" : "AM";
+        h = h % 12 || 12;
+    }
+    return `${String(h).padStart(2, "0")}:${mStr} ${ampm}`;
+}
 
 export default function ScheduleClient() {
+    const dispatch = useAppDispatch();
+    const { profile: doctorProfile } = useAppSelector((state) => state.doctor);
     const { user } = useAppSelector((state) => state.auth);
-    
-    const isVideoEnabled = user?.consultationSettings?.video?.enabled ?? user?.doctorProfile?.consultationSettings?.video?.enabled ?? false;
-    const isPhysicalEnabled = user?.consultationSettings?.physical?.enabled ?? user?.doctorProfile?.consultationSettings?.physical?.enabled ?? false;
+    const { doctorAppointments: appointments = [] } = useAppSelector((state) => state.appointment);
 
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-    const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
-    const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
-    
-    const [type, setType] = useState<"video" | "physical">(() => {
-        if (!isVideoEnabled && isPhysicalEnabled) return "physical";
-        return "video";
-    });
-    
-    const [allSlots, setAllSlots] = useState<any[]>([]);
-    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+    // Doctor profile resolution (prioritize DoctorProfile ID for backend slot resolution)
+    const doctor = doctorProfile || (typeof user?.profileId === 'object' ? user?.profileId : null) || user || {};
+    const doctorId = 
+        (typeof user?.profileId === 'string' ? user.profileId : user?.profileId?._id) ||
+        doctorProfile?.profileId ||
+        doctorProfile?._id ||
+        doctorProfile?.id ||
+        user?._id ||
+        user?.id ||
+        doctor?._id ||
+        doctor?.id;
+
+    const rawWH = doctor.workingHours || doctorProfile?.workingHours || user?.profileId?.workingHours || {};
+
+    // 14-Day Rolling Window Boundaries (identical to BookingForm.tsx)
+    const today = useMemo(() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }, []);
+
+    const maxBookingDate = useMemo(() => {
+        const max = new Date(today);
+        max.setDate(today.getDate() + 14);
+        max.setHours(23, 59, 59, 999);
+        return max;
+    }, [today]);
+
+    const slotDuration = doctor.slotDuration || doctorProfile?.slotDuration || 15;
+
+    /* ── State ── */
+    const [selectedDate, setSelectedDate] = useState<Date>(today);
+    const [calendarYear, setCalendarYear] = useState(() => today.getFullYear());
+    const [calendarMonth, setCalendarMonth] = useState(() => today.getMonth());
+    const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
+    const [allSlots, setAllSlots] = useState<DoctorSlot[]>([]);
     const [doctorWorking, setDoctorWorking] = useState(true);
-    const [selectedTime, setSelectedTime] = useState(""); // Doctor won't actually book, but can select to highlight
-    
-    // Fetch slots when date or type changes
+    const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+    const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
+    const [managingSlot, setManagingSlot] = useState<DoctorSlot | null>(null);
+    const [managingSlotTab, setManagingSlotTab] = useState<'book' | 'break'>('book');
+    const [manualPatientName, setManualPatientName] = useState<string>('');
+    const [manualOpNumber, setManualOpNumber] = useState<string>('');
+    const [manualPhone, setManualPhone] = useState<string>('');
+    const [manualPatientType, setManualPatientType] = useState<'NEW' | 'FOLLOW_UP'>('NEW');
+    const [manualNotes, setManualNotes] = useState<string>('');
+    const [isBookingManual, setIsBookingManual] = useState<boolean>(false);
+    const [isUpdatingSlot, setIsUpdatingSlot] = useState<boolean>(false);
+    const [slotActionFeedback, setSlotActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+    // Initial data fetch
     useEffect(() => {
-        if (!user?._id && !user?.id) return;
-        const doctorId = user?._id || user?.id;
+        dispatch(fetchDoctorProfile());
+        dispatch(fetchDoctorAppointments());
+    }, [dispatch]);
 
-        let isMounted = true;
-        const fetchSlots = async () => {
-            setIsLoadingSlots(true);
-            setAllSlots([]);
-            setDoctorWorking(true);
-
-            try {
-                // Ensure local date is sent formatted correctly (YYYY-MM-DD)
-                const y = selectedDate.getFullYear();
-                const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-                const d = String(selectedDate.getDate()).padStart(2, '0');
-                const dateStr = `${y}-${m}-${d}`;
-
-                const res = await axiosInstance.get(`/appointments/availability/${doctorId}?date=${dateStr}&consultationType=${type}`);
-                
-                if (isMounted && res.data.success) {
-                    setAllSlots(res.data.allSlots || []);
-                    setDoctorWorking(res.data.doctorWorking);
-                }
-            } catch (err) {
-                console.error("Failed to fetch slots:", err);
-            } finally {
-                if (isMounted) setIsLoadingSlots(false);
-            }
-        };
-
-        fetchSlots();
-
-        return () => { isMounted = false; };
-    }, [selectedDate, type, user]);
-
-    // Calendar Helpers
-    const buildCalendarDays = useCallback(() => {
-        const firstDay = new Date(calendarYear, calendarMonth, 1);
-        const lastDay  = new Date(calendarYear, calendarMonth + 1, 0);
-        const days = [];
-
-        // Adjust so Monday is 0, Sunday is 6
-        let startJsDay = firstDay.getDay();
-        startJsDay = startJsDay === 0 ? 6 : startJsDay - 1;
-
-        for (let i = 0; i < startJsDay; i++) days.push(null);
-        for (let i = 1; i <= lastDay.getDate(); i++) {
-            days.push(new Date(calendarYear, calendarMonth, i));
+    // Calculate initial next working date when rawWH is populated
+    useEffect(() => {
+        if (rawWH && Object.keys(rawWH).length > 0) {
+            const nextDate = findNextWorkingDate(rawWH, today, maxBookingDate);
+            setSelectedDate(nextDate);
+            setCalendarYear(nextDate.getFullYear());
+            setCalendarMonth(nextDate.getMonth());
         }
-        return days;
-    }, [calendarYear, calendarMonth]);
+    }, [rawWH, today, maxBookingDate]);
+
+    const dateString = useMemo(() => {
+        return [
+            selectedDate.getFullYear(),
+            String(selectedDate.getMonth() + 1).padStart(2, "0"),
+            String(selectedDate.getDate()).padStart(2, "0"),
+        ].join("-");
+    }, [selectedDate]);
+
+    /* ── Fetch Unified Slots From Backend API ── */
+    const fetchSlots = useCallback(async () => {
+        if (!doctorId) return;
+        setIsLoadingSlots(true);
+        setDoctorWorking(true);
+        try {
+            const res = await getAvailableSlots(doctorId, dateString, 'all');
+            if (res.success) {
+                setAllSlots(res.allSlots || []);
+                setDoctorWorking(res.doctorWorking !== false);
+            } else {
+                setAllSlots([]);
+                setDoctorWorking(false);
+            }
+        } catch {
+            setAllSlots([]);
+            setDoctorWorking(false);
+        } finally {
+            setIsLoadingSlots(false);
+        }
+    }, [doctorId, dateString]);
+
+    const handleToggleSlotOverride = async (slotTime: string, action: 'close' | 'open') => {
+        setIsUpdatingSlot(true);
+        setSlotActionFeedback(null);
+        try {
+            const res = await toggleDoctorSlotOverride(dateString, slotTime, action, 'Closed / On Break');
+            if (res.success) {
+                setSlotActionFeedback({
+                    type: 'success',
+                    message: res.message || (action === 'close' ? 'Slot marked as closed / on break' : 'Slot reopened for booking successfully')
+                });
+                await fetchSlots();
+                setTimeout(() => {
+                    setManagingSlot(null);
+                    setSlotActionFeedback(null);
+                }, 600);
+            } else {
+                setSlotActionFeedback({
+                    type: 'error',
+                    message: res.message || 'Failed to update slot status'
+                });
+            }
+        } catch (err: any) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: err?.response?.data?.message || err?.message || 'Error updating slot status'
+            });
+        } finally {
+            setIsUpdatingSlot(false);
+        }
+    };
+
+    const handleManualBooking = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!managingSlot) return;
+        if (!manualPatientName.trim()) {
+            setSlotActionFeedback({ type: 'error', message: 'Patient Name is required.' });
+            return;
+        }
+        setIsBookingManual(true);
+        setSlotActionFeedback(null);
+        try {
+            const res = await manualBookDoctorSlot({
+                date: dateString,
+                time: managingSlot.time,
+                patientName: manualPatientName.trim(),
+                opNumber: manualOpNumber.trim() || undefined,
+                patientPhone: manualPhone.trim() || undefined,
+                patientType: manualPatientType,
+                notes: manualNotes.trim() || undefined,
+                fee: 0
+            });
+            if (res.success) {
+                setSlotActionFeedback({
+                    type: 'success',
+                    message: res.message || `Slot at ${managingSlot.time} successfully booked offline for ${manualPatientName.trim()}.`
+                });
+                await fetchSlots();
+                dispatch(fetchDoctorAppointments());
+                setTimeout(() => {
+                    setManagingSlot(null);
+                    setSlotActionFeedback(null);
+                    setManualPatientName('');
+                    setManualOpNumber('');
+                    setManualPhone('');
+                    setManualNotes('');
+                }, 700);
+            } else {
+                setSlotActionFeedback({
+                    type: 'error',
+                    message: res.message || 'Failed to manually book slot'
+                });
+            }
+        } catch (err: any) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: err?.response?.data?.message || err?.message || 'Error booking slot'
+            });
+        } finally {
+            setIsBookingManual(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchSlots();
+    }, [fetchSlots]);
+
+    /* ── Calendar Helpers (Allow Past Browsing for History & Analytics) ── */
+    const minPastDate = useMemo(() => new Date(today.getFullYear() - 2, 0, 1), [today]);
+    const maxFutureDate = useMemo(() => new Date(today.getFullYear() + 2, 11, 31), [today]);
+
+    const canGoPrevMonth = new Date(calendarYear, calendarMonth, 1) > minPastDate;
+    const canGoNextMonth = new Date(calendarYear, calendarMonth, 1) < maxFutureDate;
 
     const goToPrevMonth = () => {
+        if (!canGoPrevMonth) return;
         if (calendarMonth === 0) {
-            setCalendarMonth(11);
             setCalendarYear(y => y - 1);
+            setCalendarMonth(11);
         } else {
             setCalendarMonth(m => m - 1);
         }
     };
 
     const goToNextMonth = () => {
+        if (!canGoNextMonth) return;
         if (calendarMonth === 11) {
-            setCalendarMonth(0);
             setCalendarYear(y => y + 1);
+            setCalendarMonth(0);
         } else {
             setCalendarMonth(m => m + 1);
         }
     };
 
-    const isSameDay = (d1: Date, d2: Date) => 
-        d1.getFullYear() === d2.getFullYear() &&
-        d1.getMonth() === d2.getMonth() &&
-        d1.getDate() === d2.getDate();
+    const goToPrevDay = () => {
+        setSelectedDate(prev => {
+            const d = new Date(prev);
+            d.setDate(prev.getDate() - 1);
+            setCalendarYear(d.getFullYear());
+            setCalendarMonth(d.getMonth());
+            return d;
+        });
+    };
 
-    const today = new Date();
-    
+    const goToNextDay = () => {
+        setSelectedDate(prev => {
+            const d = new Date(prev);
+            d.setDate(prev.getDate() + 1);
+            setCalendarYear(d.getFullYear());
+            setCalendarMonth(d.getMonth());
+            return d;
+        });
+    };
+
+    const goToToday = () => {
+        setSelectedDate(today);
+        setCalendarYear(today.getFullYear());
+        setCalendarMonth(today.getMonth());
+    };
+
+    const buildCalendarDays = (): (Date | null)[] => {
+        const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
+        const startDow = (firstOfMonth.getDay() + 6) % 7; // Mon = 0
+        const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+        const cells: (Date | null)[] = [];
+        for (let i = 0; i < startDow; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(calendarYear, calendarMonth, d));
+        while (cells.length % 7 !== 0) cells.push(null);
+        return cells;
+    };
+
+    const isSameDay = (a: Date, b: Date) =>
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
+
+    const isPastDate = (d: Date) => d < today;
+    const isBeyond14Days = (d: Date) => d > maxBookingDate;
+    const isDrWorking = (d: Date) => isDoctorAvailableOn(d, rawWH);
+
     const calendarDays = buildCalendarDays();
-    const availableCount = allSlots.filter(s => s.status === "available").length;
+
+    // 14-Day Quick Selection List
+    const quick14Days = useMemo(() => {
+        const list: Date[] = [];
+        for (let i = 0; i < 14; i++) {
+            const d = new Date(today);
+            d.setDate(today.getDate() + i);
+            list.push(d);
+        }
+        return list;
+    }, [today]);
+
+    // Shift Groups: Group slots by their shift, ensuring separation when gaps occur
+    const shiftGroups = useMemo(() => {
+        if (!allSlots || allSlots.length === 0) return [];
+
+        const groups: { [key: string]: { name: string; start?: string; end?: string; shiftType?: string; slots: DoctorSlot[] } } = {};
+
+        allSlots.forEach((slot) => {
+            const key = slot.shiftName || `shift_${slot.shiftIndex || '1'}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    name: slot.shiftName || (slot.shiftIndex ? `Shift ${slot.shiftIndex}` : 'Shift 1'),
+                    start: slot.shiftStart,
+                    end: slot.shiftEnd,
+                    shiftType: slot.shiftType || 'mixed',
+                    slots: []
+                };
+            }
+            groups[key].slots.push(slot);
+        });
+
+        return Object.values(groups).map((group, idx) => {
+            return {
+                ...group,
+                name: group.name || `Shift ${idx + 1}`,
+                start: group.start,
+                end: group.end
+            };
+        });
+    }, [allSlots]);
+
+    // Map booked appointments for quick lookup on selected date (supporting local & UTC dates)
+    const appointmentsForSelectedDate = useMemo(() => {
+        return appointments.filter((app: any) => {
+            if (!app.appointmentDate) return false;
+            const appDate = new Date(app.appointmentDate);
+            const appDateStr = [
+                appDate.getFullYear(),
+                String(appDate.getMonth() + 1).padStart(2, "0"),
+                String(appDate.getDate()).padStart(2, "0")
+            ].join("-");
+            
+            const appUTCStr = typeof app.appointmentDate === 'string' 
+                ? app.appointmentDate.split('T')[0] 
+                : appDate.toISOString().split('T')[0];
+
+            return (
+                (appDateStr === dateString || appUTCStr === dateString) &&
+                app.status !== 'cancelled'
+            );
+        });
+    }, [appointments, selectedDate, dateString]);
+
+    // Quick lookup from slot time to appointment doc
+    const appointmentByTimeMap = useMemo(() => {
+        const map = new Map<string, any>();
+        appointmentsForSelectedDate.forEach((app: any) => {
+            if (app.appointmentTime) {
+                const norm = normalizeSlotTime(app.appointmentTime);
+                map.set(norm, app);
+                map.set(app.appointmentTime.trim(), app);
+                map.set(app.appointmentTime.trim().toUpperCase(), app);
+            }
+        });
+        return map;
+    }, [appointmentsForSelectedDate]);
+
+    const getPatientDisplayName = (appointmentOrPatient: any) => {
+        if (!appointmentOrPatient) return "Patient";
+        if (appointmentOrPatient.manualPatientDetails?.name) {
+            const op = appointmentOrPatient.manualPatientDetails.opNumber ? ` (OP: ${appointmentOrPatient.manualPatientDetails.opNumber})` : '';
+            return `${appointmentOrPatient.manualPatientDetails.name}${op}`;
+        }
+        if (appointmentOrPatient.profileId?.firstName) {
+            return `${appointmentOrPatient.profileId.firstName} ${appointmentOrPatient.profileId.lastName || ''}`.trim();
+        }
+        if (appointmentOrPatient.firstName) {
+            return `${appointmentOrPatient.firstName} ${appointmentOrPatient.lastName || ''}`.trim();
+        }
+        if (appointmentOrPatient.googleName) return appointmentOrPatient.googleName;
+        if (appointmentOrPatient.email) {
+            const emailName = appointmentOrPatient.email.split('@')[0];
+            return emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
+        }
+        return "Patient";
+    };
+
+    const availableCount = allSlots.filter(s => s.status === "available" && !s.isBreak && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+    const bookedCount = allSlots.filter(s => s.status === "booked" || s.status === "Booked" || !!appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+    const breakCount = allSlots.filter(s => (s.status === "unavailable" || s.status === "break" || s.status === "closed" || s.isBreak) && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+    const lockedCount = allSlots.filter(s => s.status === "locked" || s.status === "Locked" || s.isLocked).length;
 
     return (
-        <div className="flex-1 bg-slate-100 p-4 sm:p-6 lg:p-8 overflow-y-auto min-h-screen">
-            <div className="max-w-4xl mx-auto space-y-6">
-                
-                <div className="mb-8">
-                    <h1 className="text-2xl font-bold text-slate-800">My Schedule</h1>
-                    <p className="mt-1 text-slate-500">View your daily availability and upcoming appointments.</p>
+        <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 pb-12 overflow-x-hidden min-w-0">
+            
+            {/* ─── Top Header & Summary (Flexbox Row/Col) ─── */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-xl shadow-indigo-900/10">
+                <div className="flex flex-col gap-1">
+                    <div className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] sm:text-xs font-semibold text-indigo-100 border border-white/10 w-fit">
+                        <i className="fas fa-calendar-check text-indigo-300" />
+                        <span>Doctor Schedule & Availability View</span>
+                    </div>
+                    <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight">
+                        My Schedule
+                    </h1>
+                    <p className="text-indigo-200 text-xs sm:text-sm max-w-xl">
+                        View live patient bookings, session shifts, and slot statuses across your 14-day rolling window.
+                    </p>
                 </div>
-
-                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden p-6">
-                    
-                    {/* Consultation Type Toggle */}
-                    {(isVideoEnabled || isPhysicalEnabled) && (
-                        <div className="mb-6">
-                            <label className="text-sm font-semibold text-slate-700 mb-3 block">Viewing Schedule For</label>
-                            <div className="flex gap-3">
-                                {isVideoEnabled && (
-                                    <button
-                                        onClick={() => setType('video')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${
-                                            type === 'video' 
-                                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold' 
-                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <i className="fas fa-video"></i> Online Consultation
-                                    </button>
-                                )}
-                                {isPhysicalEnabled && (
-                                    <button
-                                        onClick={() => setType('physical')}
-                                        className={`flex-1 py-3 px-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${
-                                            type === 'physical' 
-                                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700 font-bold' 
-                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                        }`}
-                                    >
-                                        <i className="fas fa-building-medical"></i> In-Person Clinic
-                                    </button>
-                                )}
-                            </div>
+                
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+                    <div className="flex-1 sm:flex-initial bg-white/10 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 border border-white/10 flex items-center gap-2.5 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
+                            <i className="fas fa-stopwatch text-indigo-200 text-xs sm:text-sm" />
                         </div>
-                    )}
+                        <div>
+                            <p className="text-[9px] sm:text-[10px] uppercase font-bold text-indigo-200 tracking-wider">Slot Duration</p>
+                            <p className="text-xs sm:text-sm font-extrabold whitespace-nowrap">{slotDuration} mins / session</p>
+                        </div>
+                    </div>
 
-                    <div className="border border-slate-100 rounded-2xl overflow-hidden">
-                        {/* ── Calendar ── */}
-                        <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-                            {/* Header row */}
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                    <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                        <i className="fas fa-calendar-alt text-indigo-600 text-xs" />
-                                    </span>
-                                    Select Date
-                                </h2>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-semibold text-slate-700">
-                                        {MONTH_NAMES[calendarMonth]} {calendarYear}
-                                    </span>
-                                    <div className="flex gap-1">
-                                        <button type="button" onClick={goToPrevMonth}
-                                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors shadow-sm">
-                                            <i className="fas fa-chevron-left text-[10px]" />
-                                        </button>
-                                        <button type="button" onClick={goToNextMonth}
-                                            className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors shadow-sm">
-                                            <i className="fas fa-chevron-right text-[10px]" />
-                                        </button>
-                                    </div>
+                    <Link
+                        href="/doctor/profile/edit2?section=schedule"
+                        className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 sm:py-2.5 bg-white text-indigo-800 hover:bg-indigo-50 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap text-center"
+                    >
+                        <i className="fas fa-sliders text-indigo-600 text-xs" />
+                        <span>Edit Hours</span>
+                    </Link>
+                </div>
+            </div>
+
+            {/* ─── Date Navigation, Quick Controls & Daily Stats Bar ─── */}
+            <div className="bg-white rounded-2xl border border-slate-100 p-3 sm:p-4 shadow-sm flex flex-col gap-3.5 w-full min-w-0">
+                {/* Top Row: Prev Day / Date Display / Next Day / Today + Calendar Toggle */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                    {/* Day Stepper */}
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <button
+                            type="button"
+                            onClick={goToPrevDay}
+                            title="Previous Day"
+                            className="w-8 h-8 rounded-xl border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 bg-slate-50/70 hover:bg-indigo-50/50 flex items-center justify-center text-slate-600 transition active:scale-95 shrink-0"
+                        >
+                            <i className="fas fa-chevron-left text-xs" />
+                        </button>
+
+                        <div className="flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                                <i className="fas fa-calendar-day text-indigo-600 text-xs" />
+                            </span>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h2 className="text-sm sm:text-base font-extrabold text-slate-900 leading-tight">
+                                        {DAY_NAMES_JS[selectedDate.getDay()].toUpperCase().slice(0, 3)}, {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                                    </h2>
+                                    {isSameDay(selectedDate, today) ? (
+                                        <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-wider">Today</span>
+                                    ) : isPastDate(selectedDate) ? (
+                                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full uppercase tracking-wider">Past</span>
+                                    ) : null}
                                 </div>
-                            </div>
-
-                            {/* Day-of-week headers */}
-                            <div className="grid grid-cols-7 mb-1">
-                                {DAY_LABELS.map(d => (
-                                    <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1.5">{d}</div>
-                                ))}
-                            </div>
-
-                            {/* Date cells */}
-                            <div className="grid grid-cols-7 gap-y-1">
-                                {calendarDays.map((day, idx) => {
-                                    if (!day) return <div key={`e-${idx}`} />;
-                                    const selected = isSameDay(day, selectedDate);
-                                    const isToday  = isSameDay(day, today);
-
-                                    return (
-                                        <button
-                                            key={day.toISOString()}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedDate(day);
-                                                setCalendarYear(day.getFullYear());
-                                                setCalendarMonth(day.getMonth());
-                                            }}
-                                            className={`
-                                                mx-auto flex flex-col items-center justify-center w-11 h-12 rounded-xl
-                                                transition-all duration-150
-                                                ${selected
-                                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-                                                    : isToday
-                                                        ? "border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50 bg-white"
-                                                        : "text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-100 bg-white"
-                                                }
-                                            `}
-                                        >
-                                            <span className={`text-sm leading-none font-bold`}>
-                                                {day.getDate()}
-                                            </span>
-                                            <span className={`text-[9px] leading-none mt-0.5 font-medium
-                                                ${selected ? "text-indigo-200" : "text-slate-400"}`}>
-                                                {MONTH_NAMES[day.getMonth()].slice(0, 3)}
-                                            </span>
-                                        </button>
-                                    );
-                                })}
+                                <p className="text-[11px] text-slate-400">Viewing scheduled sessions for this day</p>
                             </div>
                         </div>
 
-                        {/* ── Time slots ── */}
-                        <div className="p-5">
-                            <div className="flex items-center justify-between mb-5">
-                                <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                    <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                        <i className="fas fa-clock text-indigo-600 text-xs" />
-                                    </span>
-                                    Slots Overview
-                                    <span className="text-[11px] font-normal text-slate-400">
-                                        — {MONTH_NAMES[selectedDate.getMonth()].slice(0,3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
-                                    </span>
-                                </h2>
-                                {!isLoadingSlots && doctorWorking && allSlots.length > 0 && (
-                                    <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                        {availableCount} slot{availableCount !== 1 ? "s" : ""} free
-                                    </span>
-                                )}
-                            </div>
+                        <button
+                            type="button"
+                            onClick={goToNextDay}
+                            title="Next Day"
+                            className="w-8 h-8 rounded-xl border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 bg-slate-50/70 hover:bg-indigo-50/50 flex items-center justify-center text-slate-600 transition active:scale-95 shrink-0"
+                        >
+                            <i className="fas fa-chevron-right text-xs" />
+                        </button>
 
-                            <SlotPicker 
-                                allSlots={allSlots} 
-                                selectedTime={selectedTime}
-                                onTimeSelect={setSelectedTime}
-                                isLoading={isLoadingSlots}
-                                doctorWorking={doctorWorking}
-                            />
+                        {!isSameDay(selectedDate, today) && (
+                            <button
+                                type="button"
+                                onClick={goToToday}
+                                className="text-[11px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-xl hover:bg-indigo-100 transition whitespace-nowrap"
+                            >
+                                Jump to Today
+                            </button>
+                        )}
+                    </div>
 
-                            {/* Slot legend */}
-                            {allSlots.length > 0 && (
-                                <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1 mt-6 pt-4 border-t border-slate-50">
-                                    {[
-                                        { color: "bg-white border border-slate-300", label: "Available" },
-                                        { color: "bg-slate-200",   label: "Booked"    },
-                                        { color: "bg-slate-100",   label: "Past"      },
-                                    ].map(({ color, label }) => (
-                                        <span key={label} className="flex items-center gap-1 text-[10px] text-slate-500 font-medium">
-                                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
-                                            {label}
-                                        </span>
-                                    ))}
-                                </div>
+                    {/* Stats & Calendar Toggle */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* 4 Quick Day Stat Chips */}
+                        <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200/60">
+                            <span className="text-[10px] sm:text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {availableCount} Open
+                            </span>
+                            <span className="text-[10px] sm:text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                {bookedCount} Booked
+                            </span>
+                            {breakCount > 0 && (
+                                <span className="text-[10px] sm:text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 flex items-center gap-1">
+                                    <i className="fas fa-mug-hot text-[10px] text-rose-500" />
+                                    {breakCount} Break
+                                </span>
+                            )}
+                            {lockedCount > 0 && (
+                                <span className="text-[10px] sm:text-xs font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                    {lockedCount} In Cart
+                                </span>
                             )}
                         </div>
+
+                        {/* Calendar Dropdown Toggle */}
+                        <button
+                            type="button"
+                            onClick={() => setShowFullCalendar(prev => !prev)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs ${
+                                showFullCalendar
+                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-indigo-100"
+                                    : "bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200"
+                            }`}
+                        >
+                            <i className={`fas ${showFullCalendar ? "fa-calendar-check" : "fa-calendar-alt"} text-xs`} />
+                            <span>{showFullCalendar ? "Hide Calendar" : "Month Calendar & History"}</span>
+                            <i className={`fas fa-chevron-${showFullCalendar ? "up" : "down"} text-[10px] ml-0.5 opacity-70`} />
+                        </button>
+                    </div>
+                </div>
+
+                {/* 14-Day Quick Selector (Grid 7x2 on mobile, 14 on desktop) */}
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <i className="fas fa-bolt text-amber-500 text-[10px]" />
+                        <span>14-Day Rolling Window</span>
+                    </span>
+                    <div className="grid grid-cols-7 md:grid-cols-14 gap-1 sm:gap-1.5 w-full">
+                        {quick14Days.map((d) => {
+                            const isSelected = isSameDay(d, selectedDate);
+                            const isDrOpen = isDrWorking(d);
+                            const isToday = isSameDay(d, today);
+                            
+                            return (
+                                <button
+                                    key={d.toISOString()}
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedDate(d);
+                                        setCalendarYear(d.getFullYear());
+                                        setCalendarMonth(d.getMonth());
+                                    }}
+                                    className={`flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl border transition-all text-center select-none active:scale-95 w-full
+                                        ${isSelected
+                                            ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200 font-bold"
+                                            : !isDrOpen
+                                                ? "bg-slate-50 text-slate-400 border-dashed border-slate-200 hover:border-slate-300"
+                                                : isToday
+                                                    ? "bg-indigo-50/60 text-indigo-700 border-indigo-300 hover:bg-indigo-100 font-bold"
+                                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/20"
+                                        }`}
+                                >
+                                    <span className={`text-[8.5px] sm:text-[9.5px] uppercase font-bold tracking-wider ${isSelected ? 'text-indigo-200' : isToday ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                        {isToday ? "Today" : DAY_LABELS[(d.getDay() + 6) % 7]}
+                                    </span>
+                                    <span className="text-xs sm:text-sm font-extrabold leading-tight mt-0.5">
+                                        {d.getDate()}
+                                    </span>
+                                    <span className={`text-[8px] sm:text-[8.5px] font-medium ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                        {!isDrOpen ? "Off" : MONTH_NAMES[d.getMonth()].slice(0, 3)}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
+
+            {/* ─── Expandable Month Calendar & History Widget ─── */}
+            {showFullCalendar && (
+                <div className="bg-white rounded-2xl border border-indigo-100 shadow-md p-4 sm:p-5 flex flex-col gap-3 animate-fade-in w-full min-w-0">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                            <span className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                <i className="fas fa-calendar-alt text-xs" />
+                            </span>
+                            <div>
+                                <h3 className="text-sm font-bold text-slate-800">
+                                    {MONTH_NAMES[calendarMonth]} {calendarYear}
+                                </h3>
+                                <p className="text-[11px] text-slate-400">Click any date to view appointments or past records</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={goToPrevMonth}
+                                disabled={!canGoPrevMonth}
+                                aria-label="Previous month"
+                                className={`w-8 h-8 flex items-center justify-center rounded-xl border text-slate-500 transition-colors ${!canGoPrevMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600 bg-white active:scale-95'}`}
+                            >
+                                <i className="fas fa-chevron-left text-xs" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={goToNextMonth}
+                                disabled={!canGoNextMonth}
+                                aria-label="Next month"
+                                className={`w-8 h-8 flex items-center justify-center rounded-xl border text-slate-500 transition-colors ${!canGoNextMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600 bg-white active:scale-95'}`}
+                            >
+                                <i className="fas fa-chevron-right text-xs" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowFullCalendar(false)}
+                                className="w-8 h-8 flex items-center justify-center rounded-xl border border-slate-200 text-slate-400 hover:text-slate-600 bg-white ml-2 transition"
+                                title="Close calendar view"
+                            >
+                                <i className="fas fa-times text-xs" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Calendar 7-Day Matrix */}
+                    <div className="flex flex-col gap-1.5">
+                        <div className="grid grid-cols-7 mb-1 gap-1">
+                            {DAY_LABELS.map(d => (
+                                <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-slate-400 py-1">{d}</div>
+                            ))}
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                            {calendarDays.map((day, idx) => {
+                                if (!day) return <div key={`e-${idx}`} className="w-full h-10 sm:h-12" />;
+
+                                const past = isPastDate(day);
+                                const outOfWindow = isBeyond14Days(day);
+                                const drOff = !past && !outOfWindow && !isDrWorking(day);
+                                const selected = isSameDay(day, selectedDate);
+                                const isToday = isSameDay(day, today);
+
+                                return (
+                                    <button
+                                        key={day.toISOString()}
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedDate(day);
+                                            setCalendarYear(day.getFullYear());
+                                            setCalendarMonth(day.getMonth());
+                                        }}
+                                        title={past ? "View past booking history" : outOfWindow ? "Future date outside 14-day booking window" : drOff ? "Doctor not scheduled" : "Select date"}
+                                        className={`
+                                            w-full h-10 sm:h-12 rounded-xl flex flex-col items-center justify-center
+                                            transition-all duration-150 relative text-center p-0.5 select-none active:scale-95
+                                            ${selected
+                                                ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 font-bold"
+                                                : isToday
+                                                    ? "border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-bold bg-white"
+                                                    : past
+                                                        ? "text-slate-600 bg-slate-100/80 border border-slate-200/80 hover:bg-indigo-50 hover:text-indigo-600"
+                                                        : drOff
+                                                            ? "bg-slate-50 text-slate-400 border border-dashed border-slate-200 hover:bg-slate-100"
+                                                            : outOfWindow
+                                                                ? "text-slate-400 border border-slate-100 hover:bg-slate-100 bg-white"
+                                                                : "text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-100 bg-white"
+                                            }
+                                        `}
+                                    >
+                                        <span className="text-xs sm:text-sm leading-none font-bold">
+                                            {day.getDate()}
+                                        </span>
+                                        <span className={`text-[8px] sm:text-[9px] leading-none mt-0.5 font-medium
+                                            ${selected ? "text-indigo-200" : past ? "text-slate-400" : drOff ? "text-slate-400" : "text-slate-400"}`}>
+                                            {past ? "Past" : drOff ? "Closed" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Calendar legend */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-500">
+                            {[
+                                { color: "bg-indigo-600", label: "Selected" },
+                                { color: "bg-white border-2 border-indigo-300", label: "Today" },
+                                { color: "bg-white border border-slate-200", label: "Active Window" },
+                                { color: "bg-slate-100 border border-slate-200", label: "Past History" },
+                                { color: "bg-slate-100 border border-dashed border-slate-300", label: "Closed / Off" },
+                            ].map(({ color, label }) => (
+                                <span key={label} className="flex items-center gap-1">
+                                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${color}`} />
+                                    <span>{label}</span>
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Main Scheduled Time Slots Container (Full Width, Vertical Scrolling) ─── */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3.5 sm:p-5 flex flex-col gap-4 w-full min-w-0">
+                        
+                        {/* Past Date Banner */}
+                        {isPastDate(selectedDate) && (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+                                        <i className="fas fa-history text-indigo-600 text-xs" />
+                                    </span>
+                                    <div>
+                                        <p className="text-xs font-bold text-indigo-950">
+                                            Viewing Past History: {MONTH_NAMES[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                                        </p>
+                                        <p className="text-[10px] sm:text-[11px] text-indigo-700">
+                                            Review previous patient consultations and completed bookings.
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelectedDate(today);
+                                        setCalendarYear(today.getFullYear());
+                                        setCalendarMonth(today.getMonth());
+                                    }}
+                                    className="w-full sm:w-auto justify-center text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-white px-3 py-1.5 rounded-xl border border-indigo-200 shadow-2xs hover:bg-indigo-50/50 transition-all flex items-center gap-1.5"
+                                >
+                                    <i className="fas fa-calendar-day text-[10px]" />
+                                    <span>Back to Today</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Time Slots Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+                            <h2 className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                                    <i className="fas fa-clock text-indigo-600 text-xs" />
+                                </span>
+                                <span>Scheduled Time Slots</span>
+                                <span className="text-[11px] font-normal text-slate-400">
+                                    — {MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                                </span>
+                            </h2>
+
+                            {/* Status Badges */}
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                {availableCount > 0 && (
+                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        {availableCount} Available
+                                    </span>
+                                )}
+                                {bookedCount > 0 && (
+                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-indigo-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                        {bookedCount} Booked
+                                    </span>
+                                )}
+                                {lockedCount > 0 && (
+                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-amber-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                        {lockedCount} In Checkout
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Slots Content State */}
+                        {isLoadingSlots ? (
+                            <div className="flex items-center gap-2 text-slate-400 text-sm py-12 justify-center">
+                                <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent" />
+                                <span>Loading scheduled slots…</span>
+                            </div>
+                        ) : !doctorWorking ? (
+                            <div className="flex items-start gap-3 p-4 sm:p-5 bg-amber-50/80 border border-amber-200 rounded-2xl">
+                                <span className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                    <i className="fas fa-calendar-xmark text-amber-600 text-base" />
+                                </span>
+                                <div>
+                                    <p className="text-amber-900 text-sm font-bold">No Working Hours Configured for this Day</p>
+                                    <p className="text-amber-700 text-xs mt-0.5">
+                                        You have marked this day as off or no shifts are active in your working schedule.
+                                    </p>
+                                    <Link
+                                        href="/doctor/profile/edit2?section=schedule"
+                                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 mt-2"
+                                    >
+                                        <span>Configure shifts for {DAY_NAMES_JS[selectedDate.getDay()]}</span>
+                                        <i className="fas fa-arrow-right text-[10px]" />
+                                    </Link>
+                                </div>
+                            </div>
+                        ) : allSlots.length === 0 ? (
+                            <div className="flex flex-col items-center py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                <span className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-2">
+                                    <i className="far fa-calendar-times text-slate-400 text-xl" />
+                                </span>
+                                <p className="text-slate-700 text-sm font-bold">No slots generated</p>
+                                <p className="text-slate-400 text-xs mt-0.5">Please check your shift start and end times in settings.</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-5 sm:gap-6">
+                                {shiftGroups.map((group, groupIdx) => {
+                                    const availableInGroup = group.slots.filter(s => s.status === "available" && !s.isBreak && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+                                    const bookedInGroup = group.slots.filter(s => s.status === "booked" || s.status === "Booked" || !!appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+                                    const breakInGroup = group.slots.filter(s => (s.status === "unavailable" || s.status === "break" || s.status === "closed" || s.isBreak) && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
+                                    const hasShiftMeta = group.name && (group.start || shiftGroups.length > 1);
+
+                                    // Determine Shift Badge (Mixed, Online Only, In-Person Only)
+                                    const isMixedShift = group.shiftType === 'mixed' || (group.slots.some(s => s.type === 'mixed') || (group.slots.some(s => s.type === 'online') && group.slots.some(s => s.type === 'offline')));
+                                    const isOnlineOnlyShift = !isMixedShift && (group.shiftType === 'online' || group.slots.every(s => s.type === 'online'));
+                                    const isOfflineOnlyShift = !isMixedShift && !isOnlineOnlyShift;
+
+                                    return (
+                                        <div key={`group-${groupIdx}`} className="flex flex-col gap-3">
+                                            {hasShiftMeta && (
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-100 gap-2">
+                                                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
+                                                        <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                                                            {group.name}
+                                                        </span>
+                                                        {group.start && group.end && (
+                                                            <span className="text-xs text-slate-500 font-semibold">
+                                                                ({group.start} – {group.end})
+                                                            </span>
+                                                        )}
+
+                                                        {/* Shift Channel Badge */}
+                                                        {isMixedShift ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                                                <i className="fas fa-layer-group text-[8px] text-purple-500" />
+                                                                Mixed (Online & In-Person)
+                                                            </span>
+                                                        ) : isOnlineOnlyShift ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                                                <i className="fas fa-video text-[8px] text-indigo-500" />
+                                                                Online Only
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                                <i className="fas fa-hospital text-[8px] text-emerald-500" />
+                                                                In-Person Only
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-slate-500 self-start sm:self-auto">
+                                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                                            {availableInGroup} Open
+                                                        </span>
+                                                        {bookedInGroup > 0 && (
+                                                            <span className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                                                {bookedInGroup} Booked
+                                                            </span>
+                                                        )}
+                                                        {breakInGroup > 0 && (
+                                                            <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                                                <i className="fas fa-mug-hot text-[8px]" />
+                                                                {breakInGroup} Break
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Slot Grid: 2 cols on mobile, 3 on sm, 4 on md, 5 on lg, 6 on xl */}
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3 w-full">
+                                                {group.slots.map((slotObj, idx) => {
+                                                    const { time: slotTime, status, isLocked, isExpired, type: slotCapability, bookedType: slotBookedType } = slotObj;
+                                                    const normTime = normalizeSlotTime(slotTime);
+                                                    const matchedAppointment = appointmentByTimeMap.get(normTime) || appointmentByTimeMap.get(slotTime) || appointmentByTimeMap.get(slotTime.trim());
+                                                    const patientName = matchedAppointment
+                                                        ? (matchedAppointment.manualPatientDetails?.name
+                                                            ? `${matchedAppointment.manualPatientDetails.name}${matchedAppointment.manualPatientDetails.opNumber ? ` (OP: ${matchedAppointment.manualPatientDetails.opNumber})` : ''}`
+                                                            : getPatientDisplayName(matchedAppointment.patientId))
+                                                        : null;
+
+                                                    const isAnyLocked = status === "locked" || status === "Locked" || isLocked === true;
+                                                    const isBooked = status === "booked" || status === "Booked" || !!matchedAppointment;
+                                                    const isBreak = (status === "unavailable" || status === "break" || status === "closed" || slotObj.isBreak) && !isBooked && !isAnyLocked;
+                                                    const isPast = (status === "past" || isExpired === true) && !isBooked && !isBreak;
+                                                    const isAvailable = status === "available" && !isBooked && !isAnyLocked && !isBreak;
+
+                                                    // Determine booking channel type (Online vs In-Person)
+                                                    const appConsultType = matchedAppointment?.consultationType || slotBookedType;
+                                                    const isBookedOnline = appConsultType === 'online' || appConsultType === 'video';
+                                                    const isBookedInPerson = appConsultType === 'offline' || appConsultType === 'physical';
+
+                                                    return (
+                                                        <div
+                                                            key={`${slotTime}-${idx}`}
+                                                            onClick={() => {
+                                                                if (matchedAppointment) {
+                                                                    setSelectedAppointment(matchedAppointment);
+                                                                } else if (isAvailable || isBreak) {
+                                                                    setManagingSlot(slotObj);
+                                                                    setSlotActionFeedback(null);
+                                                                    setManagingSlotTab(isBreak ? 'break' : 'book');
+                                                                }
+                                                            }}
+                                                            className={`
+                                                                relative flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all duration-200 text-center
+                                                                ${isPast
+                                                                    ? "bg-slate-50/70 text-slate-300 border-slate-100 cursor-default"
+                                                                    : isAnyLocked
+                                                                        ? "bg-amber-50 text-amber-900 border-amber-300 shadow-sm cursor-default"
+                                                                        : isBooked
+                                                                            ? isBookedInPerson 
+                                                                                ? "bg-emerald-50/60 text-emerald-950 border-emerald-300 shadow-sm hover:border-emerald-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
+                                                                                : "bg-indigo-50/60 text-indigo-950 border-indigo-300 shadow-sm hover:border-indigo-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
+                                                                            : isBreak
+                                                                                ? "bg-rose-50/70 text-rose-950 border-rose-300 shadow-2xs hover:border-rose-500 hover:bg-rose-100/60 cursor-pointer active:scale-[0.98] group"
+                                                                                : isAvailable
+                                                                                    ? "bg-white text-slate-800 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer active:scale-[0.98] group"
+                                                                                    : "bg-white text-slate-700 border-slate-200"
+                                                                }
+                                                            `}
+                                                        >
+                                                            {/* Slot Time */}
+                                                            <span className={`text-xs sm:text-sm font-extrabold flex items-center gap-1.5 ${isPast ? 'opacity-50' : ''}`}>
+                                                                {isAnyLocked && <i className="fas fa-lock text-[10px] text-amber-500" />}
+                                                                {isBreak && <i className="fas fa-mug-hot text-[10px] text-rose-500" />}
+                                                                {slotTime}
+                                                            </span>
+
+                                                            {/* Slot Capability Mode Badge (Mixed / Online / In-Person) */}
+                                                            <div className="mt-1 flex flex-col items-center w-full">
+                                                                {slotCapability === 'mixed' ? (
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-purple-200 flex items-center gap-1">
+                                                                        <i className="fas fa-arrows-split-up-and-left text-[7px]" />
+                                                                        Mixed
+                                                                    </span>
+                                                                ) : slotCapability === 'online' ? (
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1">
+                                                                        <i className="fas fa-video text-[7px]" />
+                                                                        Online
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
+                                                                        <i className="fas fa-hospital text-[7px]" />
+                                                                        In-Person
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Booking Status / Break / Lock / Past Details */}
+                                                            {isBooked ? (
+                                                                <div className="mt-1 flex flex-col items-center w-full">
+                                                                    <span className={`text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-md flex items-center justify-center gap-1 shadow-2xs w-full
+                                                                        ${isBookedInPerson ? 'text-emerald-800 bg-emerald-100/90 border border-emerald-200' : 'text-indigo-800 bg-indigo-100/90 border border-indigo-200'}`}>
+                                                                        <i className={`fas ${isBookedInPerson ? 'fa-hospital' : 'fa-video'} text-[7px] shrink-0`} />
+                                                                        <span className="truncate">Booked ({isBookedInPerson ? 'Clinic' : 'Online'})</span>
+                                                                    </span>
+                                                                    {patientName && (
+                                                                        <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-700 mt-0.5 truncate max-w-[120px] w-full block group-hover:text-indigo-600">
+                                                                            {patientName}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : isBreak ? (
+                                                                <div className="mt-1 flex flex-col items-center w-full">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-extrabold uppercase tracking-wider text-rose-700 bg-rose-100 px-1.5 sm:px-2 py-0.5 rounded-md border border-rose-200 flex items-center justify-center gap-1 shadow-2xs w-full">
+                                                                        <i className="fas fa-ban text-[7px] text-rose-500 shrink-0" />
+                                                                        <span className="truncate">Closed / On Break</span>
+                                                                    </span>
+                                                                    <span className="text-[7.5px] sm:text-[8px] text-rose-500 font-semibold group-hover:underline flex items-center gap-0.5 mt-0.5 transition">
+                                                                        <i className="fas fa-undo-alt text-[6.5px]" />
+                                                                        <span>Reopen</span>
+                                                                    </span>
+                                                                </div>
+                                                            ) : isAvailable ? (
+                                                                <div className="mt-1 flex flex-col items-center w-full">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                                        Open
+                                                                    </span>
+                                                                    <span className="text-[7.5px] sm:text-[8px] text-slate-400 font-medium group-hover:text-indigo-600 flex items-center gap-0.5 mt-0.5 transition opacity-70 group-hover:opacity-100">
+                                                                        <i className="fas fa-coffee text-[6.5px]" />
+                                                                        <span>Take Break</span>
+                                                                    </span>
+                                                                </div>
+                                                            ) : isAnyLocked ? (
+                                                                <span className="text-[8px] sm:text-[8.5px] font-extrabold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 sm:px-2 py-0.5 rounded-md mt-1 border border-amber-200">
+                                                                    In Checkout
+                                                                </span>
+                                                            ) : isPast ? (
+                                                                <span className="text-[8px] sm:text-[8.5px] font-medium text-slate-400 mt-1">
+                                                                    Past
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Slot Legend */}
+                                <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-2 pt-4 border-t border-slate-100 text-[10.5px] sm:text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-700 w-full sm:w-auto">Slot Legend:</span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-purple-50 border border-purple-200 shrink-0" />
+                                        Mixed Slot (Online & In-Person)
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-indigo-50 border border-indigo-200 shrink-0" />
+                                        Online Slot
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-emerald-50 border border-emerald-200 shrink-0" />
+                                        In-Person Slot
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-indigo-100 border border-indigo-400 shrink-0" />
+                                        Booked (Click to view patient)
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-rose-50 border border-rose-400 shrink-0" />
+                                        On Break / Closed (Click to reopen)
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-amber-50 border border-amber-400 shrink-0" />
+                                        In Checkout
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span className="w-3 h-3 rounded-md bg-slate-50 border border-slate-100 shrink-0" />
+                                        Past
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+            {/* ─── Slot Break / Availability Management Modal (Drawer on Mobile, Modal on Desktop) ─── */}
+            {managingSlot && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+                    <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 border border-slate-100 max-h-[90vh] overflow-y-auto">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                                <span className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                                    (managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak)
+                                        ? 'bg-rose-100 text-rose-600'
+                                        : 'bg-indigo-100 text-indigo-600'
+                                }`}>
+                                    <i className={`fas ${
+                                        (managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak)
+                                            ? 'fa-mug-hot'
+                                            : 'fa-clock'
+                                    } text-xs`} />
+                                </span>
+                                <span>
+                                    {(managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak)
+                                        ? 'Manage Slot: Closed / On Break'
+                                        : 'Manage Slot Availability'}
+                                </span>
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setManagingSlot(null);
+                                    setSlotActionFeedback(null);
+                                }}
+                                disabled={isUpdatingSlot}
+                                className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition disabled:opacity-50"
+                            >
+                                <i className="fas fa-times text-xs" />
+                            </button>
+                        </div>
+
+                        {/* Inline Feedback Banner */}
+                        {slotActionFeedback && (
+                            <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 border ${
+                                slotActionFeedback.type === 'success'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                            }`}>
+                                <i className={`fas ${slotActionFeedback.type === 'success' ? 'fa-check-circle text-emerald-600' : 'fa-exclamation-circle text-rose-600'}`} />
+                                <span>{slotActionFeedback.message}</span>
+                            </div>
+                        )}
+
+                        {/* Slot Info Card */}
+                        <div className="bg-slate-50 p-3.5 sm:p-4 rounded-2xl text-xs text-slate-600 border border-slate-100 space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 font-medium">Selected Slot Time:</span>
+                                <span className="font-extrabold text-slate-900 text-sm">
+                                    {managingSlot.time}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 font-medium">Date:</span>
+                                <span className="font-bold text-slate-800">
+                                    {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-slate-400 font-medium">Current Status:</span>
+                                {(managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak) ? (
+                                    <span className="font-extrabold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
+                                        <i className="fas fa-ban text-[8px]" />
+                                        Closed / On Break
+                                    </span>
+                                ) : (
+                                    <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                        Open for Booking
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actions Based on Current Status */}
+                        {(managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak) ? (
+                            /* Slot is on break -> Allow reopening */
+                            <div className="space-y-4">
+                                <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
+                                    <i className="fas fa-info-circle text-amber-600 mt-0.5 shrink-0" />
+                                    <p>
+                                        This slot is currently <strong>blocked from patient booking</strong>. Reopening it will immediately make it bookable again on your schedule.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setManagingSlot(null);
+                                            setSlotActionFeedback(null);
+                                        }}
+                                        disabled={isUpdatingSlot}
+                                        className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                                    >
+                                        Keep Closed
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleSlotOverride(managingSlot.time, 'open')}
+                                        disabled={isUpdatingSlot}
+                                        className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-200 disabled:opacity-60"
+                                    >
+                                        {isUpdatingSlot ? (
+                                            <>
+                                                <i className="fas fa-spinner fa-spin text-xs" />
+                                                <span>Reopening...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="fas fa-check-circle text-xs" />
+                                                <span>Reopen Slot</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Slot is open -> Tabbed Selection (Manual Offline Booking vs Close Slot / Break) */
+                            <div className="space-y-4">
+                                {/* Tab Selector */}
+                                <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setManagingSlotTab('book')}
+                                        className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                                            managingSlotTab === 'book'
+                                                ? 'bg-white text-indigo-600 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                        }`}
+                                    >
+                                        <i className="fas fa-user-plus text-[11px]" />
+                                        <span>Manual Booking</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setManagingSlotTab('break')}
+                                        className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                                            managingSlotTab === 'break'
+                                                ? 'bg-white text-rose-600 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-800'
+                                        }`}
+                                    >
+                                        <i className="fas fa-mug-hot text-[11px]" />
+                                        <span>Take Break</span>
+                                    </button>
+                                </div>
+
+                                {managingSlotTab === 'book' ? (
+                                    <form onSubmit={handleManualBooking} className="space-y-3.5">
+                                        {/* Informational Banner */}
+                                        <div className="p-3 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl flex items-center justify-between text-xs text-emerald-950">
+                                            <span className="flex items-center gap-1.5 font-bold">
+                                                <i className="fas fa-user-check text-emerald-600" />
+                                                Direct Booking
+                                            </span>
+                                        </div>
+
+                                        {/* Patient Name */}
+                                        <div>
+                                            <label className="text-xs font-bold text-slate-700 mb-1 block">
+                                                Patient Full Name <span className="text-rose-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={manualPatientName}
+                                                onChange={(e) => setManualPatientName(e.target.value)}
+                                                placeholder="e.g. Rahul Sharma"
+                                                className="w-full text-xs font-semibold rounded-xl border border-slate-200 px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400 placeholder:font-normal"
+                                            />
+                                        </div>
+
+                                        {/* OP Number & Phone */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                            <div>
+                                                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                                                    OP Number / ID (Optional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={manualOpNumber}
+                                                    onChange={(e) => setManualOpNumber(e.target.value)}
+                                                    placeholder="e.g. OP-1048"
+                                                    className="w-full text-xs font-mono rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400 font-medium"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                                                    Phone (Optional)
+                                                </label>
+                                                <input
+                                                    type="tel"
+                                                    value={manualPhone}
+                                                    onChange={(e) => setManualPhone(e.target.value)}
+                                                    placeholder="+91 9876543210"
+                                                    className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Visit Classification */}
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                                                Visit Classification
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManualPatientType('NEW')}
+                                                    className={`py-1.5 text-[10.5px] font-bold rounded-lg transition ${
+                                                        manualPatientType === 'NEW'
+                                                            ? 'bg-white text-indigo-700 shadow-2xs'
+                                                            : 'text-slate-500 hover:text-slate-800'
+                                                    }`}
+                                                >
+                                                    New Visit
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setManualPatientType('FOLLOW_UP')}
+                                                    className={`py-1.5 text-[10.5px] font-bold rounded-lg transition ${
+                                                        manualPatientType === 'FOLLOW_UP'
+                                                            ? 'bg-white text-indigo-700 shadow-2xs'
+                                                            : 'text-slate-500 hover:text-slate-800'
+                                                    }`}
+                                                >
+                                                    Follow-Up
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Notes */}
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                                                Medical Notes / Symptoms (Optional)
+                                            </label>
+                                            <textarea
+                                                rows={2}
+                                                value={manualNotes}
+                                                onChange={(e) => setManualNotes(e.target.value)}
+                                                placeholder="Enter reason for visit or clinical notes..."
+                                                className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition resize-none placeholder:text-slate-400"
+                                            />
+                                        </div>
+
+                                        {/* Modal Footer Buttons */}
+                                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setManagingSlot(null);
+                                                    setSlotActionFeedback(null);
+                                                }}
+                                                disabled={isBookingManual}
+                                                className="w-full sm:w-1/3 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={isBookingManual}
+                                                className="w-full sm:w-2/3 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-200 disabled:opacity-60"
+                                            >
+                                                {isBookingManual ? (
+                                                    <>
+                                                        <i className="fas fa-spinner fa-spin text-xs" />
+                                                        <span>Booking Slot...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-check-circle text-xs" />
+                                                        <span>Confirm Offline Booking</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </form>
+                                ) : (
+                                    /* Tab 2: Close Slot / Take Break */
+                                    <div className="space-y-4">
+                                        <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                            Mark this slot as <strong>Closed / On Break</strong> to temporarily block patient bookings. You can reopen it at any time.
+                                        </p>
+
+                                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setManagingSlot(null);
+                                                    setSlotActionFeedback(null);
+                                                }}
+                                                disabled={isUpdatingSlot}
+                                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleSlotOverride(managingSlot.time, 'close')}
+                                                disabled={isUpdatingSlot}
+                                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-rose-200 disabled:opacity-60"
+                                            >
+                                                {isUpdatingSlot ? (
+                                                    <>
+                                                        <i className="fas fa-spinner fa-spin text-xs" />
+                                                        <span>Closing Slot...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fas fa-ban text-xs" />
+                                                        <span>Close Slot / Take Break</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Booked Appointment Details Modal (Drawer on Mobile, Modal on Desktop) ─── */}
+            {selectedAppointment && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+                    <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 border border-slate-100 max-h-[88vh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                                <span className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                                    <i className="fas fa-user-check text-xs" />
+                                </span>
+                                <span>Appointment Details</span>
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedAppointment(null)}
+                                className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition"
+                            >
+                                <i className="fas fa-times text-xs" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-2.5 sm:space-y-3 bg-slate-50 p-3.5 sm:p-4 rounded-2xl text-xs text-slate-600 border border-slate-100">
+                            <div className="flex justify-between items-start gap-2">
+                                <span className="text-slate-400 font-medium">Patient:</span>
+                                {selectedAppointment.isManualBooking ? (
+                                    <div className="space-y-1 text-right">
+                                        <span className="font-extrabold text-slate-900 text-xs sm:text-sm block">
+                                            {selectedAppointment.manualPatientDetails?.name || 'Walk-in Patient'}
+                                        </span>
+                                        {selectedAppointment.manualPatientDetails?.opNumber && (
+                                            <span className="inline-block text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                                OP: {selectedAppointment.manualPatientDetails.opNumber}
+                                            </span>
+                                        )}
+                                        {selectedAppointment.manualPatientDetails?.phone && (
+                                            <p className="text-[10px] text-slate-500 mt-0.5">
+                                                <i className="fas fa-phone mr-1 text-indigo-400" />
+                                                {selectedAppointment.manualPatientDetails.phone}
+                                            </p>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <span className="font-extrabold text-slate-900 text-xs sm:text-sm text-right truncate">
+                                        {getPatientDisplayName(selectedAppointment.patientId)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {selectedAppointment.isManualBooking && (
+                                <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 space-y-0.5">
+                                    <div className="flex items-center justify-between font-bold">
+                                        <span className="flex items-center gap-1.5">
+                                            <i className="fas fa-user-tag text-amber-600" />
+                                            Doctor Direct Booking
+                                        </span>
+                                        <span className="text-[9px] uppercase tracking-wider bg-amber-200/70 px-1.5 py-0.5 rounded text-amber-800 font-extrabold">
+                                            0% Platform Fee
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-amber-800/90 leading-tight">
+                                        Direct clinic walk-in / call booking. Payment handled outside platform.
+                                    </p>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-slate-400 font-medium">Visit Type:</span>
+                                <span className="font-bold text-slate-800 uppercase px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] sm:text-xs">
+                                    {selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-Up Visit' : 'New Consultation'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-slate-400 font-medium">Date & Time:</span>
+                                <span className="font-bold text-slate-800 text-right">
+                                    {new Date(selectedAppointment.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {selectedAppointment.appointmentTime}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center gap-2">
+                                <span className="text-slate-400 font-medium">Channel:</span>
+                                <span className="font-bold text-indigo-600 capitalize flex items-center gap-1">
+                                    <i className={`fas ${selectedAppointment.consultationType === 'video' || selectedAppointment.consultationType === 'online' ? 'fa-video' : 'fa-hospital'}`} />
+                                    {selectedAppointment.consultationType === 'video' || selectedAppointment.consultationType === 'online' ? 'Telehealth Video' : 'In-Person Clinic'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center border-t border-slate-200/60 pt-2 text-xs font-bold text-slate-800">
+                                <span>Consultation Fee:</span>
+                                <span className="text-emerald-600 font-extrabold text-xs sm:text-sm">₹{selectedAppointment.fee}</span>
+                            </div>
+                            {selectedAppointment.notes && (
+                                <div className="border-t border-slate-200/60 pt-2 text-xs">
+                                    <span className="text-slate-400 font-medium block mb-1">Patient Notes:</span>
+                                    <p className="bg-white p-2.5 rounded-xl border border-slate-200 text-slate-700 italic text-[11px] sm:text-xs">
+                                        &ldquo;{selectedAppointment.notes}&rdquo;
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedAppointment(null)}
+                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
+                            >
+                                Close
+                            </button>
+                            <Link
+                                href="/doctor/appointments"
+                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-200"
+                            >
+                                <span>Go to Appointments</span>
+                                <i className="fas fa-arrow-right text-[10px]" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+

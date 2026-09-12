@@ -9,7 +9,7 @@ interface CallControlsProps {
   onToggleVideo: () => void;
   onEndCall: () => void;
 }
-
+ 
 export default function CallControls({
   isAudioMuted,
   isVideoOff,

@@ -152,6 +152,7 @@ import AdminDashboardClient from '@/components/admin/AdminDashboardClient';
 // import React, { useState, useEffect } from 'react';
 'use client';
 import Link from 'next/link';
+import SystemHealthCard from '@/components/admin/SystemHealthCard';
 
 // Use dynamic import for Chart.js to avoid SSR issues
 import {
@@ -1373,44 +1374,8 @@ export default function AdminDashboardPage() {
             {/* New Dashboard Insights Area */}
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
 
-                {/* 1. System Health & Performance */}
-                <div className="bg-white rounded-3xl shadow-sm p-6 flex flex-col justify-between border border-slate-100">
-                    <div>
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-lg font-bold text-slate-800">System Health</h2>
-                            <span className="flex h-3 w-3 relative">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                            </span>
-                        </div>
-
-                        <div className="space-y-5">
-                            <div>
-                                <div className="flex justify-between text-sm mb-2">
-                                    <span className="text-slate-500">Server Load</span>
-                                    <span className="font-semibold text-slate-700">24%</span>
-                                </div>
-                                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                                    <div className="bg-indigo-500 h-full w-[24%] transition-all duration-500"></div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-2">
-                                <div className="p-3 rounded-2xl bg-slate-50">
-                                    <p className="text-xs text-slate-400 uppercase">Latency</p>
-                                    <p className="text-sm font-bold text-slate-700">142ms</p>
-                                </div>
-                                <div className="p-3 rounded-2xl bg-slate-50">
-                                    <p className="text-xs text-slate-400 uppercase">Errors</p>
-                                    <p className="text-sm font-bold text-slate-700">0.02%</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button className="mt-6 w-full py-3 text-sm font-semibold text-indigo-600 bg-indigo-50 rounded-2xl hover:bg-indigo-100 transition-all">
-                        Open System Logs
-                    </button>
-                </div>
+                {/* 1. System Health & Performance */} 
+                <SystemHealthCard />
 
                 {/* 2. Recent Doctor Verifications Table */}
                 <div className="bg-white rounded-3xl shadow-sm p-6 xl:col-span-2 border border-slate-100">

@@ -6,7 +6,7 @@ async function getUser(cookieHeader: string) {
     try {
         const res = await fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`,
-            {
+            { 
                 method: 'GET',
                 cache: 'no-store',
                 headers: { cookie: cookieHeader },

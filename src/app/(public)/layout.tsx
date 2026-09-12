@@ -10,7 +10,7 @@ async function getUser(cookieHeader: string) {
             method: 'GET',
             cache: 'no-store',
             headers: { cookie: cookieHeader },
-        });
+        }); 
         if (!res.ok) return null;
         const data = await res.json();
         return data.user ?? null;

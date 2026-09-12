@@ -10,7 +10,7 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/navigation"; 
 
 interface DuplicateTabFallbackProps {
   /** "duplicate" (Tab B opened while Tab A active) | "taken_over" (Tab A deactivated by Tab B) */

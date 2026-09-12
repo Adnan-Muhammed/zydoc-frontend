@@ -37,8 +37,8 @@ export const getDoctorsList = async (searchParams?: any) => {
     }
 
     const doctors = response.doctors.map((doc: any) => {
-        const hasVideo = doc.consultationSettings?.video?.enabled;
-        const hasPhysical = doc.consultationSettings?.physical?.enabled;
+        const hasVideo = Boolean(doc.consultationSettings?.online?.enabled ?? doc.consultationSettings?.video?.enabled);
+        const hasPhysical = Boolean(doc.consultationSettings?.offline?.enabled ?? doc.consultationSettings?.physical?.enabled);
         let typeStr = "Online & In-person";
         if (hasVideo && !hasPhysical) {
             typeStr = "Online only";
@@ -46,16 +46,13 @@ export const getDoctorsList = async (searchParams?: any) => {
             typeStr = "In-person only";
         }
 
-        const fee = doc.consultationSettings?.video?.enabled 
-            ? (doc.consultationSettings?.video?.fee ?? 0)
-            : (doc.consultationSettings?.physical?.fee ?? 0);
+        const videoFee = hasVideo ? Number(doc.consultationSettings?.online?.fee ?? doc.consultationSettings?.video?.fee ?? 0) : null;
+        const physicalFee = hasPhysical ? Number(doc.consultationSettings?.offline?.fee ?? doc.consultationSettings?.physical?.fee ?? 0) : null;
+        const fee = videoFee ?? physicalFee ?? 0;
+        const clinicName = doc.consultationSettings?.offline?.clinicName || doc.consultationSettings?.physical?.clinicName || "";
+        const clinicAddress = doc.consultationSettings?.offline?.clinicAddress || doc.consultationSettings?.physical?.clinicAddress || "";
 
-        const videoFee = hasVideo ? (doc.consultationSettings?.video?.fee ?? 0) : null;
-        const physicalFee = hasPhysical ? (doc.consultationSettings?.physical?.fee ?? 0) : null;
-        const clinicName = doc.consultationSettings?.physical?.clinicName || "";
-        const clinicAddress = doc.consultationSettings?.physical?.clinicAddress || "";
-
-        const location = doc.consultationSettings?.physical?.clinicAddress || "Online / Remote";
+        const location = clinicAddress || (hasPhysical && clinicName ? clinicName : "Online / Remote");
         let image = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
         if (doc.avatarUrl) {
             if (doc.avatarUrl.startsWith('http://') || doc.avatarUrl.startsWith('https://')) {

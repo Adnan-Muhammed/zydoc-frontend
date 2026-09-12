@@ -67,12 +67,15 @@
   margin: 0;
 }
 
+html,
 body {
   color: var(--text-main);
   background: var(--background);
   font-family: var(--font-sans);
   transition: background-color 0.3s ease, color 0.3s ease;
   min-height: 100vh;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 h1,
@@ -90,12 +93,18 @@ h6 {
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /*   app shell       */
 .shell-layout {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 
@@ -185,10 +194,14 @@ h6 {
   /* margin-left: 240px; */
   margin-left: 255px;
   /* Must match Sidebar width */
+  width: calc(100% - 255px);
+  max-width: calc(100% - 255px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--background);
+  overflow-x: hidden;
 }
 
 /*   app shell       */
@@ -197,10 +210,14 @@ h6 {
   /* margin-left: 240px; */
   margin-left: 255px;
   /* Must match Sidebar width */
+  width: calc(100% - 255px);
+  max-width: calc(100% - 255px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--background);
+  overflow-x: hidden;
 }
 
 
@@ -255,6 +272,8 @@ h6 {
 
 /* Consultation Mode (Zero Scrolling, 100vh Fixed Viewport) */
 .shell-layout.consultation-mode {
+  width: 100% !important;
+  max-width: 100% !important;
   height: 100vh;
   max-height: 100vh;
   overflow: hidden;
@@ -262,6 +281,8 @@ h6 {
 
 .shell-main.consultation-mode {
   margin-left: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
   height: 100vh;
   max-height: 100vh;
   overflow: hidden;
@@ -274,6 +295,8 @@ h6 {
   gap: 0 !important;
   margin: 0 !important;
   flex: 1;
+  width: 100% !important;
+  max-width: 100% !important;
   height: calc(100vh - 64px);
   max-height: calc(100vh - 64px);
   min-height: 0 !important;
@@ -414,11 +437,15 @@ h6 {
 
   .dashboard-main {
     margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   /* app shell */
   .shell-main {
     margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
 

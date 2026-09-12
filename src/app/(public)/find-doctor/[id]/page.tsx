@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getDoctorById } from "@/lib/doctors";
 import { notFound } from "next/navigation";
 import { formatTo12Hour } from "@/utils/timeFormat";
+import BookButton from "@/components/patient/BookButton";
 
 interface WorkingHourSlot {
   start: string;
@@ -23,6 +24,8 @@ interface Qualification {
   degree: string;
   institution: string;
   year: string | number;
+  certificateUrl?: string;
+  certificateStatus?: string;
 }
 
 function Card({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
@@ -57,7 +60,13 @@ const OLD_DISPLAY_DAYS = ['mondayToFriday', 'saturday', 'sunday'];
 const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
   if (!scheduleObj) return null;
   const daysToRender = isOldFormat ? OLD_DISPLAY_DAYS : DISPLAY_DAYS;
-  const activeDays = daysToRender.filter(day => scheduleObj[day]?.active);
+
+  const isDayActive = (val: any) => {
+    if (Array.isArray(val)) return val.length > 0;
+    return !!val?.active;
+  };
+
+  const activeDays = daysToRender.filter(day => isDayActive(scheduleObj[day]));
   
   if (activeDays.length === 0) {
     return (
@@ -70,20 +79,24 @@ const renderSchedule = (scheduleObj: any, isOldFormat: boolean = false) => {
   return (
     <div className="space-y-2">
       {daysToRender.map((key) => {
-        const slot = scheduleObj[key];
-        if (!slot?.active) return null;
+        const val = scheduleObj[key];
+        if (!isDayActive(val)) return null;
+
+        const timeString = Array.isArray(val)
+          ? val.map(b => `${formatTo12Hour(b.start)} – ${formatTo12Hour(b.end)}`).join(', ')
+          : `${formatTo12Hour(val.start)} – ${formatTo12Hour(val.end)}`;
 
         return (
           <div
             key={key}
-            className="flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-slate-100 bg-white text-xs shadow-sm shadow-slate-100/50"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-slate-100 bg-white text-xs shadow-sm shadow-slate-100/50"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
               <span className="font-bold text-slate-600 text-[11px] uppercase tracking-wide">{DAY_LABELS[key] || key}</span>
             </div>
-            <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg shrink-0">
-              {formatTo12Hour(slot.start)} – {formatTo12Hour(slot.end)}
+            <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg text-right">
+              {timeString}
             </span>
           </div>
         );
@@ -125,12 +138,12 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
     }
   }
 
-  const videoEnabled = d.consultationSettings?.video?.enabled ?? false;
-  const videoFee = Number(d.consultationSettings?.video?.fee ?? 0);
-  const physicalEnabled = d.consultationSettings?.physical?.enabled ?? false;
-  const physicalFee = Number(d.consultationSettings?.physical?.fee ?? 0);
-  const clinicName = d.consultationSettings?.physical?.clinicName ?? "";
-  const clinicAddress = d.consultationSettings?.physical?.clinicAddress ?? "";
+  const videoEnabled = d.consultationSettings?.online?.enabled ?? d.consultationSettings?.video?.enabled ?? false;
+  const videoFee = Number(d.consultationSettings?.online?.fee ?? d.consultationSettings?.video?.fee ?? 0);
+  const physicalEnabled = d.consultationSettings?.offline?.enabled ?? d.consultationSettings?.physical?.enabled ?? false;
+  const physicalFee = Number(d.consultationSettings?.offline?.fee ?? d.consultationSettings?.physical?.fee ?? 0);
+  const clinicName = d.consultationSettings?.offline?.clinicName ?? d.consultationSettings?.physical?.clinicName ?? "";
+  const clinicAddress = d.consultationSettings?.offline?.clinicAddress ?? d.consultationSettings?.physical?.clinicAddress ?? "";
 
   const workingHours: WorkingHours = d.workingHours ?? {
     mondayToFriday: { start: "09:00", end: "17:00", active: true },
@@ -151,13 +164,7 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
             <i className="fas fa-arrow-left text-xs" />
             Back to Search
           </Link>
-          <Link
-            href={`/find-doctor/book/${d._id || d.id}`}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all active:scale-95 shrink-0"
-          >
-            <i className="fas fa-calendar-check text-xs" />
-            Book Appointment
-          </Link>
+          <BookButton doctorId={d._id || d.id} variant="hero" />
         </div>
 
         {/* ── Hero Card Component ── */}
@@ -280,6 +287,17 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        {q.certificateUrl && (
+                          <a
+                            href={q.certificateUrl.startsWith('http') ? q.certificateUrl : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${q.certificateUrl.startsWith('/') ? q.certificateUrl : `/${q.certificateUrl}`}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-semibold border border-indigo-100 transition-colors"
+                          >
+                            <i className="fas fa-file-lines text-[10px]" />
+                            View Certificate
+                          </a>
+                        )}
                         <span className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-lg">
                           {q.year}
                         </span>
@@ -291,14 +309,10 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
                 <p className="text-sm text-slate-300 italic">Standard medical qualifications.</p>
               )}
             </Card>
-          </div>
 
-          {/* ── Right / Side column ── */}
-          <div className="space-y-5">
-            
-            {/* Consultation Settings */}
+            {/* Consultation Options */}
             <Card title="Consultation Options" icon="fa-stethoscope">
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Telehealth */}
                 <div className={`p-4 rounded-xl border transition-all ${videoEnabled ? "border-indigo-200 bg-indigo-50/50" : "border-slate-100 bg-slate-50/60"}`}>
                   <div className="flex items-center gap-3">
@@ -334,20 +348,17 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
                   )}
                 </div>
               </div>
-              <Link
-                href={`/find-doctor/book/${d._id || d.id}`}
-                className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all active:scale-95"
-              >
-                <i className="fas fa-calendar-check text-xs" />
-                Book Now
-              </Link>
+              <BookButton doctorId={d._id || d.id} variant="card" />
             </Card>
+          </div>
 
+          {/* ── Right / Side column ── */}
+          <div className="space-y-5">
             {/* Availability Schedule */}
             <Card title="Availability Schedule" icon="fa-clock">
               <div className="space-y-6">
                 {/* Online Schedule */}
-                {(workingHours.online || (!workingHours.online && !workingHours.offline)) && (
+                {videoEnabled && (workingHours.online || (!workingHours.online && !workingHours.offline)) && (
                   <div>
                     {workingHours.online && (
                       <div className="flex items-center gap-2 mb-3">
@@ -360,7 +371,7 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
                 )}
 
                 {/* Offline Schedule */}
-                {workingHours.offline && (
+                {physicalEnabled && workingHours.offline && (
                   <div>
                     <div className="flex items-center gap-2 mb-3 mt-2">
                       <i className="fas fa-user-doctor text-indigo-400 text-xs" />
@@ -381,6 +392,12 @@ export default async function PublicDoctorProfilePage({ params }: { params: { id
                       </div>
                     )}
                     {renderSchedule(workingHours.offline, false)}
+                  </div>
+                )}
+
+                {!videoEnabled && !physicalEnabled && (
+                  <div className="flex items-center justify-center p-5 rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
+                    <span className="text-xs text-slate-400 font-medium">Currently unavailable</span>
                   </div>
                 )}
               </div>

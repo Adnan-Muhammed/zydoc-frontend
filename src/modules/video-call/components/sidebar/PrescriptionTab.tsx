@@ -2,18 +2,25 @@
 
 import React, { useState } from 'react';
 import { PrescriptionItem } from './types';
+import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 
 interface PrescriptionTabProps {
+  appointmentId: string;
   isDoctor: boolean;
   prescriptions: PrescriptionItem[];
+  patientName?: string;
+  doctorName?: string;
   onAddPrescription: (item: Omit<PrescriptionItem, 'id' | 'date'>) => void;
   onRemovePrescription?: (id: string) => void;
   onFinalizePrescription?: (items: PrescriptionItem[]) => void;
 }
 
 export default function PrescriptionTab({
+  appointmentId,
   isDoctor,
   prescriptions,
+  patientName = 'Patient',
+  doctorName = 'Dr. Consultant',
   onAddPrescription,
   onRemovePrescription,
   onFinalizePrescription,
@@ -39,7 +46,7 @@ export default function PrescriptionTab({
       frequency: newFrequency,
       duration: newDuration.trim() || '5 Days',
       instructions: newInstructions.trim() || 'Take as directed with water.',
-      prescribedBy: isDoctor ? 'Dr. Consultant' : 'Doctor',
+      prescribedBy: isDoctor ? doctorName : 'Doctor',
     });
 
     // Reset form
@@ -58,7 +65,29 @@ export default function PrescriptionTab({
         onFinalizePrescription(prescriptions);
       }
       setTimeout(() => setFinalizeSuccess(false), 4000);
-    }, 900);
+    }, 800);
+  };
+
+  const handleDownloadPdf = () => {
+    generatePrescriptionPdf({
+      appointmentId,
+      date: new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      consultationType: 'Online Video Consultation',
+      patient: {
+        name: patientName,
+      },
+      doctor: {
+        name: doctorName,
+        specialty: 'Telehealth Specialist',
+      },
+      prescriptions,
+      clinicalAdvice: 'Complete full course of medication. Contact if symptoms persist.',
+    });
   };
 
   return (
@@ -77,21 +106,35 @@ export default function PrescriptionTab({
           </span>
         </div>
 
-        {/* Doctor: Toggle Add Form Button */}
-        {isDoctor && (
-          <button
-            type="button"
-            onClick={() => setShowAddForm(!showAddForm)}
-            className={`text-xs font-medium px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all shadow-sm ${
-              showAddForm
-                ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95'
-            }`}
-          >
-            <i className={`fas ${showAddForm ? 'fa-xmark' : 'fa-plus'} text-[11px]`}></i>
-            <span>{showAddForm ? 'Close' : 'Add Rx'}</span>
-          </button>
-        )}
+        {/* Action Buttons: Add Rx (Doctor) / Download PDF */}
+        <div className="flex items-center gap-1.5">
+          {prescriptions.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              title="Download client-side prescription PDF"
+              className="text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white flex items-center gap-1 border border-slate-750 transition-all shadow-xs"
+            >
+              <i className="fas fa-file-pdf text-rose-400 text-[11px]"></i>
+              <span className="hidden sm:inline">PDF</span>
+            </button>
+          )}
+
+          {isDoctor && (
+            <button
+              type="button"
+              onClick={() => setShowAddForm(!showAddForm)}
+              className={`text-xs font-medium px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all shadow-sm ${
+                showAddForm
+                  ? 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95'
+              }`}
+            >
+              <i className={`fas ${showAddForm ? 'fa-xmark' : 'fa-plus'} text-[11px]`}></i>
+              <span>{showAddForm ? 'Close' : 'Add Rx'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── DOCTOR ONLY: Add Prescription Form ── */}
@@ -156,7 +199,7 @@ export default function PrescriptionTab({
             </div>
           </div>
 
-          {/* DURATION (New Input Field) */}
+          {/* DURATION */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-[10px] text-slate-400 font-semibold">
@@ -216,7 +259,7 @@ export default function PrescriptionTab({
         </form>
       )}
 
-      {/* ── Prescription List (Shared for Doctor & Patient, with distinct card styling) ── */}
+      {/* ── Prescription List (Shared for Doctor & Patient) ── */}
       <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 scrollbar-thin scrollbar-thumb-slate-800">
         {prescriptions.length === 0 ? (
           <div className="text-center py-10 px-4 bg-slate-900/40 border border-dashed border-slate-800 rounded-xl">
@@ -229,7 +272,7 @@ export default function PrescriptionTab({
             <p className="text-[11px] text-slate-500 mt-1 max-w-[220px] mx-auto leading-normal">
               {isDoctor
                 ? 'Click "Add Rx" above to prescribe medications and dosage for this consultation.'
-                : 'Medicines added by your doctor during this consultation will appear here in real time.'}
+                : 'Medicines prescribed by your doctor during this consultation will appear here in real time.'}
             </p>
           </div>
         ) : (
@@ -250,13 +293,12 @@ export default function PrescriptionTab({
                   </h5>
                 </div>
 
-                {/* Duration Badge */}
+                {/* Duration Badge & Doctor Delete */}
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-[10px] font-medium text-emerald-300 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                     <i className="fas fa-calendar-day text-[9px]"></i>
                     <span>{rx.duration || '5 Days'}</span>
                   </span>
-                  {/* Doctor Delete Option */}
                   {isDoctor && onRemovePrescription && (
                     <button
                       type="button"
@@ -296,7 +338,7 @@ export default function PrescriptionTab({
               <div className="mt-2 pt-1.5 border-t border-slate-850 flex items-center justify-between text-[10px] text-slate-500">
                 <span className="flex items-center gap-1">
                   <i className="fas fa-user-doctor text-[9px] text-indigo-400"></i>
-                  <span>{rx.prescribedBy}</span>
+                  <span>{rx.prescribedBy || doctorName}</span>
                 </span>
                 <span>{rx.date}</span>
               </div>
@@ -305,13 +347,13 @@ export default function PrescriptionTab({
         )}
       </div>
 
-      {/* ── DOCTOR ONLY: Prominent "Finalize Prescription" / "Generate PDF" Button ── */}
+      {/* ── DOCTOR ONLY: "Finalize Prescription" Button ── */}
       {isDoctor && (
-        <div className="pt-3 mt-2 border-t border-slate-800 shrink-0">
+        <div className="pt-3 mt-2 border-t border-slate-800 shrink-0 space-y-2">
           {finalizeSuccess ? (
             <div className="bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 rounded-xl p-2.5 text-center text-xs flex items-center justify-center gap-2 animate-fadeIn">
               <i className="fas fa-circle-check text-emerald-400"></i>
-              <span className="font-medium">Prescription Finalized & Ready for PDF!</span>
+              <span className="font-medium">Prescriptions Saved to Patient Health Record!</span>
             </div>
           ) : (
             <button
@@ -323,19 +365,34 @@ export default function PrescriptionTab({
               {isFinalizing ? (
                 <>
                   <i className="fas fa-spinner fa-spin text-xs"></i>
-                  <span>Processing Prescription...</span>
+                  <span>Saving Prescriptions...</span>
                 </>
               ) : (
                 <>
                   <i className="fas fa-file-pdf text-sm text-emerald-200"></i>
-                  <span className="tracking-wide">Finalize Prescription / Generate PDF</span>
+                  <span className="tracking-wide">Finalize & Save Prescription</span>
                 </>
               )}
             </button>
           )}
-          <p className="text-[10px] text-slate-500 text-center mt-1.5">
-            Generates official e-prescription document for this consultation session.
+
+          <p className="text-[10px] text-slate-500 text-center">
+            Stores clean JSON medication payload in DB and makes client-side PDF available instantly.
           </p>
+        </div>
+      )}
+
+      {/* ── PATIENT ONLY: Download PDF banner if prescription exists ── */}
+      {!isDoctor && prescriptions.length > 0 && (
+        <div className="pt-3 mt-2 border-t border-slate-800 shrink-0">
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] transition-all"
+          >
+            <i className="fas fa-download text-xs text-indigo-200"></i>
+            <span>Download Official Prescription PDF</span>
+          </button>
         </div>
       )}
     </div>

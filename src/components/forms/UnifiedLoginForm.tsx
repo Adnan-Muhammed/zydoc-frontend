@@ -7,10 +7,29 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { loginUser, loginWithGoogleUser } from '@/redux/auth/authThunk';
 import Button from '../ui/Button'; 
 import Input from '../ui/Input';
+import { useSearchParams } from 'next/navigation';
+
+// Only redirect to these prefixes after login — prevents open-redirect attacks
+const SAFE_CALLBACK_PREFIXES = ['/patient', '/doctor', '/admin'];
+
+function getSafeCallbackUrl(raw: string | null, role: string): string {
+    const defaultDest = `/${role}/dashboard`;
+    if (!raw) return defaultDest;
+    try {
+        // Reject anything with a protocol (e.g. //evil.com or https://evil.com)
+        if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(raw)) return defaultDest;
+        const isSafe = SAFE_CALLBACK_PREFIXES.some(prefix => raw.startsWith(prefix));
+        return isSafe ? raw : defaultDest;
+    } catch {
+        return defaultDest;
+    }
+}
 
 const UnifiedLoginForm: React.FC = () => {
     const dispatch = useAppDispatch();
     const { isLoading } = useAppSelector((state) => state.auth);
+    const searchParams = useSearchParams();
+    const callbackUrl = searchParams.get('callbackUrl');
 
     const [form, setForm] = useState({ email: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
@@ -45,7 +64,7 @@ const UnifiedLoginForm: React.FC = () => {
             }
 
             // Full page navigation — forces server components to re-run so cookies are picked up
-            window.location.href = `/${role}/dashboard`;
+            window.location.href = getSafeCallbackUrl(callbackUrl, role);
         } catch (err: unknown) {
             if (typeof err === 'object' && err !== null && (err as any).requiresVerification) {
                 const payload = err as any;
@@ -74,7 +93,7 @@ const UnifiedLoginForm: React.FC = () => {
                     setShowRoleSelector(true);
                 } else {
                     // Full page navigation — forces server components to re-run so cookies are picked up
-                    window.location.href = `/${userRole}/dashboard`;
+                    window.location.href = getSafeCallbackUrl(callbackUrl, userRole);
                 }
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Google Login failed'));

@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/redux/store';
-import { fetchPatientAppointments } from '@/redux/features/appointment/appointmentThunk';
+import { fetchPatientAppointments, cancelAppointment, disputeAppointment } from '@/redux/features/appointment/appointmentThunk';
+import { getAppointmentStatusConfig } from '@/utils/appointmentStatus';
+import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 
 const AppointmentTimer = ({ startTime }: { startTime: number }) => {
     const timerRef = React.useRef<HTMLSpanElement>(null);
@@ -37,8 +39,54 @@ const AppointmentTimer = ({ startTime }: { startTime: number }) => {
 
 export default function PatientAppointmentsPage() {
     const dispatch = useDispatch<AppDispatch>();
+    const { user } = useSelector((state: RootState) => state.auth);
     const { appointments, isLoading, error } = useSelector((state: RootState) => state.appointment);
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
+
+    const handleDownloadPrescription = (app: any) => {
+        if (!app) return;
+        const doctor = app.doctorId || {};
+        const doctorName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim() || 'Dr. Consultant';
+        const patientName = user?.name || user?.googleName || user?.email || 'Patient';
+
+        generatePrescriptionPdf({
+            appointmentId: app._id,
+            date: new Date(app.appointmentDate).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+            }),
+            time: app.appointmentTime,
+            consultationType:
+                app.consultationType === 'offline' || app.consultationType === 'physical'
+                    ? 'In-Person Consultation'
+                    : 'Online Video Consultation',
+            patient: {
+                name: patientName,
+            },
+            doctor: {
+                name: doctorName,
+                specialty: doctor.specialty || 'General Practice',
+                qualifications: doctor.qualifications,
+                clinicName:
+                    doctor.consultationSettings?.offline?.clinicName ||
+                    doctor.consultationSettings?.physical?.clinicName,
+            },
+            prescriptions: app.prescriptions || [],
+            clinicalAdvice:
+                'Take medications strictly as directed. If symptoms persist or adverse reactions occur, contact your doctor immediately.',
+        });
+    };
+    const [cancelModalAppointment, setCancelModalAppointment] = useState<any>(null);
+    const [cancelReason, setCancelReason] = useState<string>('');
+    const [isCancelling, setIsCancelling] = useState<boolean>(false);
+
+    const [disputeModalAppointment, setDisputeModalAppointment] = useState<any>(null);
+    const [disputeReason, setDisputeReason] = useState<string>('');
+    const [disputeProofUrl, setDisputeProofUrl] = useState<string>('');
+    const [isDisputing, setIsDisputing] = useState<boolean>(false);
+
+    const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => {
         dispatch(fetchPatientAppointments());
@@ -67,27 +115,120 @@ export default function PatientAppointmentsPage() {
         const now = new Date().getTime();
         const startTime = getAppTimestamp(app);
         const fifteenMins = 15 * 60 * 1000;
-        const fortyMins = 40 * 60 * 1000;
+        const slotDurationMins = (app.scheduledStartAt && app.scheduledEndAt)
+            ? Math.round((new Date(app.scheduledEndAt).getTime() - new Date(app.scheduledStartAt).getTime()) / 60000)
+            : (Number(app.doctorId?.slotDuration) || 15);
+        const maxSessionEnd = app.scheduledEndAt 
+            ? new Date(app.scheduledEndAt).getTime() 
+            : startTime + slotDurationMins * 60 * 1000;
 
-        if (now > startTime + fortyMins) {
-            return 'EXPIRED';
-        } else if (now >= startTime - fifteenMins) {
-            return 'ACTIVE';
+        // Proportional late joining cutoff for patients who haven't joined yet
+        const hasJoinedBefore = !!app.patientJoinedAt;
+        let lateJoinCutoffMs;
+        if (app.lateJoinCutoffAt) {
+            lateJoinCutoffMs = new Date(app.lateJoinCutoffAt).getTime();
         } else {
-            return 'UPCOMING';
+            let graceMins = 5;
+            if (slotDurationMins <= 10) graceMins = 3;
+            else if (slotDurationMins <= 20) graceMins = 5;
+            else if (slotDurationMins <= 30) graceMins = 8;
+            else if (slotDurationMins <= 45) graceMins = 10;
+            else graceMins = 15;
+            lateJoinCutoffMs = startTime + graceMins * 60 * 1000;
+        }
+
+        if (!hasJoinedBefore && now >= lateJoinCutoffMs) {
+            return 'EXPIRED';
+        }
+
+        if (now >= maxSessionEnd) {
+            return 'EXPIRED';
+        }
+
+        if (now >= startTime - fifteenMins) {
+            return 'ACTIVE';
+        }
+
+        return 'UPCOMING';
+    };
+
+    const getCancellationEligibility = (app: any) => {
+        if (app.status !== 'scheduled') return { canCancel: false, hoursLeft: 0 };
+        const startMs = app.scheduledStartAt 
+            ? new Date(app.scheduledStartAt).getTime() 
+            : getAppTimestamp(app);
+        const diffHours = (startMs - Date.now()) / (1000 * 60 * 60);
+        return {
+            canCancel: diffHours > 12,
+            hoursLeft: Math.max(0, diffHours)
+        };
+    };
+
+    const handleConfirmCancel = async () => {
+        if (!cancelModalAppointment) return;
+        setIsCancelling(true);
+        try {
+            const res = await dispatch(cancelAppointment({ 
+                appointmentId: cancelModalAppointment._id, 
+                reason: cancelReason || 'Patient cancelled (>12h prior)' 
+            })).unwrap();
+            setActionMessage({ 
+                type: 'success', 
+                text: res?.message || 'Appointment cancelled successfully. Full refund initiated via Razorpay.' 
+            });
+            setCancelModalAppointment(null);
+            dispatch(fetchPatientAppointments());
+        } catch (err: any) {
+            setActionMessage({ 
+                type: 'error', 
+                text: typeof err === 'string' ? err : err?.message || 'Failed to cancel appointment.' 
+            });
+        } finally {
+            setIsCancelling(false);
         }
     };
 
+    const handleConfirmDispute = async () => {
+        if (!disputeModalAppointment) return;
+        if (!disputeReason.trim()) {
+            alert('Please provide a reason for the dispute.');
+            return;
+        }
+        setIsDisputing(true);
+        try {
+            const res = await dispatch(disputeAppointment({ 
+                appointmentId: disputeModalAppointment._id, 
+                reason: disputeReason.trim(),
+                proofUrl: disputeProofUrl.trim() || undefined,
+            })).unwrap();
+            setActionMessage({ 
+                type: 'success', 
+                text: res?.message || 'Issue reported. Admin will review the dispute and process your refund.' 
+            });
+            setDisputeModalAppointment(null);
+            setDisputeProofUrl('');
+            dispatch(fetchPatientAppointments());
+        } catch (err: any) {
+            setActionMessage({ 
+                type: 'error', 
+                text: typeof err === 'string' ? err : err?.message || 'Failed to submit dispute.' 
+            });
+        } finally {
+            setIsDisputing(false);
+        }
+    };
 
     // Separate into upcoming and past
     const now = new Date();
     
     const isUpcoming = (app: any) => {
-        if (['cancelled', 'completed', 'no-show'].includes(app.status)) return false;
+        if (['cancelled', 'completed', 'no-show', 'cancelled-by-doctor', 'disputed', 'refunded'].includes(app.status)) return false;
         
-        // Slot duration strictly ends at startTime + 40 minutes.
-        const exactAppEndTime = new Date(getAppTimestamp(app) + 40 * 60000);
-        return exactAppEndTime >= now;
+        const slotDurationMins = Number(app.doctorId?.slotDuration) || 15;
+        const exactAppEndTime = app.scheduledEndAt 
+            ? new Date(app.scheduledEndAt).getTime() 
+            : getAppTimestamp(app) + slotDurationMins * 60 * 1000;
+        return Date.now() <= exactAppEndTime;
     };
 
     const upcoming = appointments
@@ -120,9 +261,7 @@ export default function PatientAppointmentsPage() {
         // Time is already formatted like "05:40 PM" from backend
         const formattedTime = app.appointmentTime;
 
-        let statusBadge = "bg-amber-100 text-amber-700";
-        if (app.status === 'completed') statusBadge = "bg-emerald-100 text-emerald-700";
-        if (app.status === 'cancelled') statusBadge = "bg-red-100 text-red-700";
+        const statusConfig = getAppointmentStatusConfig(app.status, 'patient');
 
         // Parse avatar correctly if needed
         let avatarUrl = "";
@@ -170,7 +309,7 @@ export default function PatientAppointmentsPage() {
                 
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100">
                     <div className="flex flex-wrap items-center gap-2">
-                        {app.consultationType === 'video' ? (
+                        {(app.consultationType === 'online' || app.consultationType === 'video') ? (
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-700 flex items-center gap-1.5"><i className="fas fa-video"></i> Video</span>
                         ) : (
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 flex items-center gap-1.5"><i className="fas fa-building"></i> Clinic</span>
@@ -180,14 +319,20 @@ export default function PatientAppointmentsPage() {
                         ) : app.patientType === 'FOLLOW_UP' ? (
                             <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 flex items-center gap-1.5"><i className="fas fa-user-check"></i> Follow-up</span>
                         ) : null}
-                        <span className={`text-xs font-bold px-2.5 py-1 rounded-md capitalize ${statusBadge}`}>
-                            {app.status}
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${statusConfig.badgeClass}`}>
+                            {statusConfig.label}
                         </span>
                         
-                        {/* Payment Success Badge */}
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5">
-                            <i className="fas fa-check-circle text-emerald-500"></i> Paid
-                        </span>
+                        {/* Payment & Refund Badge */}
+                        {(app.paymentStatus === 'refunded' || app.status === 'refunded' || app.status === 'cancelled-by-doctor') ? (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1.5">
+                                <i className="fas fa-undo text-teal-500"></i> Refunded
+                            </span>
+                        ) : (
+                            <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5">
+                                <i className="fas fa-check-circle text-emerald-500"></i> Paid
+                            </span>
+                        )}
                     </div>
                     
                     <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
@@ -196,12 +341,25 @@ export default function PatientAppointmentsPage() {
                             <span className="text-sm font-extrabold text-slate-800">₹{app.fee}</span>
                         </div>
                         
-                        {app.consultationType === 'video' && app.status === 'scheduled' && (() => {
+                        {(app.consultationType === 'online' || app.consultationType === 'video') && app.status === 'scheduled' && (() => {
                             const timeState = getAppointmentTimeState(app);
                             const startTime = getAppTimestamp(app);
                             
                             if (timeState === 'EXPIRED') {
-                                return null; // Completely hide if > 40 mins
+                                return (
+                                    <div className="flex flex-col items-end gap-1">
+                                        <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
+                                            Expired (5m grace ended)
+                                        </span>
+                                        <button 
+                                            disabled
+                                            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+                                        >
+                                            <i className="fas fa-lock text-[10px] mr-1" />
+                                            Join Closed
+                                        </button>
+                                    </div>
+                                );
                             }
                             
                             if (timeState === 'ACTIVE') {
@@ -241,6 +399,85 @@ export default function PatientAppointmentsPage() {
                             );
                         })()}
 
+                        {/* Task 1: 12-Hour Patient Cancellation Button */}
+                        {app.status === 'scheduled' && (() => {
+                            const { canCancel, hoursLeft } = getCancellationEligibility(app);
+                            if (canCancel) {
+                                return (
+                                    <button
+                                        onClick={() => { setCancelModalAppointment(app); setCancelReason(''); }}
+                                        className="px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-colors flex items-center gap-1"
+                                        title="Cancel booking with instant Razorpay auto-refund (>12h before slot)"
+                                    >
+                                        <i className="fas fa-ban text-[11px]"></i> Cancel
+                                    </button>
+                                );
+                            }
+                            return (
+                                <button
+                                    disabled
+                                    className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed flex items-center gap-1"
+                                    title={`Cancellation closed: Only allowed >12h prior (${hoursLeft.toFixed(1)}h remaining)`}
+                                >
+                                    <i className="fas fa-lock text-[10px]"></i> Cancel Closed
+                                </button>
+                            );
+                        })()}
+
+                        {/* Task 3: Offline No-Show Dispute / Refund Request Button — strictly after 'no-show' and within 24h of scheduledEndAt */}
+                        {app.status === 'no-show' && (app.consultationType === 'offline' || app.consultationType === 'physical') && (() => {
+                            const endMs = app.scheduledEndAt 
+                                ? new Date(app.scheduledEndAt).getTime() 
+                                : (getAppTimestamp(app) + (Number(app.doctorId?.slotDuration) || 15) * 60 * 1000);
+                            const withinWindow = Date.now() <= endMs + (24 * 60 * 60 * 1000);
+                            return withinWindow ? (
+                                <button
+                                    onClick={() => { setDisputeModalAppointment(app); setDisputeReason(''); setDisputeProofUrl(''); }}
+                                    className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+                                >
+                                    <i className="fas fa-exclamation-triangle text-[11px]"></i> Report Issue / Request Refund
+                                </button>
+                            ) : (
+                                <span className="text-xs font-semibold px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1">
+                                    <i className="fas fa-lock"></i> Dispute Window Expired
+                                </span>
+                            );
+                        })()}
+
+                        {app.status === 'disputed' && (
+                            <span className="text-xs font-semibold px-2 py-1 rounded bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                                <i className="fas fa-clock text-amber-500"></i> Under Review
+                            </span>
+                        )}
+
+                        {app.status === 'cancelled-by-doctor' && (
+                            <span className="text-xs font-semibold px-2 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                                <i className="fas fa-user-xmark text-rose-500"></i> Doctor Missed
+                            </span>
+                        )}
+
+                        {app.prescriptions && app.prescriptions.length > 0 && (
+                            <button
+                                onClick={() => handleDownloadPrescription(app)}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 transition-colors flex items-center gap-1.5 shadow-2xs"
+                                title="Download official prescription PDF directly (client-side)"
+                            >
+                                <i className="fas fa-file-pdf text-rose-500"></i>
+                                <span>Prescription ({app.prescriptions.length})</span>
+                            </button>
+                        )}
+
+                        {app.consultationFiles && app.consultationFiles.length > 0 && (
+                            <button
+                                onClick={() => setSelectedAppointment(app)}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 transition-colors flex items-center gap-1.5 shadow-2xs"
+                                title="View uploaded consultation documents"
+                            >
+                                <i className="fas fa-paperclip text-emerald-600"></i>
+                                <span>Files ({app.consultationFiles.length})</span>
+                            </button>
+                        )}
+
                         <button 
                             onClick={() => setSelectedAppointment(app)}
                             className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors"
@@ -255,6 +492,23 @@ export default function PatientAppointmentsPage() {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
+            {/* Banner feedback */}
+            {actionMessage && (
+                <div className={`p-4 rounded-xl flex items-center justify-between shadow-sm border ${
+                    actionMessage.type === 'success' 
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                        : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                        <i className={`fas ${actionMessage.type === 'success' ? 'fa-check-circle text-emerald-500' : 'fa-circle-exclamation text-rose-500'}`}></i>
+                        <span>{actionMessage.text}</span>
+                    </div>
+                    <button onClick={() => setActionMessage(null)} className="text-slate-400 hover:text-slate-600">
+                        <i className="fas fa-times"></i>
+                    </button>
+                </div>
+            )}
+
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">My Appointments</h1>
@@ -290,7 +544,7 @@ export default function PatientAppointmentsPage() {
 
                 <section>
                     <h2 className="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
-                        <i className="fas fa-history text-slate-400"></i> Past & Cancelled
+                        <i className="fas fa-history text-slate-400"></i> Past & Completed
                     </h2>
                     {past.length > 0 ? (
                         <div className="space-y-4 opacity-75 hover:opacity-100 transition-opacity">
@@ -360,22 +614,90 @@ export default function PatientAppointmentsPage() {
                                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">Paid</span>
                                         </div>
                                         <span className="text-xs text-slate-500 capitalize">
-                                            {selectedAppointment.patientType === 'NEW' ? 'New ' : selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-up ' : ''}{selectedAppointment.consultationType} Visit
+                                            {selectedAppointment.patientType === 'NEW' ? 'New ' : selectedAppointment.patientType === 'FOLLOW_UP' ? 'Follow-up ' : ''}{(selectedAppointment.consultationType === 'online' || selectedAppointment.consultationType === 'video') ? 'Online' : 'In-Person'} Visit
                                         </span>
                                     </div>
                                 </div>
                             </div>
                             
                             {/* Conditional Info (Clinic vs Video) */}
-                            {selectedAppointment.consultationType === 'physical' ? (
+                            {(selectedAppointment.consultationType === 'offline' || selectedAppointment.consultationType === 'physical') ? (
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                                         <i className="fas fa-map-marker-alt text-emerald-500"></i> Clinic Location
                                     </h4>
                                     <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
-                                        <p className="font-semibold text-emerald-800">{selectedAppointment.doctorId?.consultationSettings?.physical?.clinicName || "Clinic Name Not Provided"}</p>
-                                        <p className="text-sm text-emerald-600 mt-1">{selectedAppointment.doctorId?.consultationSettings?.physical?.clinicAddress || "Address not provided."}</p>
+                                        <p className="font-semibold text-emerald-800">{selectedAppointment.doctorId?.consultationSettings?.offline?.clinicName || selectedAppointment.doctorId?.consultationSettings?.physical?.clinicName || "Clinic Name Not Provided"}</p>
+                                        <p className="text-sm text-emerald-600 mt-1">{selectedAppointment.doctorId?.consultationSettings?.offline?.clinicAddress || selectedAppointment.doctorId?.consultationSettings?.physical?.clinicAddress || "Address not provided."}</p>
                                     </div>
+
+                                    {/* Offline OTP Verification Code (Visible until scheduledEndAt) */}
+                                    {(() => {
+                                        const endMs = selectedAppointment.scheduledEndAt
+                                            ? new Date(selectedAppointment.scheduledEndAt).getTime()
+                                            : (getAppTimestamp(selectedAppointment) + (Number(selectedAppointment.doctorId?.slotDuration) || 15) * 60 * 1000);
+                                        const isBeforeScheduledEnd = Date.now() <= endMs;
+                                        const isNotTerminal = !['cancelled', 'completed', 'no-show', 'cancelled-by-doctor', 'disputed', 'refunded'].includes((selectedAppointment.status || '').toLowerCase().trim());
+
+                                        if (!isNotTerminal || !selectedAppointment.offlineOTP || !isBeforeScheduledEnd) {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <div className="mt-3 bg-white border border-emerald-200 rounded-xl p-4 flex flex-col items-center gap-2 shadow-sm">
+                                                <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 uppercase tracking-wider">
+                                                    <i className="fas fa-shield-alt"></i>
+                                                    Your Verification Code
+                                                </div>
+                                                <div className="flex gap-3 mt-1">
+                                                    {selectedAppointment.offlineOTP.toString().split('').map((digit: string, i: number) => (
+                                                        <div key={i} className="w-10 h-12 rounded-lg bg-emerald-50 border-2 border-emerald-400 flex items-center justify-center text-2xl font-black text-emerald-800 shadow-sm">
+                                                            {digit}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 text-center mt-1">
+                                                    Show this code to the doctor at the clinic to confirm your visit.
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
+                                    {/* Offline Dispute / Report Issue Button in Modal */}
+                                    {selectedAppointment.status === 'no-show' && (() => {
+                                        const endMs = selectedAppointment.scheduledEndAt 
+                                            ? new Date(selectedAppointment.scheduledEndAt).getTime() 
+                                            : (getAppTimestamp(selectedAppointment) + (Number(selectedAppointment.doctorId?.slotDuration) || 15) * 60 * 1000);
+                                        const withinWindow = Date.now() <= endMs + (24 * 60 * 60 * 1000);
+
+                                        return withinWindow ? (
+                                            <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-2.5">
+                                                <div className="text-xs text-amber-800">
+                                                    <span className="font-bold flex items-center gap-1.5 mb-1">
+                                                        <i className="fas fa-exclamation-triangle text-amber-600"></i>
+                                                        Marked as Missed / No-Show
+                                                    </span>
+                                                    If the doctor was absent from the clinic or you could not be consulted, you can report this issue for a full refund within 24 hours of your scheduled time.
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const appToDispute = selectedAppointment;
+                                                        setSelectedAppointment(null);
+                                                        setDisputeModalAppointment(appToDispute);
+                                                        setDisputeReason('');
+                                                        setDisputeProofUrl('');
+                                                    }}
+                                                    className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                                                >
+                                                    <i className="fas fa-hand-holding-dollar"></i> Report Issue / Request Refund
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-3 bg-slate-100 border border-slate-200 rounded-xl p-3 text-xs text-slate-500 text-center flex items-center justify-center gap-1.5">
+                                                <i className="fas fa-lock"></i>
+                                                <span>24-hour dispute window has expired</span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             ) : (
                                 <div>
@@ -388,9 +710,10 @@ export default function PatientAppointmentsPage() {
                                         const timeState = getAppointmentTimeState(selectedAppointment);
                                         
                                         if (selectedAppointment.status !== 'scheduled') {
+                                            const modalStatus = getAppointmentStatusConfig(selectedAppointment.status, 'patient');
                                             return (
                                                 <button disabled className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all bg-slate-100 text-slate-400 cursor-not-allowed">
-                                                    <i className="fas fa-video-slash"></i> Appointment {selectedAppointment.status}
+                                                    <i className="fas fa-video-slash"></i> {modalStatus.label}
                                                 </button>
                                             );
                                         }
@@ -436,6 +759,267 @@ export default function PatientAppointmentsPage() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Prescriptions & Client-Side PDF Download */}
+                            {selectedAppointment.prescriptions && selectedAppointment.prescriptions.length > 0 && (
+                                <div className="pt-4 border-t border-slate-100">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                            <i className="fas fa-prescription text-indigo-600"></i>
+                                            <span>Prescribed Medications ({selectedAppointment.prescriptions.length})</span>
+                                        </h4>
+                                        <button
+                                            onClick={() => handleDownloadPrescription(selectedAppointment)}
+                                            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm transition-colors"
+                                        >
+                                            <i className="fas fa-download text-[10px]"></i>
+                                            <span>Download PDF</span>
+                                        </button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {selectedAppointment.prescriptions.map((rx: any, i: number) => (
+                                            <div
+                                                key={i}
+                                                className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs flex items-center justify-between"
+                                            >
+                                                <div>
+                                                    <div className="font-bold text-slate-800 flex items-center gap-2">
+                                                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
+                                                            {i + 1}
+                                                        </span>
+                                                        <span>{rx.medicine}</span>
+                                                    </div>
+                                                    <div className="text-slate-500 text-[11px] mt-1 ml-7 flex items-center gap-2">
+                                                        <span>{rx.dosage}</span>
+                                                        <span>•</span>
+                                                        <span className="text-indigo-600 font-medium">{rx.frequency}</span>
+                                                        <span>•</span>
+                                                        <span>{rx.duration}</span>
+                                                    </div>
+                                                    {rx.instructions && (
+                                                        <div className="text-slate-400 italic text-[10px] mt-0.5 ml-7">
+                                                            Instructions: {rx.instructions}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-semibold px-2 py-0.5 rounded-md">
+                                                    {rx.duration || 'Active'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Consultation Documents & Uploaded Files */}
+                            {selectedAppointment.consultationFiles && selectedAppointment.consultationFiles.length > 0 && (
+                                <div className="pt-4 border-t border-slate-100">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                            <i className="fas fa-paperclip text-emerald-600"></i>
+                                            <span>Consultation Documents & Files ({selectedAppointment.consultationFiles.length})</span>
+                                        </h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {selectedAppointment.consultationFiles.map((file: any, i: number) => {
+                                            const fileType = (file.type || '').toLowerCase();
+                                            const isPdf = fileType === 'pdf';
+                                            const isImg = ['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(fileType);
+                                            const iconClass = isPdf ? 'fa-file-pdf text-rose-500' : isImg ? 'fa-file-image text-emerald-500' : 'fa-file-alt text-indigo-500';
+                                            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
+                                            const fileUrl = file.url?.startsWith('http') ? file.url : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
+
+                                            return (
+                                                <div
+                                                    key={file.id || i}
+                                                    className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-100/70 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                                                            <i className={`fas ${iconClass} text-sm`}></i>
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold text-slate-800 truncate" title={file.name}>
+                                                                {file.name}
+                                                            </div>
+                                                            <div className="text-slate-500 text-[11px] flex items-center gap-2 mt-0.5">
+                                                                <span>{file.size || 'Attachment'}</span>
+                                                                <span>•</span>
+                                                                <span className="text-emerald-600 font-medium">{file.category || 'Consultation File'}</span>
+                                                                {file.uploadedBy && (
+                                                                    <>
+                                                                        <span>•</span>
+                                                                        <span>By {file.uploadedBy}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {file.url && (
+                                                        <a
+                                                            href={fileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-xs shrink-0 transition-colors"
+                                                        >
+                                                            <i className="fas fa-download text-[10px]"></i>
+                                                            <span>View / Download</span>
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Task 1: Patient Cancellation Modal */}
+            {cancelModalAppointment && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-rose-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800">Cancel Appointment</h3>
+                            </div>
+                            <button onClick={() => setCancelModalAppointment(null)} className="text-slate-400 hover:text-slate-600">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm space-y-1">
+                                <div className="font-semibold text-slate-800">
+                                    Dr. {cancelModalAppointment.doctorId?.firstName} {cancelModalAppointment.doctorId?.lastName}
+                                </div>
+                                <div className="text-slate-500">
+                                    {new Date(cancelModalAppointment.appointmentDate).toDateString()} at {cancelModalAppointment.appointmentTime}
+                                </div>
+                                <div className="text-emerald-700 font-bold pt-1">
+                                    Refund Amount: ₹{cancelModalAppointment.fee} (100% Auto-Refund)
+                                </div>
+                            </div>
+
+                            <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
+                                <i className="fas fa-shield-check text-emerald-600 text-sm mt-0.5"></i>
+                                <div>
+                                    <p className="font-bold mb-0.5">12-Hour Cancellation Rule Satisfied</p>
+                                    <p>Your appointment is scheduled more than 12 hours from now. Cancelling will immediately free your slot and trigger a 100% refund via Razorpay to your original payment method.</p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                                    Reason for cancellation (optional)
+                                </label>
+                                <textarea
+                                    value={cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    placeholder="Please let us know why you are cancelling..."
+                                    rows={3}
+                                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                            <button
+                                onClick={() => setCancelModalAppointment(null)}
+                                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                            >
+                                Keep Appointment
+                            </button>
+                            <button
+                                onClick={handleConfirmCancel}
+                                disabled={isCancelling}
+                                className="px-5 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isCancelling && <i className="fas fa-spinner fa-spin"></i>}
+                                {isCancelling ? 'Refunding...' : 'Confirm & Refund ₹' + cancelModalAppointment.fee}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Task 3: Offline No-Show Dispute / Refund Request Modal */}
+            {disputeModalAppointment && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-amber-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
+                                    <i className="fas fa-hand-holding-dollar"></i>
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-800">Request Refund for In-Person Visit</h3>
+                            </div>
+                            <button onClick={() => setDisputeModalAppointment(null)} className="text-slate-400 hover:text-slate-600">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-600">
+                                If you visited the clinic and the doctor was absent or could not see you, you can report this issue for administrative investigation and a full refund within 24 hours of the scheduled end time.
+                            </p>
+
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm space-y-1">
+                                <div className="font-semibold text-slate-800">
+                                    Dr. {disputeModalAppointment.doctorId?.firstName} {disputeModalAppointment.doctorId?.lastName}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    {disputeModalAppointment.doctorId?.consultationSettings?.offline?.clinicName || "Clinic"} - {disputeModalAppointment.appointmentTime}
+                                </div>
+                                <div className="text-amber-800 font-bold pt-1">
+                                    Amount to Refund: ₹{disputeModalAppointment.fee}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                                    Describe what happened <span className="text-rose-500">*</span>
+                                </label>
+                                <textarea
+                                    value={disputeReason}
+                                    onChange={(e) => setDisputeReason(e.target.value)}
+                                    placeholder="e.g., I arrived at the clinic at 10:00 AM but the doctor was not present and clinic staff said they were unavailable."
+                                    rows={4}
+                                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1.5">
+                                    Proof / Evidence URL <span className="text-slate-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    type="url"
+                                    value={disputeProofUrl}
+                                    onChange={(e) => setDisputeProofUrl(e.target.value)}
+                                    placeholder="e.g., Google Drive / photo link showing closed clinic"
+                                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                                />
+                                <p className="text-xs text-slate-400 mt-1">Paste a shareable link to a photo or document (e.g., Google Drive, Dropbox).</p>
+                            </div>
+                        </div>
+                        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                            <button
+                                onClick={() => setDisputeModalAppointment(null)}
+                                className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleConfirmDispute}
+                                disabled={isDisputing || !disputeReason.trim()}
+                                className="px-5 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shadow-sm transition-colors flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isDisputing && <i className="fas fa-spinner fa-spin"></i>}
+                                {isDisputing ? 'Submitting...' : 'Submit Dispute'}
+                            </button>
                         </div>
                     </div>
                 </div>

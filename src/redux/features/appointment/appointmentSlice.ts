@@ -1,5 +1,20 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment, fetchPatientAppointments, fetchDoctorAppointments, fetchAllAdminAppointments } from './appointmentThunk';
+import {
+    lockSlot,
+    unlockSlot,
+    createRazorpayOrder,
+    verifyPayment,
+    fetchPatientAppointments,
+    fetchDoctorAppointments,
+    fetchAllAdminAppointments,
+    completeOfflineAppointment,
+    markNoShowOfflineAppointment,
+    cancelAppointment,
+    disputeAppointment,
+    fetchDisputedAppointmentsAdmin,
+    refundDisputedAppointmentAdmin,
+    fetchAppointmentById,
+} from './appointmentThunk';
 
 export interface AppointmentState {
     isLoading: boolean;
@@ -9,6 +24,8 @@ export interface AppointmentState {
     appointments: any[];
     doctorAppointments: any[];
     adminAppointments: any[];
+    disputedAppointments: any[];
+    currentAppointment: any | null;
 }
 
 const initialState: AppointmentState = {
@@ -19,6 +36,8 @@ const initialState: AppointmentState = {
     appointments: [],
     doctorAppointments: [],
     adminAppointments: [],
+    disputedAppointments: [],
+    currentAppointment: null,
 };
 
 const appointmentSlice = createSlice({
@@ -33,7 +52,8 @@ const appointmentSlice = createSlice({
             state.lockedSlotDetails = null;
         },
         addBooking(state, action) {
-            const newBooking = action.payload;
+            const newBooking = action.payload?.booking || action.payload;
+            if (!newBooking || !newBooking._id) return;
             // Ensure no duplicates
             if (!state.doctorAppointments.find(appt => appt._id === newBooking._id)) {
                 state.doctorAppointments.push(newBooking);
@@ -154,6 +174,130 @@ const appointmentSlice = createSlice({
                 state.adminAppointments = action.payload.appointments || action.payload || [];
             })
             .addCase(fetchAllAdminAppointments.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(fetchAppointmentById.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(fetchAppointmentById.fulfilled, (state, action) => {
+                state.isLoading = false;
+                state.currentAppointment = action.payload.appointment || action.payload;
+            })
+            .addCase(fetchAppointmentById.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            .addCase(completeOfflineAppointment.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(completeOfflineAppointment.fulfilled, (state, action) => {
+                state.isLoading = false;
+                // Optimistically update the appointment status in the local list
+                const completedAppt = action.payload?.appointment;
+                if (completedAppt?._id) {
+                    const idx = state.doctorAppointments.findIndex(a => a._id === completedAppt._id);
+                    if (idx !== -1) state.doctorAppointments[idx].status = 'completed';
+                }
+            })
+            .addCase(completeOfflineAppointment.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Mark No-Show Offline Appointment
+            .addCase(markNoShowOfflineAppointment.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(markNoShowOfflineAppointment.fulfilled, (state, action) => {
+                state.isLoading = false;
+                const updated = action.payload?.appointment;
+                if (updated?._id) {
+                    const idx = state.doctorAppointments.findIndex(a => a._id === updated._id);
+                    if (idx !== -1) {
+                        state.doctorAppointments[idx].status = 'no-show';
+                    }
+                    if (state.currentAppointment?._id === updated._id) {
+                        state.currentAppointment.status = 'no-show';
+                    }
+                }
+            })
+            .addCase(markNoShowOfflineAppointment.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Cancel Appointment
+            .addCase(cancelAppointment.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(cancelAppointment.fulfilled, (state, action) => {
+                state.isLoading = false;
+                const updatedAppt = action.payload?.appointment;
+                if (updatedAppt?._id) {
+                    const idx = state.appointments.findIndex(a => a._id === updatedAppt._id);
+                    if (idx !== -1) {
+                        state.appointments[idx] = { ...state.appointments[idx], ...updatedAppt };
+                    }
+                }
+            })
+            .addCase(cancelAppointment.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Dispute Appointment
+            .addCase(disputeAppointment.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(disputeAppointment.fulfilled, (state, action) => {
+                state.isLoading = false;
+                const updatedAppt = action.payload?.appointment;
+                if (updatedAppt?._id) {
+                    const idx = state.appointments.findIndex(a => a._id === updatedAppt._id);
+                    if (idx !== -1) {
+                        state.appointments[idx] = { ...state.appointments[idx], ...updatedAppt };
+                    }
+                }
+            })
+            .addCase(disputeAppointment.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Fetch Disputed Appointments (Admin)
+            .addCase(fetchDisputedAppointmentsAdmin.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(fetchDisputedAppointmentsAdmin.fulfilled, (state, action) => {
+                state.isLoading = false;
+                state.disputedAppointments = action.payload?.appointments || action.payload || [];
+            })
+            .addCase(fetchDisputedAppointmentsAdmin.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            })
+            // Refund Disputed Appointment (Admin)
+            .addCase(refundDisputedAppointmentAdmin.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(refundDisputedAppointmentAdmin.fulfilled, (state, action) => {
+                state.isLoading = false;
+                const refundedAppt = action.payload?.appointment;
+                if (refundedAppt?._id) {
+                    // Update in disputed list
+                    state.disputedAppointments = state.disputedAppointments.filter(a => a._id !== refundedAppt._id);
+                    // Update in adminAppointments list
+                    const adminIdx = state.adminAppointments.findIndex(a => a._id === refundedAppt._id);
+                    if (adminIdx !== -1) {
+                        state.adminAppointments[adminIdx] = { ...state.adminAppointments[adminIdx], ...refundedAppt };
+                    }
+                }
+            })
+            .addCase(refundDisputedAppointmentAdmin.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
             });

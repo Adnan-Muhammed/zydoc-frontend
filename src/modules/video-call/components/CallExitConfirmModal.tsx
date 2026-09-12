@@ -8,7 +8,7 @@ interface CallExitConfirmModalProps {
   role: string;
   onCancel: () => void;
   onConfirm: () => void;
-}
+} 
 
 export default function CallExitConfirmModal({
   isOpen,

@@ -18,6 +18,20 @@ export default function SettingsMatrixClient({ initialData }: { initialData: any
     
     // 1. Establish state to track the active section (defaults to 'basic')
     const [activeSection, setActiveSection] = useState('basic');
+    const [profileData, setProfileData] = useState(initialData);
+
+    useEffect(() => {
+        setProfileData(initialData);
+    }, [initialData]);
+
+    const handleProfileUpdate = (updates: any) => {
+        setProfileData((prev: any) => ({
+            ...prev,
+            ...updates,
+            consultationSettings: updates.consultationSettings || prev?.consultationSettings,
+            workingHours: updates.workingHours || prev?.workingHours,
+        }));
+    };
 
     useEffect(() => {
         const sectionParam = searchParams.get('section');
@@ -74,78 +88,60 @@ export default function SettingsMatrixClient({ initialData }: { initialData: any
                         </div>
                     </div>
 
-                        <Link 
-                            href="/doctor/profile" 
-                            onClick={(e) => {
-                                e.preventDefault();
-                                router.refresh();
-                                router.push('/doctor/profile');
-                            }}
-                            className="self-start sm:self-center px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-sm hover:bg-slate-50 transition-colors"
-                        >
-                            Back to Profile
-                        </Link>
+                    <Link 
+                        href="/doctor/profile" 
+                        onClick={(e) => {
+                            e.preventDefault();
+                            router.refresh();
+                            router.push('/doctor/profile');
+                        }}
+                        className="self-start sm:self-center px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl shadow-sm hover:bg-slate-50 transition-colors"
+                    >
+                        Back to Profile
+                    </Link>
                 </div>
 
                 {/* 3. Conditional rendering of Sub-sections based on activeSection state */}
                 <div className="transition-all duration-200">
                     {activeSection === 'basic' && (
-                        <BasicInfoSection initialData={initialData} />
+                        <BasicInfoSection initialData={profileData} />
                     )}
                     
                     {activeSection === 'consultation' && (
-                        <ConsultationSection initialData={{
-                            enableVideo: initialData?.consultationSettings?.video?.enabled ?? initialData?.enableVideo,
-                            videoFee: initialData?.consultationSettings?.video?.fee ?? initialData?.videoFee,
-                            enablePhysical: initialData?.consultationSettings?.physical?.enabled ?? initialData?.enablePhysical,
-                            physicalFee: initialData?.consultationSettings?.physical?.fee ?? initialData?.physicalFee,
-                            clinicName: initialData?.consultationSettings?.physical?.clinicName ?? initialData?.clinicName,
-                            clinicAddress: initialData?.consultationSettings?.physical?.clinicAddress ?? initialData?.clinicAddress
-                        }} />
+                        <ConsultationSection 
+                            initialData={profileData?.consultationSettings || profileData} 
+                            onUpdate={handleProfileUpdate}
+                        />
                     )}
                     
                     {activeSection === 'qualifications' && (
-                        <QualificationsSection initialData={initialData?.qualifications || []} />
+                        <QualificationsSection initialData={profileData?.qualifications || []} />
                     )}
                     
                     {activeSection === 'preferences' && (
                         <PreferencesSection 
-                            initialLanguages={initialData?.languages || initialData?.selectedLanguages || []} 
-                            initialTags={initialData?.expertiseTags || []} 
+                            initialLanguages={profileData?.languages || profileData?.selectedLanguages || []} 
+                            initialTags={profileData?.expertiseTags || []} 
                         />
                     )}
                     
                     {activeSection === 'schedule' && (
-                        <ScheduleSection initialData={initialData?.workingHours || {
-                            online: {
-                                mondayToFriday: { start: "09:00", end: "17:00", active: false },
-                                monday:         { start: "09:00", end: "17:00", active: false },
-                                tuesday:        { start: "09:00", end: "17:00", active: false },
-                                wednesday:      { start: "09:00", end: "17:00", active: false },
-                                thursday:       { start: "09:00", end: "17:00", active: false },
-                                friday:         { start: "09:00", end: "17:00", active: false },
-                                saturday:       { start: "10:00", end: "14:00", active: false },
-                                sunday:         { start: "00:00", end: "00:00", active: false },
-                            },
-                            offline: {
-                                mondayToFriday: { start: "09:00", end: "17:00", active: false },
-                                monday:         { start: "09:00", end: "17:00", active: false },
-                                tuesday:        { start: "09:00", end: "17:00", active: false },
-                                wednesday:      { start: "09:00", end: "17:00", active: false },
-                                thursday:       { start: "09:00", end: "17:00", active: false },
-                                friday:         { start: "09:00", end: "17:00", active: false },
-                                saturday:       { start: "10:00", end: "14:00", active: false },
-                                sunday:         { start: "00:00", end: "00:00", active: false },
-                            }
-                        }} consultationSettings={initialData?.consultationSettings || {}} />
+                        <ScheduleSection 
+                            initialData={profileData?.workingHours} 
+                            consultationSettings={profileData?.consultationSettings || profileData} 
+                            slotDuration={profileData?.slotDuration || 15}
+                            timezone={profileData?.timezone}
+                            onNavigateToConsultation={() => setActiveSection('consultation')}
+                            onUpdate={handleProfileUpdate}
+                        />
                     )}
                     
                     {activeSection === 'certificates' && (
-                        <CertificatesSection initialData={[initialData?.medicalCertificateUrl, initialData?.governmentIdUrl].filter(Boolean)} />
+                        <CertificatesSection initialData={[profileData?.medicalCertificateUrl, profileData?.governmentIdUrl].filter(Boolean)} />
                     )}
 
                     {activeSection === 'bank' && (
-                        <BankDetailsSection initialData={initialData} />
+                        <BankDetailsSection initialData={profileData} />
                     )}
                 </div>
  

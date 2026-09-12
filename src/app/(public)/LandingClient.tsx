@@ -12,7 +12,7 @@ import HowItWorks from '../../components/landing/HowItWorks';
 import Testimonials from '../../components/landing/Testimonials';
 import Blogs from '../../components/landing/Blogs';
 
-interface User {
+interface User { 
     role?: string;
     name?: string;
 }

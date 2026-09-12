@@ -135,7 +135,7 @@ export default function DashboardClient({ user }: Props) {
                     <div className="prescription-card">
                         <div className="section-title">
                             My Prescriptions
-                            <Link href="#">View All →</Link>
+                            <Link href="/patient/prescriptions">View All →</Link>
                         </div>
                         <div className="prescription-item">
                             <div className="prescription-date">Mar 5, 2025</div>

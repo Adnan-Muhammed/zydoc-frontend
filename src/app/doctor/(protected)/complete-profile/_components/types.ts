@@ -8,22 +8,22 @@ export interface Qualification {
     certificateName?: string;
 }
 
-export interface WorkingHourSlot {
+export interface TimeBlock {
+    id: string;
     start: string;
     end: string;
-    active: boolean;
 }
 
 export interface DailySchedule {
-    fullWeek?: WorkingHourSlot;
-    mondayToFriday: WorkingHourSlot;
-    monday: WorkingHourSlot;
-    tuesday: WorkingHourSlot;
-    wednesday: WorkingHourSlot;
-    thursday: WorkingHourSlot;
-    friday: WorkingHourSlot;
-    saturday: WorkingHourSlot;
-    sunday: WorkingHourSlot;
+    fullWeek?: TimeBlock[];
+    mondayToFriday?: TimeBlock[];
+    monday: TimeBlock[];
+    tuesday: TimeBlock[];
+    wednesday: TimeBlock[];
+    thursday: TimeBlock[];
+    friday: TimeBlock[];
+    saturday: TimeBlock[];
+    sunday: TimeBlock[];
 }
 
 export interface WorkingHours {
@@ -39,6 +39,7 @@ export interface DraftState {
     specialty: string;
     licenseNumber: string;
     yearsOfExperience: string;
+    slotDuration: number;
     bio: string;
     expertiseTags: string[];
     selectedLanguages: string[];
@@ -50,6 +51,7 @@ export interface DraftState {
     clinicName: string;
     clinicAddress: string;
     workingHours: WorkingHours;
+    timezone?: string;
 }
 
 export const DEFAULT_DRAFT: DraftState = {
@@ -60,6 +62,7 @@ export const DEFAULT_DRAFT: DraftState = {
     specialty: '',
     licenseNumber: '',
     yearsOfExperience: '',
+    slotDuration: 15,
     bio: '',
     expertiseTags: [],
     selectedLanguages: ['English'],
@@ -72,26 +75,26 @@ export const DEFAULT_DRAFT: DraftState = {
     clinicAddress: '',
     workingHours: {
         online: {
-            fullWeek: { start: '09:00', end: '17:00', active: false },
-            mondayToFriday: { start: '09:00', end: '17:00', active: false },
-            monday: { start: '09:00', end: '17:00', active: false },
-            tuesday: { start: '09:00', end: '17:00', active: false },
-            wednesday: { start: '09:00', end: '17:00', active: false },
-            thursday: { start: '09:00', end: '17:00', active: false },
-            friday: { start: '09:00', end: '17:00', active: false },
-            saturday: { start: '10:00', end: '14:00', active: false },
-            sunday: { start: '00:00', end: '00:00', active: false },
+            fullWeek: [],
+            mondayToFriday: [],
+            monday: [{ id: 'mon-1', start: '09:00', end: '17:00' }],
+            tuesday: [{ id: 'tue-1', start: '09:00', end: '17:00' }],
+            wednesday: [{ id: 'wed-1', start: '09:00', end: '17:00' }],
+            thursday: [{ id: 'thu-1', start: '09:00', end: '17:00' }],
+            friday: [{ id: 'fri-1', start: '09:00', end: '17:00' }],
+            saturday: [{ id: 'sat-1', start: '10:00', end: '14:00' }],
+            sunday: [],
         },
         offline: {
-            fullWeek: { start: '09:00', end: '17:00', active: false },
-            mondayToFriday: { start: '09:00', end: '17:00', active: false },
-            monday: { start: '09:00', end: '17:00', active: false },
-            tuesday: { start: '09:00', end: '17:00', active: false },
-            wednesday: { start: '09:00', end: '17:00', active: false },
-            thursday: { start: '09:00', end: '17:00', active: false },
-            friday: { start: '09:00', end: '17:00', active: false },
-            saturday: { start: '10:00', end: '14:00', active: false },
-            sunday: { start: '00:00', end: '00:00', active: false },
+            fullWeek: [],
+            mondayToFriday: [],
+            monday: [{ id: 'mon-1', start: '09:00', end: '17:00' }],
+            tuesday: [{ id: 'tue-1', start: '09:00', end: '17:00' }],
+            wednesday: [{ id: 'wed-1', start: '09:00', end: '17:00' }],
+            thursday: [{ id: 'thu-1', start: '09:00', end: '17:00' }],
+            friday: [{ id: 'fri-1', start: '09:00', end: '17:00' }],
+            saturday: [{ id: 'sat-1', start: '10:00', end: '14:00' }],
+            sunday: [],
         },
     },
 };

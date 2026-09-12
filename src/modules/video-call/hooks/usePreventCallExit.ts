@@ -7,8 +7,10 @@ import { useRouter } from "next/navigation";
 export interface UsePreventCallExitOptions {
   /** Whether the guard is currently active (call is live/connected and has not ended) */
   isActive: boolean;
-  /** Callback to clean up local media tracks, RTCPeerConnection, and socket connection */
+  /** Callback to clean up local media tracks, RTCPeerConnection, and socket connection on pagehide/unload */
   onLeaveCall: () => void;
+  /** Explicit callback when user confirms exit/end in modal (emits end_call) */
+  onConfirmExit?: () => void;
   /** Default redirect URL when leaving (e.g. '/doctor/dashboard' or '/patient/appointments') */
   defaultRedirectUrl: string;
   /** Appointment ObjectId to tag session exit flags */
@@ -29,6 +31,7 @@ export interface UsePreventCallExitReturn {
 export function usePreventCallExit({
   isActive,
   onLeaveCall,
+  onConfirmExit,
   defaultRedirectUrl,
   appointmentId,
 }: UsePreventCallExitOptions): UsePreventCallExitReturn {
@@ -38,10 +41,15 @@ export function usePreventCallExit({
   const pendingUrlRef = useRef<string | null>(null);
   const isBypassingGuardRef = useRef(false);
   const onLeaveCallRef = useRef(onLeaveCall);
+  const onConfirmExitRef = useRef(onConfirmExit);
 
   useEffect(() => {
     onLeaveCallRef.current = onLeaveCall;
   }, [onLeaveCall]);
+
+  useEffect(() => {
+    onConfirmExitRef.current = onConfirmExit;
+  }, [onConfirmExit]);
 
   // ── 1. Browser Tab Close / Page Refresh Prevention (beforeunload) ────────
   useEffect(() => {
@@ -176,14 +184,18 @@ export function usePreventCallExit({
 
     // Properly disconnect/clean up local media tracks and socket/WebRTC connections
     try {
-      onLeaveCallRef.current?.();
+      if (onConfirmExitRef.current) {
+        onConfirmExitRef.current();
+      } else {
+        onLeaveCallRef.current?.();
+        const destination = pendingUrlRef.current || defaultRedirectUrl;
+        router.replace(destination);
+      }
     } catch (err) {
       console.warn("[usePreventCallExit] Error during exit cleanup:", err);
+      const destination = pendingUrlRef.current || defaultRedirectUrl;
+      router.replace(destination);
     }
-
-    // Determine target URL and replace history so Back button will NOT return to call
-    const destination = pendingUrlRef.current || defaultRedirectUrl;
-    router.replace(destination);
   }, [appointmentId, defaultRedirectUrl, router]);
 
   return {

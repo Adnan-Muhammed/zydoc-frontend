@@ -52,7 +52,7 @@ export default function AppShell({
     const isConsultation = pathname.includes('/consultation/');
 
     return (
-        <div className={`shell-layout ${isConsultation ? 'consultation-mode' : ''}`}>
+        <div className={`shell-layout ${isConsultation ? 'consultation-mode !w-full !max-w-full' : ''}`}>
             {/* Hide left navigation during active consultation */}
             {!isConsultation && (
                 <Sidebar
@@ -62,13 +62,13 @@ export default function AppShell({
                 />
             )}
  
-            <div className={`shell-main ${isConsultation ? 'consultation-mode !ml-0' : ''}`}>
+            <div className={`shell-main ${isConsultation ? 'consultation-mode !ml-0 !w-full !max-w-full' : ''}`}>
                 <Topbar
                     role={role}
                     title={isConsultation ? 'Video Consultation' : undefined}
                     onToggleSidebar={() => setSidebarOpen(true)}
                 />
-                <main className={`shell-content ${isConsultation ? 'consultation-mode !p-0 !min-h-0' : 'min-h-[652px]'}`}>
+                <main className={`shell-content ${isConsultation ? 'consultation-mode !p-0 !min-h-0 !w-full !max-w-full' : 'min-h-[652px]'}`}>
                     {isAuthorized ? children : (
                         <div className="flex h-full w-full items-center justify-center min-h-[400px]">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

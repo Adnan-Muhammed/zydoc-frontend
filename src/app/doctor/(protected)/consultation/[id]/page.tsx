@@ -4,17 +4,33 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
+import { fetchAppointmentById } from '@/redux/features/appointment/appointmentThunk';
 import { VideoCallRoom } from '@/modules/video-call';
 
 interface ConsultationPageProps {
   params: { id: string };
 }
-
+ 
 export default function DoctorConsultationPage({ params }: ConsultationPageProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
+  const { currentAppointment } = useAppSelector((state) => state.appointment);
   const [isBlockedReentry, setIsBlockedReentry] = useState(false);
+
+  useEffect(() => {
+    if (params.id) {
+      dispatch(fetchAppointmentById(params.id));
+    }
+  }, [dispatch, params.id]);
+
+  useEffect(() => {
+    if (currentAppointment && currentAppointment.status === 'completed') {
+      setIsBlockedReentry(true);
+      router.replace('/doctor/dashboard');
+    }
+  }, [currentAppointment, router]);
 
   // Guard against direct browser history back-navigation re-entry
   useEffect(() => {

@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
 import { useSocket } from '@/hooks/useSocket';
+import { getAppointmentStatusConfig, getAppointmentStartTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
 import './doctor-dashboard.css';
 
 export default function DoctorDashboardPage() {
@@ -32,46 +33,23 @@ export default function DoctorDashboardPage() {
   const { doctorAppointments: appointments, isLoading: loadingAppointments } = useAppSelector((state) => state.appointment);
 
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'video' | 'physical'>('all');
-  const [isNextPatientLive, setIsNextPatientLive] = useState(false);
-  const timerRef = useRef<HTMLDivElement>(null);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
-  // Timer Effect using useRef to avoid re-renders
+  // 1-second live clock ticker to guarantee reactive slot transitions and countdown updates
   useEffect(() => {
-    if (!appointments || appointments.length === 0) return;
-    const nextAppt = appointments[0];
-
-    // Only run timer if status is 'scheduled' (Upcoming)
-    if (nextAppt.status !== 'scheduled') {
-      if (timerRef.current) timerRef.current.innerText = "00:00:00";
-      return;
-    }
-
-    const apptDate = new Date(nextAppt.appointmentDate);
-    const [timeStr, modifier] = (nextAppt.appointmentTime || "").trim().split(/\s+/);
-    let [hours, minutes] = (timeStr || "").split(":").map(Number);
-    if (modifier?.toUpperCase() === "PM" && hours < 12) hours += 12;
-    if (modifier?.toUpperCase() === "AM" && hours === 12) hours = 0;
-    apptDate.setHours(hours, minutes, 0, 0);
-
-    const exactTime = apptDate.getTime();
-
-    const updateTimer = () => {
-      if (!timerRef.current) return;
-      const diff = exactTime - new Date().getTime();
-      if (diff <= 0) {
-        timerRef.current.innerText = "00:00:00";
-        return;
-      }
-      const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-      const m = Math.floor((diff / 1000 / 60) % 60);
-      const s = Math.floor((diff / 1000) % 60);
-      timerRef.current.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    updateTimer();
-    const intervalId = setInterval(updateTimer, 1000);
+    const intervalId = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
     return () => clearInterval(intervalId);
-  }, [appointments]);
+  }, []);
+
+  const formatCountdown = (diffMs: number) => {
+    if (diffMs <= 0) return "00:00:00";
+    const h = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
+    const m = Math.floor((diffMs / 1000 / 60) % 60);
+    const s = Math.floor((diffMs / 1000) % 60);
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   // Get the socket instance
   const { socket } = useSocket({ userId: user?._id || user?.id, role: user?.role });
@@ -217,10 +195,14 @@ export default function DoctorDashboardPage() {
 
             {/* Next Patient */}
             {(() => {
-              const nextAppt = appointments.length > 0 ? appointments[0] : null;
-              const apptStatus = nextAppt?.status || 'Upcoming';
+              const upcomingOrActive = (appointments || [])
+                .filter((a: any) => isAppointmentUpcomingOrActive(a))
+                .sort((a: any, b: any) => getAppointmentStartTimestamp(a) - getAppointmentStartTimestamp(b));
 
-              let cardBgClass = 'bg-gradient-to-r from-blue-500 to-blue-700';
+              const nextAppt = upcomingOrActive[0] || null;
+              const apptStatus = (nextAppt?.status || 'Upcoming').toLowerCase();
+
+              let cardBgClass = 'bg-gradient-to-r from-blue-600 to-indigo-700';
               let textClass = 'text-blue-600';
               let lightTextClass = 'text-blue-100';
               let hoverClass = 'text-blue-700 hover:bg-slate-100';
@@ -230,34 +212,71 @@ export default function DoctorDashboardPage() {
               let pulseColor = 'bg-blue-400';
               let pulseDotColor = 'bg-blue-500';
 
-              if (apptStatus === 'Time Reached') {
-                cardBgClass = 'bg-gradient-to-r from-orange-500 to-orange-700';
-                textClass = 'text-orange-600';
-                lightTextClass = 'text-orange-100';
-                hoverClass = 'text-orange-700 hover:bg-orange-50';
-                badgeText = 'Time Reached';
-                btnText = 'Join Call';
-                isPulsing = true;
-                pulseColor = 'bg-orange-400';
-                pulseDotColor = 'bg-orange-500';
-              } else if (apptStatus === 'Patient Joined') {
-                cardBgClass = 'bg-gradient-to-r from-emerald-500 to-emerald-700';
-                textClass = 'text-emerald-600';
-                lightTextClass = 'text-emerald-100';
-                hoverClass = 'text-emerald-700 hover:bg-emerald-50';
-                badgeText = 'Patient Joined';
-                btnText = 'Join Call (Patient Waiting)';
-                isPulsing = true;
-                pulseColor = 'bg-emerald-400';
-                pulseDotColor = 'bg-emerald-500';
-              } else if (apptStatus === 'Patient Disconnected') {
-                cardBgClass = 'bg-gradient-to-r from-red-500 to-red-700';
-                textClass = 'text-red-600';
-                lightTextClass = 'text-red-100';
-                hoverClass = 'text-red-700 hover:bg-red-50';
-                badgeText = 'Patient Ended Call';
-                btnText = 'Rejoin Call';
-                isPulsing = false;
+              const isOffline = nextAppt?.consultationType === 'offline' || nextAppt?.consultationType === 'physical';
+              const nowMs = currentTime;
+              const startMs = nextAppt ? getAppointmentStartTimestamp(nextAppt) : 0;
+              const isSlotLive = Boolean(nextAppt && startMs > 0 && nowMs >= startMs);
+
+              if (nextAppt) {
+                if (isOffline) {
+                  if (isSlotLive) {
+                    cardBgClass = 'bg-gradient-to-r from-emerald-600 to-teal-700';
+                    textClass = 'text-emerald-700';
+                    lightTextClass = 'text-emerald-100';
+                    hoverClass = 'text-emerald-800 hover:bg-emerald-50';
+                    badgeText = 'Patient Due / In Clinic';
+                    btnText = 'Verify OTP & Complete';
+                    isPulsing = true;
+                    pulseColor = 'bg-emerald-400';
+                    pulseDotColor = 'bg-emerald-500';
+                  } else {
+                    cardBgClass = 'bg-gradient-to-r from-indigo-600 to-blue-700';
+                    textClass = 'text-indigo-600';
+                    lightTextClass = 'text-indigo-100';
+                    hoverClass = 'text-indigo-700 hover:bg-indigo-50';
+                    badgeText = 'Upcoming In-Person Visit';
+                    btnText = 'View Appointment Details';
+                    isPulsing = false;
+                  }
+                } else if (apptStatus === 'patient joined') {
+                  cardBgClass = 'bg-gradient-to-r from-emerald-600 to-teal-700';
+                  textClass = 'text-emerald-700';
+                  lightTextClass = 'text-emerald-100';
+                  hoverClass = 'text-emerald-800 hover:bg-emerald-50';
+                  badgeText = 'Patient Joined & Waiting';
+                  btnText = 'Join Call (Patient Waiting)';
+                  isPulsing = true;
+                  pulseColor = 'bg-emerald-400';
+                  pulseDotColor = 'bg-emerald-500';
+                } else if (apptStatus === 'patient disconnected') {
+                  cardBgClass = 'bg-gradient-to-r from-red-500 to-red-700';
+                  textClass = 'text-red-600';
+                  lightTextClass = 'text-red-100';
+                  hoverClass = 'text-red-700 hover:bg-red-50';
+                  badgeText = 'Patient Ended Call';
+                  btnText = 'Rejoin Call';
+                  isPulsing = false;
+                } else if (isSlotLive || apptStatus === 'time reached') {
+                  // Slot time has arrived for online consultation
+                  cardBgClass = 'bg-gradient-to-r from-emerald-600 to-teal-700';
+                  textClass = 'text-emerald-700';
+                  lightTextClass = 'text-emerald-100';
+                  hoverClass = 'text-emerald-800 hover:bg-emerald-50';
+                  badgeText = 'Consultation Live';
+                  btnText = 'Join Call (Live)';
+                  isPulsing = true;
+                  pulseColor = 'bg-emerald-400';
+                  pulseDotColor = 'bg-emerald-500';
+                } else {
+                  // Scheduled in the future (Upcoming)
+                  cardBgClass = 'bg-gradient-to-r from-blue-600 to-indigo-700';
+                  textClass = 'text-blue-600';
+                  lightTextClass = 'text-blue-100';
+                  hoverClass = 'text-blue-700 hover:bg-blue-50';
+                  badgeText = 'Upcoming Online Consultation';
+                  btnText = 'Start Consultation';
+                  isPulsing = false;
+                }
               }
 
               return (
@@ -294,12 +313,23 @@ export default function DoctorDashboardPage() {
                         </div>
 
                         {/* Timer Display */}
-                        {apptStatus === 'scheduled' && (
+                        {!isSlotLive && startMs > nowMs && (
                           <div className="text-right hidden sm:block pr-4">
                             <p className={`text-sm ${lightTextClass} mb-1 uppercase tracking-wider font-bold`}>Starts In</p>
-                            <div className="text-3xl font-mono font-bold tracking-tight" ref={timerRef}>
-                              00:00:00
+                            <div className="text-3xl font-mono font-bold tracking-tight">
+                              {formatCountdown(startMs - nowMs)}
                             </div>
+                          </div>
+                        )}
+                        {isSlotLive && (
+                          <div className="text-right hidden sm:block pr-4">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-white">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                              </span>
+                              {isOffline ? 'In Clinic Now' : 'Live Now'}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -321,6 +351,10 @@ export default function DoctorDashboardPage() {
                       disabled={!nextAppt}
                       onClick={() => {
                         if (nextAppt) {
+                          if (isOffline) {
+                            router.push('/doctor/appointments');
+                            return;
+                          }
                           if (typeof window !== 'undefined') {
                             sessionStorage.removeItem(`consultation_exited_${nextAppt._id}`);
                           }
@@ -332,9 +366,12 @@ export default function DoctorDashboardPage() {
                       {isPulsing && <span className="relative flex h-3 w-3"><span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${pulseColor} opacity-75`}></span><span className={`relative inline-flex rounded-full h-3 w-3 ${pulseDotColor}`}></span></span>}
                       {btnText}
                     </button>
-                    <button className="rounded-xl border border-white/40 px-5 py-2.5 transition hover:bg-white/10">
+                    <Link
+                      href="/doctor/appointments"
+                      className="rounded-xl border border-white/40 px-5 py-2.5 transition hover:bg-white/10 text-center"
+                    >
                       View History
-                    </button>
+                    </Link>
                   </div>
                 </div>
               );
@@ -497,7 +534,7 @@ export default function DoctorDashboardPage() {
                 </div>
 
                 <Link
-                  href="#"
+                  href="/doctor/appointments"
                   className="hidden sm:block rounded-xl border border-slate-200 px-4 py-2 font-medium text-indigo-600 hover:bg-slate-100"
                 >
                   View All
@@ -510,7 +547,12 @@ export default function DoctorDashboardPage() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
               ) : (() => {
-                const filteredAppointments = appointments.filter(appt => appointmentFilter === 'all' || appt.consultationType === appointmentFilter);
+                const filteredAppointments = (appointments || [])
+                  .filter(appt => {
+                    const matchesFilter = appointmentFilter === 'all' || appt.consultationType === appointmentFilter;
+                    return matchesFilter && isAppointmentUpcomingOrActive(appt);
+                  })
+                  .sort((a, b) => getAppointmentStartTimestamp(a) - getAppointmentStartTimestamp(b));
 
                 return filteredAppointments.length > 0 ? (
                   <div className="space-y-4">
@@ -527,12 +569,23 @@ export default function DoctorDashboardPage() {
                             </p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold capitalize ${appt.consultationType === 'video' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold ${
+                              (appt.consultationType === 'online' || appt.consultationType === 'video') ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                             }`}>
-                            {appt.consultationType === 'video' ? 'Online' : 'In-Person'}
-                          </span>
-                          <p className="text-xs text-slate-400 mt-1">₹{appt.fee}</p>
+                              {(appt.consultationType === 'online' || appt.consultationType === 'video') ? 'Online' : 'In-Person'}
+                            </span>
+                            {(() => {
+                              const st = getAppointmentStatusConfig(appt.status, 'doctor');
+                              return (
+                                <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold ${st.badgeClass}`}>
+                                  {st.label}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          <p className="text-xs text-slate-400">₹{appt.fee}</p>
                         </div>
                       </div>
                     ))}

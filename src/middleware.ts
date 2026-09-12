@@ -94,7 +94,12 @@ export async function middleware(req: NextRequest) {
     if (!accessToken && !refreshToken) {
         if (isProtected && !isAuthPage) {
             const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login';
-            return NextResponse.redirect(new URL(loginPath, req.url));
+            const loginUrl = new URL(loginPath, req.url);
+            // Preserve intended destination so post-login redirect works
+            if (!pathname.startsWith('/admin')) {
+                loginUrl.searchParams.set('callbackUrl', pathname);
+            }
+            return NextResponse.redirect(loginUrl);
         }
         return NextResponse.next();
     }
@@ -123,11 +128,17 @@ export async function middleware(req: NextRequest) {
         );
 
         if (!refreshRes.ok) {
-            const response = (isProtected && !isAuthPage)
-                ? NextResponse.redirect(
-                    new URL(pathname.startsWith('/admin') ? '/admin/login' : '/login', req.url)
-                )
-                : NextResponse.next();
+            let response: NextResponse;
+            if (isProtected && !isAuthPage) {
+                const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+                const loginUrl = new URL(loginPath, req.url);
+                if (!pathname.startsWith('/admin')) {
+                    loginUrl.searchParams.set('callbackUrl', pathname);
+                }
+                response = NextResponse.redirect(loginUrl);
+            } else {
+                response = NextResponse.next();
+            }
             response.cookies.delete('accessToken');
             response.cookies.delete('refreshToken');
             return response;
@@ -163,9 +174,12 @@ export async function middleware(req: NextRequest) {
 
     } catch {
         if (isProtected && !isAuthPage) {
-            return NextResponse.redirect(
-                new URL(pathname.startsWith('/admin') ? '/admin/login' : '/login', req.url)
-            );
+            const loginPath = pathname.startsWith('/admin') ? '/admin/login' : '/login';
+            const loginUrl = new URL(loginPath, req.url);
+            if (!pathname.startsWith('/admin')) {
+                loginUrl.searchParams.set('callbackUrl', pathname);
+            }
+            return NextResponse.redirect(loginUrl);
         }
         return NextResponse.next();
     }
