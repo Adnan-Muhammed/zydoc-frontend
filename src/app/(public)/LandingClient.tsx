@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Header from '../../components/layout/Header';
+import Hero from  '../../components/landing/Hero';
 import FAQ from '../../components/landing/FAQ';
 import Link from 'next/link';
 import './landing.css';
@@ -11,7 +12,6 @@ import Features from '../../components/landing/Features';
 import HowItWorks from '../../components/landing/HowItWorks';
 import Testimonials from '../../components/landing/Testimonials';
 import Blogs from '../../components/landing/Blogs';
-
 interface User { 
     role?: string;
     name?: string;
@@ -98,6 +98,10 @@ export default function LandingClient({ initialUser, hasRefreshToken }: Props) {
                     </div>
                 </div>
             </section>
+
+
+
+       {/* <Hero/> */}
 
             <STATS />
 
