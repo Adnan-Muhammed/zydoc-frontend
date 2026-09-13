@@ -71,7 +71,7 @@ export const getDoctorsList = async (searchParams?: any) => {
             experience: `${doc.yearsOfExperience || 0} years experience`,
             location: location,
             type: typeStr,
-            rating: doc.rating ?? 5.0,
+            rating: doc.rating ?? 0,
             reviews: doc.reviewCount ?? 0,
             fee: fee,
             videoFee: videoFee,

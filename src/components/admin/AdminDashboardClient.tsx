@@ -174,7 +174,7 @@ export default function AdminDashboardClient({ stats }: Props) {
             {/* Page Header */}
             <div className="page-header">
                 <div className="page-header-left">
-                    <h1>Welcome back, Super Admin! 👋</h1>
+                    <h1>Welcome, Super Admin! 👋</h1>
                     <p>Here's what's happening on Zydoc today — <span id="dateDisplay">{dateString}</span></p>
                 </div>
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>

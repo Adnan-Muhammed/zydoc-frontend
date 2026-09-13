@@ -27,7 +27,7 @@ export default function LoginPage() {
                     <Badge variant="primary" pill>
                         <i className="fas fa-lock mr-1"></i> Secure Portal Access
                     </Badge>
-                    <h1 className="text-4xl font-bold">Welcome back</h1>
+                    <h1 className="text-4xl font-bold">Welcome </h1>
                     <p className="text-lg text-slate-600 dark:text-slate-400">
                         Sign in to manage your appointments, view prescriptions, and connect with your doctors.
                     </p>

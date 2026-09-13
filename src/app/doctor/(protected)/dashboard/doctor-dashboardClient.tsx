@@ -182,7 +182,7 @@ export default function DoctorDashboardPage() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-slate-800">
-              Welcome back, Dr. {user?.name || 'Smith'}! 👋
+              Welcome, Dr. {user?.name || 'Smith'}! 👋
             </h1>
 
             <p className="mt-1 text-slate-500">

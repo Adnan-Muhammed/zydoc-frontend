@@ -71,7 +71,7 @@ export default function DoctorAppointmentsPage() {
     const handleDownloadPrescription = (app: any) => {
         if (!app) return;
         const patientName = getPatientName(app.patientId, app.manualPatientDetails, app.isManualBooking);
-        const doctor = user || {};
+        const doctor: any = user || {};
         generatePrescriptionPdf({
             appointmentId: app._id,
             date: new Date(app.appointmentDate).toDateString(),

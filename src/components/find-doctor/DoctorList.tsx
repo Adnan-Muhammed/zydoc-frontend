@@ -252,14 +252,30 @@ export default function DoctorList({ doctors, pagination, basePath }: Props) {
                                             <span>{doc.type}</span>
                                         </div>
                                     </div>
-                                    <div className="doctor-rating">
-                                        <div className="stars" aria-label={`Rating: ${doc.rating} out of 5`}>
-                                            {Array.from({ length: Math.floor(doc.rating) }).map((_, i) => (
-                                                <i key={i} className="fas fa-star"></i>
-                                            ))}
-                                            {doc.rating % 1 !== 0 && <i className="fas fa-star-half-alt"></i>}
+                                    <div className="doctor-rating flex items-center gap-1.5">
+                                        <div className="stars flex items-center gap-0.5" aria-label={`Rating: ${doc.rating || 0} out of 5`}>
+                                            {[1, 2, 3, 4, 5].map((star) => {
+                                                const isFilled = doc.rating && doc.rating > 0 && star <= Math.round(doc.rating);
+                                                return (
+                                                    <svg
+                                                        key={star}
+                                                        className={`w-3.5 h-3.5 transition-colors ${
+                                                            isFilled
+                                                                ? "fill-amber-400 stroke-amber-400 text-amber-400"
+                                                                : "fill-transparent stroke-amber-400 text-amber-400"
+                                                        }`}
+                                                        strokeWidth="1.8"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                                    </svg>
+                                                );
+                                            })}
                                         </div>
-                                        <span className="rating-count">({doc.reviews} reviews)</span>
+                                        <span className="font-bold text-xs text-slate-700 ml-0.5">
+                                            {doc.rating && doc.rating > 0 ? Number(doc.rating).toFixed(1) : "0.0"}
+                                        </span>
+                                        <span className="rating-count text-xs text-slate-400">({doc.reviews || 0} reviews)</span>
                                     </div>
 
                                     <div className="doctor-fee">

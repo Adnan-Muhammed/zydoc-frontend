@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getDoctorById } from "@/lib/doctors";
 import { notFound } from "next/navigation";
 import { formatTo12Hour } from "@/utils/timeFormat";
+import { DoctorProfileReviewsSection } from "@/modules/reviews-ratings";
 
 interface WorkingHourSlot {
   start: string;
@@ -208,10 +209,30 @@ export default async function PatientDoctorProfilePage({ params }: { params: { i
                   )}
                 </p>
                 {/* Rating */}
-                <div className="flex items-center gap-1 mt-1 text-sm">
-                    <span className="text-amber-400">★</span>
-                    <span className="font-semibold text-slate-700">{d.rating ?? 5.0}</span>
-                    <span className="text-slate-400">({d.reviewCount ?? 0} reviews)</span>
+                <div className="flex items-center gap-1.5 mt-1.5 text-sm">
+                    <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((star) => {
+                            const isFilled = d.rating && d.rating > 0 && star <= Math.round(d.rating);
+                            return (
+                                <svg
+                                    key={star}
+                                    className={`w-4 h-4 transition-colors ${
+                                        isFilled
+                                            ? "fill-amber-400 stroke-amber-400 text-amber-400 drop-shadow-[0_1px_2px_rgba(251,191,36,0.4)]"
+                                            : "fill-transparent stroke-amber-400 text-amber-400"
+                                    }`}
+                                    strokeWidth="1.8"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                </svg>
+                            );
+                        })}
+                    </div>
+                    <span className="font-bold text-slate-700 ml-1">
+                        {d.rating && d.rating > 0 ? Number(d.rating).toFixed(1) : "0.0"}
+                    </span>
+                    <span className="text-slate-400 font-medium">({d.reviewCount ?? 0} reviews)</span>
                 </div>
               </div>
             </div>
@@ -361,6 +382,16 @@ export default async function PatientDoctorProfilePage({ params }: { params: { i
                 Book Now
               </Link>
             </Card>
+
+            {/* Patient Reviews & Ratings Section */}
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
+              <DoctorProfileReviewsSection
+                doctorId={d._id || d.id}
+                doctorName={fullName}
+                specialty={specialty}
+                avatarUrl={avatarUrl}
+              />
+            </div>
           </div>
 
           {/* ── Right / Side column ── */}

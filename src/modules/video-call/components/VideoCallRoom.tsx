@@ -86,7 +86,9 @@ export default function VideoCallRoom({
   } = useWebRTC({ appointmentId, userId, role, onCallEnded });
 
   const defaultRedirectUrl =
-    role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+    role?.toLowerCase() === "doctor"
+      ? "/doctor/dashboard"
+      : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
 
   const {
     isExitModalOpen,

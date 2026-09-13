@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { AppDispatch, RootState } from '@/redux/store';
 import { fetchPatientAppointments, cancelAppointment, disputeAppointment } from '@/redux/features/appointment/appointmentThunk';
 import { getAppointmentStatusConfig } from '@/utils/appointmentStatus';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { ReviewModal, reviewService } from '@/modules/reviews-ratings';
 
 const AppointmentTimer = ({ startTime }: { startTime: number }) => {
     const timerRef = React.useRef<HTMLSpanElement>(null);
@@ -39,6 +41,8 @@ const AppointmentTimer = ({ startTime }: { startTime: number }) => {
 
 export default function PatientAppointmentsPage() {
     const dispatch = useDispatch<AppDispatch>();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const { user } = useSelector((state: RootState) => state.auth);
     const { appointments, isLoading, error } = useSelector((state: RootState) => state.appointment);
     const [selectedAppointment, setSelectedAppointment] = useState<any>(null);
@@ -88,9 +92,53 @@ export default function PatientAppointmentsPage() {
 
     const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Reviews & Ratings state
+    const [reviewModalAppointment, setReviewModalAppointment] = useState<any>(null);
+    const [reviewedAppointmentsMap, setReviewedAppointmentsMap] = useState<Record<string, boolean>>({});
+
     useEffect(() => {
         dispatch(fetchPatientAppointments());
     }, [dispatch]);
+
+    // Check review status for completed and no-show appointments to update button state
+    useEffect(() => {
+        if (!appointments || appointments.length === 0) return;
+        const reviewable = appointments.filter((a: any) => a.status === 'completed' || a.status === 'no-show');
+        reviewable.forEach(async (app: any) => {
+            if (reviewedAppointmentsMap[app._id] !== undefined) return;
+            try {
+                const res = await reviewService.getAppointmentReview(app._id);
+                if (res && res.reviewed) {
+                    setReviewedAppointmentsMap((prev) => ({ ...prev, [app._id]: true }));
+                } else {
+                    setReviewedAppointmentsMap((prev) => ({ ...prev, [app._id]: false }));
+                }
+            } catch (err) {
+                // Ignore silent check errors
+            }
+        });
+    }, [appointments]);
+
+    // Requirement 1: After consultation redirect, open Review & Rating modal
+    useEffect(() => {
+        const shouldPromptReview = searchParams?.get('reviewModal') === 'true';
+        const targetAppointmentId = searchParams?.get('appointmentId');
+
+        if (shouldPromptReview && targetAppointmentId && appointments.length > 0) {
+            const targetApp = appointments.find((a: any) => a._id === targetAppointmentId);
+            if (targetApp) {
+                reviewService.getAppointmentReview(targetAppointmentId).then((res) => {
+                    if (res && res.reviewed) {
+                        setReviewedAppointmentsMap((prev) => ({ ...prev, [targetAppointmentId]: true }));
+                    } else {
+                        setReviewModalAppointment(targetApp);
+                    }
+                }).catch(() => {
+                    setReviewModalAppointment(targetApp);
+                });
+            }
+        }
+    }, [searchParams, appointments]);
 
     const getAppTimestamp = (app: any) => {
         const appDate = new Date(app.appointmentDate);
@@ -475,6 +523,21 @@ export default function PatientAppointmentsPage() {
                             >
                                 <i className="fas fa-paperclip text-emerald-600"></i>
                                 <span>Files ({app.consultationFiles.length})</span>
+                            </button>
+                        )}
+
+                        {(app.status === 'completed' || app.status === 'no-show') && (
+                            <button
+                                onClick={() => setReviewModalAppointment(app)}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-2xs ${
+                                    reviewedAppointmentsMap[app._id]
+                                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                                        : 'bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 hover:text-amber-800'
+                                }`}
+                                title={reviewedAppointmentsMap[app._id] ? "You have reviewed this consultation." : "Rate & review your consultation experience with this doctor"}
+                            >
+                                <i className="fas fa-star text-amber-400"></i>
+                                <span>{reviewedAppointmentsMap[app._id] ? "Reviewed ★" : "Rate Doctor"}</span>
                             </button>
                         )}
 
@@ -1023,6 +1086,42 @@ export default function PatientAppointmentsPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Doctor Review & Rating Modal */}
+            {reviewModalAppointment && (
+                <ReviewModal
+                    isOpen={Boolean(reviewModalAppointment)}
+                    onClose={() => {
+                        setReviewModalAppointment(null);
+                        // Clean URL query params if opened via post-call redirect
+                        if (searchParams?.get('reviewModal')) {
+                            router.replace('/patient/appointments', { scroll: false });
+                        }
+                    }}
+                    onSuccess={() => {
+                        if (reviewModalAppointment) {
+                            setReviewedAppointmentsMap((prev) => ({
+                                ...prev,
+                                [reviewModalAppointment._id]: true,
+                            }));
+                        }
+                        setActionMessage({
+                            type: 'success',
+                            text: 'Thank you! Your doctor rating and review was submitted successfully.',
+                        });
+                        if (searchParams?.get('reviewModal')) {
+                            router.replace('/patient/appointments', { scroll: false });
+                        }
+                    }}
+                    appointmentId={reviewModalAppointment._id}
+                    doctor={{
+                        id: reviewModalAppointment.doctorId?._id || reviewModalAppointment.doctorId?.id,
+                        name: reviewModalAppointment.doctorId?.name || `${reviewModalAppointment.doctorId?.firstName || ''} ${reviewModalAppointment.doctorId?.lastName || ''}`.trim() || 'Doctor',
+                        specialty: reviewModalAppointment.doctorId?.specialty || 'Medical Specialist',
+                        avatarUrl: reviewModalAppointment.doctorId?.avatarUrl,
+                    }}
+                />
             )}
         </div>
     );

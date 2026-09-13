@@ -24,7 +24,7 @@ export default function DashboardClient({ user }: Props) {
 
             <div className="welcome-section">
                 <div className="welcome-text">
-                    <h2>Welcome back, {user?.name || 'there'}! 👋</h2>
+                    <h2>Welcome, {user?.name || 'there'}! 👋</h2>
                     <p>You have 1 upcoming appointment</p>
                 </div>
 

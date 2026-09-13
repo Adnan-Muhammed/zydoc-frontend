@@ -418,7 +418,10 @@ export function useWebRTC({
             if (onCallEnded) {
               onCallEnded();
             } else {
-              const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+              const destination =
+                role?.toLowerCase() === "doctor"
+                  ? "/doctor/dashboard"
+                  : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
               router.replace(destination);
             }
           }, 2500);
@@ -446,7 +449,10 @@ export function useWebRTC({
           if (onCallEnded) {
             onCallEnded();
           } else {
-            const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+            const destination =
+              role?.toLowerCase() === "doctor"
+                ? "/doctor/dashboard"
+                : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
             router.replace(destination);
           }
         });
@@ -614,7 +620,9 @@ export function useWebRTC({
       if (onCallEnded) {
         onCallEnded();
       } else {
-        const destination = isDoctor ? "/doctor/dashboard" : "/patient/appointments";
+        const destination = isDoctor
+          ? "/doctor/dashboard"
+          : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
         router.replace(destination);
       }
     }, 150);

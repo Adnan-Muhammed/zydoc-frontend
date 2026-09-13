@@ -53,3 +53,10 @@ export const NOTIFICATIONS = {
     MARK_ALL_AS_READ: '/notifications/read-all',
 } as const;
 
+export const REVIEWS = {
+    CREATE: '/reviews',
+    BY_DOCTOR: (doctorId: string) => `/reviews/doctor/${doctorId}`,
+    ELIGIBILITY: (doctorId: string) => `/reviews/eligibility/${doctorId}`,
+    BY_APPOINTMENT: (appointmentId: string) => `/reviews/appointment/${appointmentId}`,
+} as const;
+

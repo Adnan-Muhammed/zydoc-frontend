@@ -1209,7 +1209,7 @@ export default function AdminDashboardPage() {
             <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6 mb-8">
                 <div>
                     <h1 className="text-3xl sm:text-4xl font-bold text-slate-800 tracking-tight">
-                        Welcome back, Super Admin! 👋
+                        Welcome, Super Admin! 👋
                     </h1>
                     <p className="text-slate-500 mt-2 text-sm sm:text-base">
                         Here's what's happening on Zydoc today —
