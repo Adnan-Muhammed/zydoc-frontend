@@ -228,6 +228,7 @@ export default function ScheduleClient() {
                     message: res.message || 'Failed to update slot status'
                 });
             }
+            
         } catch (err: any) {
             setSlotActionFeedback({
                 type: 'error',

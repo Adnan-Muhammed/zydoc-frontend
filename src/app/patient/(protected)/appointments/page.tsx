@@ -24,10 +24,16 @@ const AppointmentTimer = ({ startTime }: { startTime: number }) => {
                 return;
             }
             
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
             const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
             const m = Math.floor((diff / 1000 / 60) % 60);
             const s = Math.floor((diff / 1000) % 60);
-            timerRef.current.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            
+            if (days > 0) {
+                timerRef.current.innerText = `${days}d ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            } else {
+                timerRef.current.innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            }
         };
         
         updateTimer();
@@ -141,8 +147,13 @@ export default function PatientAppointmentsPage() {
     }, [searchParams, appointments]);
 
     const getAppTimestamp = (app: any) => {
-        const appDate = new Date(app.appointmentDate);
-        if (!app.appointmentTime) return appDate.getTime();
+        if (app?.scheduledStartAt) {
+            const t = new Date(app.scheduledStartAt).getTime();
+            if (!isNaN(t)) return t;
+        }
+
+        const appDate = new Date(app?.appointmentDate);
+        if (!app?.appointmentTime) return appDate.getTime();
         
         const [timePart, modifier] = app.appointmentTime.trim().split(/\s+/);
         let [hours, minutes] = timePart.split(':').map(Number);
@@ -451,7 +462,7 @@ export default function PatientAppointmentsPage() {
                         {app.status === 'scheduled' && (() => {
                             const { canCancel, hoursLeft } = getCancellationEligibility(app);
                             if (canCancel) {
-                                return (
+                                return ( 
                                     <button
                                         onClick={() => { setCancelModalAppointment(app); setCancelReason(''); }}
                                         className="px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-colors flex items-center gap-1"

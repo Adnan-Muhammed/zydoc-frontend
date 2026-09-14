@@ -89,7 +89,7 @@ export async function extendLock(slotId: string) {
 
     return res.json();
 }
-
+ 
 export async function toggleDoctorSlotOverride(date: string, time: string, action: 'close' | 'open', reason?: string) {
     try {
         const res = await axiosInstance.post('/appointments/doctor/slot-override', { date, time, action, reason });

@@ -81,6 +81,7 @@ function getDoctorNav(isDoctorLocked: boolean): NavSection[] {
             label: 'Account',
             links: [
                 { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings', disabled: isDoctorLocked },
+                { href: '/doctor/reviews', icon: 'fas fa-star', label: 'My Reviews', disabled: isDoctorLocked },
                 { href: '/doctor/profile', icon: 'fas fa-address-card', label: 'Profile', disabled: isDoctorLocked },
             ],
         },
@@ -106,6 +107,8 @@ const PATIENT_NAV: NavSection[] = [
     {
         label: 'Account',
         links: [
+            { href: '/patient/wallet', icon: 'fas fa-wallet', label: 'Wallet & Refunds' },
+            { href: '/patient/reviews', icon: 'fas fa-star', label: 'My Reviews' },
             { href: '/patient/profile', icon: 'fas fa-user', label: 'My Profile' },
             { href: '/patient/settings', icon: 'fas fa-gear', label: 'Settings' },
         ],

@@ -45,9 +45,14 @@ export default function DoctorDashboardPage() {
 
   const formatCountdown = (diffMs: number) => {
     if (diffMs <= 0) return "00:00:00";
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const h = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
     const m = Math.floor((diffMs / 1000 / 60) % 60);
     const s = Math.floor((diffMs / 1000) % 60);
+
+    if (days > 0) {
+      return `${days}d ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -215,7 +220,10 @@ export default function DoctorDashboardPage() {
               const isOffline = nextAppt?.consultationType === 'offline' || nextAppt?.consultationType === 'physical';
               const nowMs = currentTime;
               const startMs = nextAppt ? getAppointmentStartTimestamp(nextAppt) : 0;
+              const fifteenMinsMs = 15 * 60 * 1000;
+              const isWithin15Mins = Boolean(startMs > 0 && nowMs >= startMs - fifteenMinsMs);
               const isSlotLive = Boolean(nextAppt && startMs > 0 && nowMs >= startMs);
+              const canJoinCall = isOffline ? false : (isSlotLive || isWithin15Mins || apptStatus === 'patient joined' || apptStatus === 'time reached');
 
               if (nextAppt) {
                 if (isOffline) {
@@ -267,14 +275,25 @@ export default function DoctorDashboardPage() {
                   isPulsing = true;
                   pulseColor = 'bg-emerald-400';
                   pulseDotColor = 'bg-emerald-500';
+                } else if (isWithin15Mins) {
+                  // Within 15m early join window: Ready to join!
+                  cardBgClass = 'bg-gradient-to-r from-indigo-600 to-blue-700';
+                  textClass = 'text-indigo-600';
+                  lightTextClass = 'text-indigo-100';
+                  hoverClass = 'text-indigo-700 hover:bg-indigo-50';
+                  badgeText = 'Starting Soon (15m Early Join)';
+                  btnText = 'Join Call Early';
+                  isPulsing = true;
+                  pulseColor = 'bg-indigo-400';
+                  pulseDotColor = 'bg-indigo-500';
                 } else {
-                  // Scheduled in the future (Upcoming)
+                  // Scheduled in the future (>15m away, e.g. hours or days away)
                   cardBgClass = 'bg-gradient-to-r from-blue-600 to-indigo-700';
                   textClass = 'text-blue-600';
                   lightTextClass = 'text-blue-100';
                   hoverClass = 'text-blue-700 hover:bg-blue-50';
                   badgeText = 'Upcoming Online Consultation';
-                  btnText = 'Start Consultation';
+                  btnText = 'Join Opens 15m Prior';
                   isPulsing = false;
                 }
               }
@@ -348,11 +367,21 @@ export default function DoctorDashboardPage() {
 
                   <div className="mt-6 flex flex-wrap gap-4">
                     <button
-                      disabled={!nextAppt}
+                      disabled={!nextAppt || (!isOffline && !canJoinCall)}
+                      title={
+                        !nextAppt
+                          ? undefined
+                          : !isOffline && !canJoinCall
+                          ? "You can only join the consultation up to 15 minutes before the scheduled time."
+                          : undefined
+                      }
                       onClick={() => {
                         if (nextAppt) {
                           if (isOffline) {
                             router.push('/doctor/appointments');
+                            return;
+                          }
+                          if (!canJoinCall) {
                             return;
                           }
                           if (typeof window !== 'undefined') {
@@ -361,16 +390,27 @@ export default function DoctorDashboardPage() {
                           router.push(`/doctor/consultation/${nextAppt._id}?join=true`);
                         }
                       }}
-                      className={`flex items-center gap-2 rounded-xl bg-white px-5 py-2.5 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${hoverClass}`}
+                      className={`flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold transition ${
+                        !isOffline && !canJoinCall
+                          ? 'bg-white/70 text-slate-500 cursor-not-allowed border border-white/20'
+                          : `bg-white ${hoverClass}`
+                      } disabled:opacity-70 disabled:cursor-not-allowed`}
                     >
-                      {isPulsing && <span className="relative flex h-3 w-3"><span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${pulseColor} opacity-75`}></span><span className={`relative inline-flex rounded-full h-3 w-3 ${pulseDotColor}`}></span></span>}
+                      {!isOffline && !canJoinCall ? (
+                        <i className="fas fa-lock text-xs opacity-75"></i>
+                      ) : isPulsing ? (
+                        <span className="relative flex h-3 w-3">
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${pulseColor} opacity-75`}></span>
+                          <span className={`relative inline-flex rounded-full h-3 w-3 ${pulseDotColor}`}></span>
+                        </span>
+                      ) : null}
                       {btnText}
                     </button>
                     <Link
                       href="/doctor/appointments"
-                      className="rounded-xl border border-white/40 px-5 py-2.5 transition hover:bg-white/10 text-center"
+                      className="rounded-xl border border-white/40 px-5 py-2.5 transition hover:bg-white/10 text-center font-medium"
                     >
-                      View History
+                      {nextAppt ? 'View Details' : 'View History'}
                     </Link>
                   </div>
                 </div>

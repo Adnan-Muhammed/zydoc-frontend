@@ -374,12 +374,17 @@ export function useWebRTC({
             console.log(1);
             
             setError(payload.message);
-            if (payload.message === 'This consultation has already ended.' || payload.message?.includes('expired') || payload.message?.includes('ended')) {
+            if (
+              payload.message === 'This consultation has already ended.' || 
+              payload.message?.includes('expired') || 
+              payload.message?.includes('ended') ||
+              payload.message?.toLowerCase().includes('in-person')
+            ) {
               if (typeof window !== "undefined" && appointmentId) {
                 sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
                 sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
               }
-              const destination = role?.toLowerCase() === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
+              const destination = role?.toLowerCase() === "doctor" ? "/doctor/appointments" : "/patient/appointments";
               router.replace(destination);
             }
             setIsCallEnded(true);

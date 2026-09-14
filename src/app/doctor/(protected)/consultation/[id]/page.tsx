@@ -18,6 +18,7 @@ export default function DoctorConsultationPage({ params }: ConsultationPageProps
   const { user } = useAppSelector((state) => state.auth);
   const { currentAppointment } = useAppSelector((state) => state.appointment);
   const [isBlockedReentry, setIsBlockedReentry] = useState(false);
+  const [isInPersonConsultation, setIsInPersonConsultation] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -26,9 +27,21 @@ export default function DoctorConsultationPage({ params }: ConsultationPageProps
   }, [dispatch, params.id]);
 
   useEffect(() => {
-    if (currentAppointment && currentAppointment.status === 'completed') {
-      setIsBlockedReentry(true);
-      router.replace('/doctor/dashboard');
+    if (currentAppointment) {
+      if (currentAppointment.status === 'completed') {
+        setIsBlockedReentry(true);
+        router.replace('/doctor/dashboard');
+        return;
+      }
+
+      const consultType = (currentAppointment.consultationType || '').toLowerCase();
+      if (consultType === 'offline' || consultType === 'physical') {
+        setIsInPersonConsultation(true);
+        const timer = setTimeout(() => {
+          router.replace('/doctor/appointments');
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
     }
   }, [currentAppointment, router]);
 
@@ -54,6 +67,29 @@ export default function DoctorConsultationPage({ params }: ConsultationPageProps
       router.replace('/doctor/dashboard');
     }
   }, [params.id, router]);
+
+  if (isInPersonConsultation) {
+    return (
+      <div className="w-full h-full min-h-screen flex items-center justify-center bg-[#0a0a0a] text-white px-4">
+        <div className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl backdrop-blur-xl">
+          <div className="w-16 h-16 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-2xl flex items-center justify-center mx-auto mb-5 text-2xl">
+            <i className="fas fa-hospital-user"></i>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">In-Person Consultation</h2>
+          <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+            This appointment is scheduled for an in-person clinic visit and does not support online video calls. 
+            Patient verification and consultation take place at the clinic.
+          </p>
+          <button
+            onClick={() => router.replace('/doctor/appointments')}
+            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition text-sm flex items-center justify-center gap-2"
+          >
+            <i className="fas fa-arrow-left text-xs"></i> Return to Appointments
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (isBlockedReentry) {
     return (
