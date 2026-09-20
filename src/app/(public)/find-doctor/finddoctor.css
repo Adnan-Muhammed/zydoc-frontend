@@ -77,6 +77,9 @@
     display: grid;
     grid-template-columns: 280px 1fr;
     gap: 2rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 /* ============ SIDEBAR FILTERS ============ */
@@ -181,31 +184,44 @@
 /* ============ DOCTORS LIST ============ */
 .doctors-section {
     flex: 1;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .results-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-    gap: 1rem;
+    margin-bottom: 1.75rem;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .results-info {
     color: var(--text-medium);
-    font-size: 0.95rem;
+    font-size: 0.92rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .sort-dropdown {
-    padding: 0.65rem 1rem;
+    padding: 0.6rem 0.9rem;
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: var(--text-dark);
     cursor: pointer;
     background: white;
     font-family: var(--font-sans);
+    flex-shrink: 0;
+    max-width: 160px;
+    box-sizing: border-box;
 }
 
 .sort-dropdown:focus {
@@ -216,8 +232,11 @@
 .doctors-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 2rem;
+    gap: 1.75rem;
     margin-bottom: 3rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .doctor-card {
@@ -229,6 +248,10 @@
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .doctor-card:hover {
@@ -371,7 +394,8 @@
     /* height: 72px; */
     padding: 0.5rem 0.75rem;
     margin-bottom: 0.75rem;
-    height: 56px;
+    min-height: 52px;
+    height: auto;
     background: #f8fafc;
     border-radius: 8px;
     border: 1px dashed var(--border);
@@ -397,12 +421,10 @@
     gap: 0.5rem;
     font-size: 0.85rem;
     color: var(--text-medium);
-    /* padding: 0.6rem 0.8rem; */
-    /* margin-bottom: 1rem; */
-    /* height: 72px; */
     padding: 0.5rem 0.75rem;
-    margin-bottom: 0.75em;
-    height: 56px;
+    margin-bottom: 0.75rem;
+    min-height: 52px;
+    height: auto;
     background: #f8fafc;
     border-radius: 8px;
     border: 1px dashed var(--border);
@@ -426,22 +448,36 @@
     display: flex;
     gap: 0.5rem;
     margin-top: auto;
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
 }
 
-.btn-view {
-    flex: 1;
-    /* padding: 0.75rem; */
-    padding: 0.65rem;
-    background: white;
-    color: var(--primary);
-    border: 2px solid var(--primary);
+.btn-view,
+.btn-book {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.65rem 0.4rem;
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     transition: all 0.3s ease;
     text-decoration: none;
     text-align: center;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-view {
+    background: white;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
 }
 
 .btn-view:hover {
@@ -449,23 +485,14 @@
 }
 
 .btn-book {
-    flex: 1;
-    /* padding: 0.75rem; */
-    padding: 0.65rem;
     background: var(--primary);
     color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    text-align: center;
+    border: 1.5px solid var(--primary);
 }
 
 .btn-book:hover {
     background: var(--primary-dark);
+    border-color: var(--primary-dark);
 }
 
 /* ============ NO RESULTS ============ */
@@ -537,52 +564,305 @@
     color: var(--text-dark);
 }
 
-/* ============ MOBILE FILTER TOGGLE ============ */
+/* ============ RESPONSIVE DESIGN SYSTEM (DESKTOP, TAB, MOBILE) ============ */
+
+/* Helper visibility classes */
 .desktop-search-only {
     display: block;
+}
+
+.mobile-tablet-only {
+    display: none !important;
 }
 
 .mobile-search-only {
     display: none;
 }
 
-/* Drawer CSS moved inside media query */
+/* ============ SYSTEM OF MEDICINE PILL BAR ============ */
+.system-pills-container {
+    margin-bottom: 1.5rem;
+    position: relative;
+    width: 100%;
+}
+
+.system-pills-scroll {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding: 0.25rem 0.15rem 0.6rem;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+    -webkit-overflow-scrolling: touch;
+}
+
+.system-pills-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+.system-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.15rem;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--text-medium);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    touch-action: manipulation;
+}
+
+.system-pill-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #f8faff;
+    transform: translateY(-1px);
+}
+
+.system-pill-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.28);
+}
+
+.system-pill-btn .pill-icon {
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+.system-pill-btn.active .pill-icon {
+    opacity: 1;
+}
+
+.system-badge-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: #eef2ff;
+    color: var(--primary);
+    border: 1px solid #c7d2fe;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+/* ============ MOBILE / TABLET FILTER TOOLBAR ============ */
+.mobile-tablet-filter-bar {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+    width: 100%;
+    flex-wrap: wrap;
+}
+
+.mobile-filter-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1.1rem;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 9999px;
+    color: var(--text-dark);
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+}
+
+.mobile-filter-trigger-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #f8faff;
+}
+
+.filter-count-badge {
+    background: var(--primary);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.active-filter-chips-scroll {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
+    padding: 0.2rem 0;
+}
+
+.active-filter-chips-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.75rem;
+    background: #eef2ff;
+    color: var(--primary-dark);
+    border: 1px solid #c7d2fe;
+    border-radius: 9999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    touch-action: manipulation;
+}
+
+.active-filter-chip:hover {
+    background: #e0e7ff;
+}
+
+.active-filter-chip i {
+    font-size: 0.65rem;
+    opacity: 0.8;
+}
+
+.clear-all-chip-btn {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-decoration: underline;
+}
+
+/* ============ TABLET BREAKPOINT (max-width: 1024px) ============ */
 @media (max-width: 1024px) {
     .desktop-search-only {
-        display: none;
+        display: none !important;
     }
 
-    .mobile-search-only {
-        display: block;
+    .mobile-tablet-only {
+        display: flex !important;
     }
 
     .main-content {
-        grid-template-columns: 1fr;
-        margin-top: 1rem;
+        grid-template-columns: 1fr !important;
+        margin: 1.75rem auto 3rem;
+        padding: 0 1.25rem;
+        gap: 1.5rem;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
 
-    /* Drawer container */
+    /* Tablet Search Bar */
+    .search-container {
+        margin: -1.5rem auto 0;
+        padding: 0 1.25rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .search-box {
+        padding: 1rem 1.25rem;
+    }
+
+    /* Tablet Doctors Grid: Strictly 2 columns */
+    .doctors-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1.25rem;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .doctor-card {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .doctor-info {
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .doctor-actions {
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0;
+    }
+
+    .btn-view, .btn-book {
+        flex: 1 1 0;
+        min-width: 0;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Drawer Overlay */
     .filters-drawer-overlay {
         display: block;
         position: fixed;
-        top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5);
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.5);
+        backdrop-filter: blur(4px);
         z-index: 1000;
+        animation: fadeIn 0.2s ease-out;
     }
+
+    /* Drawer Sidebar */
+    .filters-sidebar {
+        display: none;
+    }
+
     .filters-drawer {
         position: fixed;
-        top: 0; left: -100%;
-        width: 85%; max-width: 320px;
+        top: 0;
+        left: -100%;
+        width: 85%;
+        max-width: 340px;
         height: 100%;
         background: white;
         z-index: 1001;
-        transition: left 0.3s ease;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         overflow-y: auto;
         padding: 1.5rem;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-        display: flex !important; /* override any sidebar display none */
+        box-shadow: 4px 0 25px rgba(0, 0, 0, 0.15);
+        display: flex !important;
         flex-direction: column;
     }
+
     .filters-drawer.open {
         left: 0;
     }
@@ -592,198 +872,341 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1.5rem;
-        padding-bottom: 1rem;
+        margin-bottom: 1.25rem;
+        padding-bottom: 0.85rem;
         border-bottom: 1px solid var(--border);
     }
+
     .drawer-header h3 {
         margin: 0;
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 700;
         color: var(--text-dark);
     }
+
     .drawer-header .reset-btn {
-        font-size: 0.9rem;
+        font-size: 0.88rem;
         color: var(--primary);
         background: none;
         border: none;
         cursor: pointer;
         font-weight: 600;
+        padding: 0.2rem 0;
     }
+
     .drawer-header .close-btn {
         background: none;
         border: none;
-        font-size: 1.2rem;
+        font-size: 1.25rem;
         color: var(--text-medium);
         cursor: pointer;
+        padding: 0.2rem 0.5rem;
     }
 
-    /* Horizontal scrollable pills */
-    .mobile-filter-pills {
-        display: flex;
-        gap: 0.75rem;
-        overflow-x: auto;
-        padding: 0.5rem 1rem 1rem 0;
-        scrollbar-width: none; /* Firefox */
-    }
-    .mobile-filter-pills::-webkit-scrollbar {
-        display: none; /* Chrome/Safari/Opera */
-    }
-    .filter-pill {
-        white-space: nowrap;
-        padding: 0.5rem 1rem;
-        background: #f0f4ff;
-        border: 1px solid var(--primary-light);
-        border-radius: 20px;
-        font-size: 0.85rem;
-        cursor: pointer;
-        color: var(--primary-dark);
-    }
-    .filter-pill-icon {
-        width: 34px;
-        height: 34px;
-        padding: 0;
-        background: white;
-        border: 1px solid var(--border);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        font-size: 1rem;
-        flex-shrink: 0;
-    }
-
-    /* Mobile Drawer Search Form */
-    .mobile-search-only form {
+    /* Drawer Search Form */
+    .drawer-search-wrapper form {
+        display: flex !important;
         flex-direction: column !important;
-        gap: 0.75rem;
-    }
-    
-    .mobile-search-only .search-button {
-        width: 100%;
+        gap: 0.5rem !important;
+        width: 100% !important;
     }
 
-    .filters-sidebar {
-        display: none;
+    .drawer-search-wrapper .search-input,
+    .drawer-search-wrapper .search-button {
+        width: 100% !important;
+        box-sizing: border-box !important;
     }
-    .filters-sidebar.mobile-open {
-        display: none;
+
+    /* Drawer Footer */
+    .drawer-footer {
+        margin-top: auto;
+        padding-top: 1.25rem;
+        position: sticky;
+        bottom: -1.5rem;
+        background: white;
+        padding-bottom: 1rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .apply-filters-btn {
+        width: 100%;
+        padding: 0.85rem;
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        transition: all 0.2s ease;
+    }
+
+    .apply-filters-btn:hover {
+        background: var(--primary-dark);
     }
 }
 
-@media (max-width: 768px) {
-    .search-box {
-        flex-direction: column;
-    }
-
-    .search-button {
-        width: 100%;
-    }
-
-    .doctors-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .results-header {
-        flex-direction: column;
-    }
-
-    .doctor-actions {
-        flex-direction: column;
-    }
-
+/* ============ MOBILE BREAKPOINT (max-width: 640px) ============ */
+@media (max-width: 640px) {
     .page-header {
-        padding: 1.5rem 1rem;
+        margin-top: 60px;
+        padding: 2rem 1rem;
     }
 
     .page-header h1 {
-        font-size: 1.8rem;
+        font-size: 1.65rem;
+        margin-bottom: 0.5rem;
     }
 
     .page-header p {
         font-size: 0.85rem;
     }
+
+    .search-container {
+        margin: -1.25rem auto 0;
+        padding: 0 0.85rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .search-box {
+        padding: 0.65rem 0.85rem;
+        border-radius: 12px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        gap: 0.5rem;
+    }
+
+    .search-input {
+        font-size: 0.88rem;
+        padding: 0.6rem 0.75rem;
+        min-width: 0;
+    }
+
+    .search-button {
+        padding: 0.6rem 1rem;
+        font-size: 0.88rem;
+        flex-shrink: 0;
+    }
+
+    .main-content {
+        padding: 0 0.85rem;
+        margin: 1.25rem auto 2.5rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Mobile Doctors Grid: 1 column */
+    .doctors-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .doctor-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .doctor-image {
+        height: 190px;
+    }
+
+    .doctor-info {
+        padding: 0.9rem;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+
+    .doctor-name {
+        font-size: 1.1rem;
+    }
+
+    .results-header {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        gap: 0.5rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .results-info {
+        font-size: 0.82rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+
+    .sort-dropdown {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.8rem;
+        max-width: 135px;
+        min-width: 100px;
+        flex-shrink: 0;
+        box-sizing: border-box;
+    }
+
+    .doctor-actions {
+        display: flex;
+        flex-direction: row;
+        gap: 0.4rem;
+        width: 100%;
+        box-sizing: border-box;
+        min-width: 0;
+    }
+
+    .btn-view, .btn-book {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0.6rem 0.35rem;
+        font-size: 0.82rem;
+        min-height: 38px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .system-pills-container {
+        margin-bottom: 1rem;
+        width: 100%;
+        max-width: 100%;
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .system-pills-scroll {
+        padding: 0.25rem 1.5rem 0.5rem 0.15rem;
+        gap: 0.4rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .system-pill-btn {
+        padding: 0.45rem 0.85rem;
+        font-size: 0.8rem;
+        gap: 0.35rem;
+    }
+}
+
+/* ============ SMALL MOBILE BREAKPOINT (max-width: 480px) ============ */
+@media (max-width: 480px) {
+    .page-header {
+        padding: 1.75rem 0.75rem 2rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .page-header p {
+        font-size: 0.82rem;
+    }
+
+    .search-container {
+        padding: 0 0.75rem;
+    }
+
+    .search-box {
+        padding: 0.6rem 0.75rem;
+    }
+
+    .search-input {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .search-button {
+        padding: 0.55rem 0.9rem;
+        font-size: 0.85rem;
+    }
+
+    .search-btn-text {
+        display: none;
+    }
+
+    .main-content {
+        padding: 0 0.75rem;
+        margin-top: 1rem;
+    }
+
+    .doctor-image {
+        height: 175px;
+    }
+
+    .doctor-info {
+        padding: 0.85rem;
+    }
+
+    .doctor-name {
+        font-size: 1.05rem;
+    }
+
+    .doctor-details {
+        font-size: 0.8rem;
+    }
+
+    .doctor-actions {
+        gap: 0.35rem;
+    }
+
+    .btn-view, .btn-book {
+        font-size: 0.8rem;
+        padding: 0.55rem 0.35rem;
+    }
+
+    .pagination {
+        gap: 0.25rem;
+        margin-top: 1.75rem;
+    }
+
+    .pagination button {
+        min-width: 32px;
+        height: 32px;
+        padding: 0 0.35rem;
+        font-size: 0.8rem;
+    }
 }
 
 /* ============ DASHBOARD SPECIFIC OVERRIDES ============ */
+.dashboard-find-doctor {
+    padding: 1rem 0 !important;
+}
+
+.dashboard-find-doctor .main-content {
+    grid-template-columns: 1fr !important;
+    margin-top: 0.5rem !important;
+    padding: 0 1rem !important;
+}
+
 .dashboard-find-doctor .desktop-search-only {
     display: none !important;
 }
-.dashboard-find-doctor .mobile-search-only {
-    display: block !important;
-}
-.dashboard-find-doctor .main-content {
-    grid-template-columns: 1fr !important;
-    margin-top: 1rem !important;
-}
-.dashboard-find-doctor .filters-drawer-overlay {
-    display: block;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 1000;
-}
-.dashboard-find-doctor .filters-drawer {
-    position: fixed !important;
-    top: 0 !important;
-    left: -100% !important;
-    width: 320px !important;
-    max-width: 85% !important;
-    height: 100% !important;
-    background: white !important;
-    z-index: 1001 !important;
-    transition: left 0.3s ease !important;
-    overflow-y: auto !important;
-    padding: 1.5rem !important;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1) !important;
+
+.dashboard-find-doctor .mobile-tablet-only {
     display: flex !important;
-    flex-direction: column !important;
 }
-.dashboard-find-doctor .filters-drawer.open {
-    left: 0 !important;
+
+.dashboard-find-doctor .doctors-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+    gap: 1.25rem !important;
 }
-.dashboard-find-doctor .mobile-filter-pills {
-    display: flex !important;
-    gap: 0.75rem;
-    overflow-x: auto;
-    padding: 0.5rem 1rem 1rem 0;
-    scrollbar-width: none;
+
+@media (max-width: 640px) {
+    .dashboard-find-doctor .doctors-grid {
+        grid-template-columns: 1fr !important;
+    }
 }
-.dashboard-find-doctor .mobile-filter-pills::-webkit-scrollbar {
-    display: none;
-}
-.dashboard-find-doctor .filter-pill {
-    white-space: nowrap;
-    padding: 0.5rem 1rem;
-    background: #f0f4ff;
-    border: 1px solid var(--primary-light);
-    border-radius: 20px;
-    font-size: 0.85rem;
-    cursor: pointer;
-    color: var(--primary-dark);
-}
-.dashboard-find-doctor .filter-pill-icon {
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 1rem;
-    flex-shrink: 0;
-}
-.dashboard-find-doctor .mobile-search-only form {
-    flex-direction: column !important;
-    gap: 0.75rem;
-}
-.dashboard-find-doctor .mobile-search-only .search-button {
-    width: 100%;
-}
-.dashboard-find-doctor aside.filters-sidebar:not(.open) {
-    display: none !important;
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }

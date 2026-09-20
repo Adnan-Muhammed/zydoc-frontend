@@ -6,7 +6,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 
 import { updateDoctorProfile } from '@/redux/features/doctor/doctorThunk';
 import { setCredentials } from '@/redux/auth/authSlice';
-
+ 
 import { DraftState, DEFAULT_DRAFT } from './_components/types';
 import DraftBanner from './_components/DraftBanner';
 import StepProgressHeader from './_components/StepProgressHeader';
@@ -108,7 +108,7 @@ export default function CompleteDoctorProfileClient() {
             return;
         }
         if (currentStep === 2) {
-            if (!draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
+            if (!draft.systemOfMedicine || !draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
                 alert('Please complete all professional credential details.');
                 return;
             }
@@ -232,6 +232,7 @@ export default function CompleteDoctorProfileClient() {
                 firstName: draft.firstName,
                 lastName: draft.lastName,
                 phone: draft.phone,
+                systemOfMedicine: draft.systemOfMedicine || 'Modern Medicine',
                 specialty: draft.specialty,
                 licenseNumber: draft.licenseNumber,
                 yearsOfExperience: Number(draft.yearsOfExperience),

@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import Input from '@/components/ui/Input';
 import { DraftState, Qualification } from './types';
+import { SYSTEMS_LIST, getSystemConfigById } from '@/constants/systemsOfMedicine';
 
 const AVAILABLE_LANGUAGES = ['English', 'Malayalam', 'Hindi', 'Tamil', 'Spanish', 'French'];
 
 interface StepCredentialsSectionProps {
     draft: Pick<
-        DraftState,
-        'specialty' | 'licenseNumber' | 'yearsOfExperience' | 'expertiseTags' | 'qualifications' | 'selectedLanguages'
+        DraftState, 
+        'systemOfMedicine' | 'specialty' | 'licenseNumber' | 'yearsOfExperience' | 'expertiseTags' | 'qualifications' | 'selectedLanguages'
     >;
     setDraft: (updater: Partial<DraftState>) => void;
     serverErrors: { field?: string; message?: string } | null;
@@ -24,7 +25,26 @@ export default function StepCredentialsSection({
     qualificationFiles,
     setQualificationFiles,
 }: StepCredentialsSectionProps) {
-    const { specialty, licenseNumber, yearsOfExperience, expertiseTags, qualifications, selectedLanguages } = draft;
+    const {
+        systemOfMedicine = 'Modern Medicine',
+        specialty,
+        licenseNumber,
+        yearsOfExperience,
+        expertiseTags,
+        qualifications,
+        selectedLanguages,
+    } = draft;
+
+    const currentSystemConfig = getSystemConfigById(systemOfMedicine);
+
+    const handleSystemChange = (newSystemId: string) => {
+        if (newSystemId !== systemOfMedicine) {
+            setDraft({
+                systemOfMedicine: newSystemId,
+                specialty: '', // Automatically reset to avoid mismatched data
+            });
+        }
+    };
 
     const [currentTag, setCurrentTag] = useState('');
     const [newDegree, setNewDegree] = useState('');
@@ -89,21 +109,78 @@ export default function StepCredentialsSection({
     return (
         <div className="grid grid-cols-1 gap-6 animate-fade-in items-start py-4 px-2">
             <div className="space-y-6">
+                {/* System of Medicine Selection */}
+                <div className="space-y-2.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                                System of Medicine *
+                            </label>
+                            <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
+                                Select your clinical discipline to adapt specialty focuses and licensing details
+                            </p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50">
+                            {currentSystemConfig.label}
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-1">
+                        {SYSTEMS_LIST.map((sys) => {
+                            const isSelected = (systemOfMedicine || 'Modern Medicine') === sys.id;
+                            return (
+                                <button
+                                    type="button"
+                                    key={sys.id}
+                                    onClick={() => handleSystemChange(sys.id)}
+                                    className={`p-3.5 rounded-xl border text-left cursor-pointer transition select-none shadow-xs flex flex-col justify-between gap-1.5 focus:outline-hidden ${
+                                        isSelected
+                                            ? 'border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold ring-2 ring-blue-500/20'
+                                            : 'border-slate-200 dark:border-[#24274d] text-slate-600 dark:text-slate-400 bg-white dark:bg-[#151732] hover:bg-slate-50 dark:hover:bg-[#1a1c3d]/40'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between w-full gap-1">
+                                        <span className="text-xs sm:text-sm font-bold truncate">
+                                            {sys.id}
+                                        </span>
+                                        <div
+                                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                                isSelected
+                                                    ? 'border-blue-500 bg-blue-500 text-white'
+                                                    : 'border-slate-300 dark:border-slate-600'
+                                            }`}
+                                        >
+                                            {isSelected && (
+                                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                            )}
+                                        </div>
+                                    </div>
+                                    <span className="text-[11px] text-slate-400 dark:text-slate-500 line-clamp-1 font-normal">
+                                        {sys.id === 'Modern Medicine' ? 'Allopathy' : `${sys.specialties.length} Specialties`}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     <div className="space-y-2 sm:col-span-2">
-                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">Primary Specialty Area *</label>
+                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+                            Primary Specialty Area *
+                        </label>
                         <select
                             value={specialty}
                             onChange={(e) => setDraft({ specialty: e.target.value })}
                             required
                             className="w-full rounded-xl border border-slate-300 dark:border-[#24274d] bg-white dark:bg-[#151732] px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500/20 transition h-[46px] font-medium"
                         >
-                            <option value="">Choose Department</option>
-                            <option value="Cardiology">Cardiology</option>
-                            <option value="Neurology">Neurology</option>
-                            <option value="Pediatrics">Pediatrics</option>
-                            <option value="Dermatology">Dermatology</option>
-                            <option value="General Medicine">General Medicine</option>
+                            <option value="">Choose {currentSystemConfig.id} Specialty</option>
+                            {currentSystemConfig.specialties.map((spec) => (
+                                <option key={spec} value={spec}>
+                                    {spec}
+                                </option>
+                            ))}
                         </select>
                     </div>
                     <Input
@@ -121,10 +198,20 @@ export default function StepCredentialsSection({
                 {/* Medical Registration Number */}
                 <div className="space-y-1 w-full">
                     <Input
-                        label="Medical Registration Number *"
+                        label={`${currentSystemConfig.licenseLabel} *`}
                         value={licenseNumber}
                         onChange={(e) => setDraft({ licenseNumber: e.target.value })}
-                        placeholder="KMC-REG-2026X"
+                        placeholder={
+                            currentSystemConfig.id === 'Modern Medicine'
+                                ? 'e.g. KMC-REG-2026X'
+                                : currentSystemConfig.id === 'Dentistry'
+                                ? 'e.g. DCI-REG-4581A'
+                                : currentSystemConfig.id === 'Ayurveda'
+                                ? 'e.g. NCISM-AYUR-12049'
+                                : currentSystemConfig.id === 'Homeopathy'
+                                ? 'e.g. NCH-HOM-88321'
+                                : 'e.g. RCI-PSY-09923'
+                        }
                         className={`dark:bg-[#151732] text-sm py-3 font-medium placeholder:font-normal transition ${
                             serverErrors?.field === 'licenseNumber'
                                 ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'
@@ -228,13 +315,34 @@ export default function StepCredentialsSection({
                     {/* Add Qualification Form */}
                     <div className="p-4 sm:p-5 bg-slate-50 dark:bg-[#1a1c3d]/30 border border-slate-200 dark:border-[#24274d] rounded-xl flex flex-col gap-4 shadow-sm animate-fade-in">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                            <Input
-                                label="Qualification / Fellowship"
-                                value={newDegree}
-                                onChange={(e) => setNewDegree(e.target.value)}
-                                placeholder="e.g. MD Cardiology"
-                                className="dark:bg-[#151732] dark:border-[#24274d] text-sm py-2.5 font-medium placeholder:font-normal"
-                            />
+                            <div className="space-y-1.5">
+                                <Input
+                                    label="Qualification / Fellowship *"
+                                    value={newDegree}
+                                    onChange={(e) => setNewDegree(e.target.value)}
+                                    placeholder={`e.g. ${currentSystemConfig.degreePresets.slice(0, 2).join(' or ')}`}
+                                    className="dark:bg-[#151732] dark:border-[#24274d] text-sm py-2.5 font-medium placeholder:font-normal"
+                                />
+                                {currentSystemConfig.degreePresets.length > 0 && (
+                                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                                        <span className="text-[10px] text-slate-400 font-semibold mr-0.5">Suggestions:</span>
+                                        {currentSystemConfig.degreePresets.map((deg) => (
+                                            <button
+                                                type="button"
+                                                key={deg}
+                                                onClick={() => setNewDegree(deg)}
+                                                className={`px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
+                                                    newDegree === deg
+                                                        ? 'bg-blue-600 text-white shadow-xs'
+                                                        : 'bg-white dark:bg-[#151732] text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 border border-slate-200 dark:border-[#24274d]'
+                                                }`}
+                                            >
+                                                {deg}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                             <Input
                                 label="Institution Name"
                                 value={newInstitution}

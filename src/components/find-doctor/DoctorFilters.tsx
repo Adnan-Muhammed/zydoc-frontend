@@ -55,8 +55,8 @@ export default function DoctorFilters() {
                 onChange={handleInputChange}
                 aria-label="Search doctors"
             />
-            <button type="submit" className="search-button">
-                <i className="fas fa-search"></i> Search
+            <button type="submit" className="search-button" aria-label="Search">
+                <i className="fas fa-search"></i> <span className="search-btn-text">Search</span>
             </button>
         </form>
     );

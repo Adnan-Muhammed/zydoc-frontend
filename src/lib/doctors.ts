@@ -7,7 +7,7 @@ export async function getDoctors(searchParams?: any) {
       if (value !== undefined && value !== null) {
         params.append(key, String(value));
       }
-    });
+    }); 
   }
   
   const query = params.toString() ? `?${params.toString()}` : '';
@@ -27,7 +27,7 @@ export async function getDoctorById(id: string) {
     { cache: "no-store" }
   );
   if (!res.ok) return null;
-  return res.json();
+  return res.json(); 
 }
 
 export const getDoctorsList = async (searchParams?: any) => {
@@ -68,6 +68,7 @@ export const getDoctorsList = async (searchParams?: any) => {
             id: String(doc.id || doc._id),
             name: doc.name || `${doc.firstName || ""} ${doc.lastName || ""}`.trim() || "Doctor",
             specialty: doc.specialty || "General Practitioner",
+            systemOfMedicine: doc.systemOfMedicine || "Modern Medicine",
             experience: `${doc.yearsOfExperience || 0} years experience`,
             location: location,
             type: typeStr,
@@ -83,4 +84,4 @@ export const getDoctorsList = async (searchParams?: any) => {
     });
 
     return { doctors, pagination: response.pagination };
-};
+};

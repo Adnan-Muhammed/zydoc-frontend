@@ -89,6 +89,7 @@ export interface DoctorProfile {
     email?: string;
     phone?: string;
     specialty?: string;
+    systemOfMedicine?: string;
     yearsOfExperience?: number;
     bio?: string; 
     avatarUrl?: string;

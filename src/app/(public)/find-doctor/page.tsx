@@ -84,7 +84,7 @@ export default async function FindDoctorPage({
     return (
 
 
-        <div>
+        <div className="w-full max-w-full overflow-x-hidden">
             {/* <Header user={user} /> */}
 
             {/* SEO-friendly static page header — rendered in HTML, crawlable */}
@@ -94,7 +94,7 @@ export default async function FindDoctorPage({
             </section>
 
             {/* Static search bar shell — interactivity handled in DoctorFilters client component */}
-            <div className="desktop-search-only">
+            <div className="search-container-section">
                 <div className="search-container">
                     <div className="search-box">
                         <DoctorFilters />

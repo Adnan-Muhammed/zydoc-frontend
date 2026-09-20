@@ -33,6 +33,7 @@ export interface WorkingHours {
 
 export interface DraftState {
     currentStep: number;
+    systemOfMedicine: string;
     firstName: string;
     lastName: string;
     phone: string;
@@ -56,6 +57,7 @@ export interface DraftState {
 
 export const DEFAULT_DRAFT: DraftState = {
     currentStep: 1,
+    systemOfMedicine: 'Modern Medicine',
     firstName: '',
     lastName: '',
     phone: '',
