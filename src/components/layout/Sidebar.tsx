@@ -31,34 +31,41 @@ interface NavSection {
     links: LinkItem[];
 }
 
-const ADMIN_NAV: NavSection[] = [
-    {
-        label: 'Overview',
-        links: [
-            { href: '/admin/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
-            { href: '/admin/appointments', icon: 'fas fa-calendar-check', label: 'Appointments' },
-            { href: '/admin/refunds', icon: 'fas fa-hand-holding-dollar', label: 'Refund Requests' },
-            { href: '/admin/analytics', icon: 'fas fa-chart-line', label: 'Analytics' },
-        ],
-    },
-    {
-        label: 'User Management',
-        links: [
-            { href: '/admin/doctors', icon: 'fas fa-user-doctor', label: 'Doctors' },
-            { href: '/admin/patients', icon: 'fas fa-users', label: 'Patients' },
-            { href: '/admin/approvals', icon: 'fas fa-user-check', label: 'Approvals', badge: { text: '7', color: 'badge-yellow' } },
-        ],
-    },
-    {
-        label: 'System',
-        links: [
-            { href: '/admin/support', icon: 'fas fa-headset', label: 'Support', badge: { text: '12', color: 'badge-red' } },
-            { href: '/admin/transactions', icon: 'fas fa-credit-card', label: 'Transactions' },
-            { href: '/admin/profile', icon: 'fas fa-user-gear', label: 'My Profile' },
-            { href: '/admin/settings', icon: 'fas fa-gear', label: 'Settings' },
-        ],
-    },
-];
+function getAdminNav(pendingApprovals: number = 0, pendingRefunds: number = 0): NavSection[] {
+    return [
+        {
+            label: 'Core Operations',
+            links: [
+                { href: '/admin/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
+                { 
+                    href: '/admin/approvals', 
+                    icon: 'fas fa-user-check', 
+                    label: 'Approvals', 
+                    badge: pendingApprovals > 0 ? { text: String(pendingApprovals), color: 'badge-yellow' } : undefined 
+                },
+                { href: '/admin/doctors', icon: 'fas fa-user-doctor', label: 'Doctors' },
+                { href: '/admin/patients', icon: 'fas fa-users', label: 'Patients' },
+                { href: '/admin/appointments', icon: 'fas fa-calendar-check', label: 'Appointments' },
+                { 
+                    href: '/admin/refunds', 
+                    icon: 'fas fa-hand-holding-dollar', 
+                    label: 'Refunds',
+                    badge: pendingRefunds > 0 ? { text: String(pendingRefunds), color: 'badge-yellow' } : undefined
+                },
+            ],
+        },
+        {
+            label: 'System & Control',
+            links: [
+                { href: '/admin/settings', icon: 'fas fa-gear', label: 'Settings' },
+                { href: '/admin/analytics', icon: 'fas fa-chart-line', label: 'Analytics' },
+                { href: '/admin/financials', icon: 'fas fa-file-invoice-dollar', label: 'Financials' },
+                { href: '/admin/transactions', icon: 'fas fa-credit-card', label: 'Transactions' },
+                { href: '/admin/notifications', icon: 'fas fa-bell', label: 'Notifications' },
+            ],
+        },
+    ];
+}
 
 function getDoctorNav(isDoctorLocked: boolean): NavSection[] {
     return [
@@ -73,16 +80,16 @@ function getDoctorNav(isDoctorLocked: boolean): NavSection[] {
         {
             label: 'Patients',
             links: [
-                { href: '/doctor/messages', icon: 'fas fa-comments', label: 'Messages', badge: { text: '3', color: 'badge-red' }, disabled: isDoctorLocked },
                 { href: '/doctor/prescriptions', icon: 'fas fa-prescription-bottle', label: 'Prescriptions', disabled: isDoctorLocked },
             ],
         },
         {
             label: 'Account',
             links: [
-                { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings', disabled: isDoctorLocked },
+                { href: '/doctor/earnings', icon: 'fas fa-dollar-sign', label: 'Earnings & Payouts', disabled: isDoctorLocked },
                 { href: '/doctor/reviews', icon: 'fas fa-star', label: 'My Reviews', disabled: isDoctorLocked },
                 { href: '/doctor/profile', icon: 'fas fa-address-card', label: 'Profile', disabled: isDoctorLocked },
+                { href: '/doctor/security', icon: 'fas fa-shield-alt', label: 'Security', disabled: isDoctorLocked },
             ],
         },
     ];
@@ -101,15 +108,18 @@ const PATIENT_NAV: NavSection[] = [
         label: 'Medical',
         links: [
             { href: '/patient/prescriptions', icon: 'fas fa-prescription', label: 'Prescriptions' },
-            { href: '/patient/records', icon: 'fas fa-file-medical', label: 'Medical Records' },
+        
+            //  This is for future AI Implementation   
+            // { href: '/patient/records', icon: 'fas fa-file-medical', label: 'Medical Records' },
         ],
     },
     {
         label: 'Account',
         links: [
-            { href: '/patient/wallet', icon: 'fas fa-wallet', label: 'Wallet & Refunds' },
+            { href: '/patient/wallet', icon: 'fas fa-wallet', label: 'Wallet' },
             { href: '/patient/reviews', icon: 'fas fa-star', label: 'My Reviews' },
             { href: '/patient/profile', icon: 'fas fa-user', label: 'My Profile' },
+            { href: '/patient/security', icon: 'fas fa-shield-alt', label: 'Security' },
             { href: '/patient/settings', icon: 'fas fa-gear', label: 'Settings' },
         ],
     },
@@ -127,10 +137,11 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     const pathname = usePathname();
     const dispatch = useAppDispatch();
     const { user } = useAppSelector((state) => state.auth);
+    const { pendingDoctorsTotal, pendingRefundsTotal } = useAppSelector((state) => state.admin);
 
     const isDoctorLocked = user?.verificationStatus !== 'approved';
     const navSections: NavSection[] =
-        role === 'admin' ? ADMIN_NAV :
+        role === 'admin' ? getAdminNav(pendingDoctorsTotal, pendingRefundsTotal) :
         role === 'doctor' ? getDoctorNav(isDoctorLocked) :
         PATIENT_NAV;
 
@@ -138,12 +149,14 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         dispatch(logoutUser())
             .unwrap()
             .then(() => {
-                router.replace('/');
+                const target = role === 'admin' ? '/admin/login' : '/';
+                router.replace(target);
                 router.refresh();
             })
             .catch((err: unknown) => {
                 console.error('Logout failed:', err);
-                router.replace('/');
+                const target = role === 'admin' ? '/admin/login' : '/';
+                router.replace(target);
                 router.refresh();
             });
     };
@@ -175,7 +188,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
                         <div className="nav-section" key={idx}>
                             <div className="nav-label">{section.label}</div>
                             {section.links.map((link, linkIdx) => {
-                                const isActive = pathname.startsWith(link.href);
+                                const isActive = pathname === link.href || pathname.startsWith(`${link.href}/`);
                                 if (link.disabled) {
                                     return (
                                         <div

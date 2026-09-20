@@ -4,9 +4,9 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { fetchDoctorProfile } from '@/redux/features/doctor/doctorThunk';
-import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
+import { fetchDoctorAppointments, cancelAppointment } from '@/redux/features/appointment/appointmentThunk';
 import { getAvailableSlots, toggleDoctorSlotOverride, manualBookDoctorSlot } from "@/lib/appointments";
-
+ 
 /* ═══════════════════════════════════════════════════════════════════
    Constants & Helpers (Matching BookingForm.tsx Exactly)
 ═══════════════════════════════════════════════════════════════════ */
@@ -17,7 +17,7 @@ const MONTH_NAMES = [
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_NAMES_JS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-export interface DoctorSlot {
+export interface DoctorSlot { 
     time: string;
     status: 'available' | 'booked' | 'past' | 'locked' | 'Locked' | 'Booked' | 'unavailable' | 'break' | 'closed' | string;
     available?: boolean;
@@ -105,6 +105,180 @@ function normalizeSlotTime(timeStr: string) {
     return `${String(h).padStart(2, "0")}:${mStr} ${ampm}`;
 }
 
+function parseTimeToMinutes(timeStr: string): number {
+    if (!timeStr) return 0;
+    let cleaned = timeStr.trim();
+    if (cleaned.includes('-')) {
+        cleaned = cleaned.split('-')[0].trim();
+    } else if (cleaned.toLowerCase().includes(' to ')) {
+        cleaned = cleaned.split(/ to /i)[0].trim();
+    }
+    const match = cleaned.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return 0;
+    let [_, hStr, mStr, ampm] = match;
+    let h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10);
+    if (ampm) {
+        const upper = ampm.toUpperCase();
+        if (upper === 'PM' && h < 12) h += 12;
+        if (upper === 'AM' && h === 12) h = 0;
+    }
+    return h * 60 + m;
+}
+
+function formatMinutesTo12H(totalMinutes: number): string {
+    const normMins = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const h24 = Math.floor(normMins / 60);
+    const m = normMins % 60;
+    const ampm = h24 >= 12 ? 'PM' : 'AM';
+    const h12 = h24 % 12 || 12;
+    return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+/**
+ * Calculates start and fill width percentages for an off-grid event overlapping a grid slot.
+ * Used to render dynamic linear-gradient CSS background fills on grid buttons.
+ *
+ * @param slotStart - Slot start time in minutes from midnight (e.g. 14:00 = 840)
+ * @param slotEnd - Slot end time in minutes from midnight (e.g. 14:15 = 855)
+ * @param eventStart - Off-grid event start time in minutes from midnight (e.g. 14:10 = 850)
+ * @param eventEnd - Off-grid event end time in minutes from midnight (e.g. 14:20 = 860)
+ */
+function calculateOverlapPercentages(
+    slotStart: number,
+    slotEnd: number,
+    eventStart: number,
+    eventEnd: number
+) {
+    const slotDuration = slotEnd - slotStart;
+    if (slotDuration <= 0) {
+        return {
+            startPercentage: 0,
+            startOffsetPercentage: 0,
+            fillWidthPercentage: 0,
+            overlapMinutes: 0,
+            hasOverlap: false
+        };
+    }
+
+    const overlapStart = Math.max(slotStart, eventStart);
+    const overlapEnd = Math.min(slotEnd, eventEnd);
+
+    if (overlapEnd <= overlapStart) {
+        return {
+            startPercentage: 0,
+            startOffsetPercentage: 0,
+            fillWidthPercentage: 0,
+            overlapMinutes: 0,
+            hasOverlap: false
+        };
+    }
+
+    const overlapMinutes = overlapEnd - overlapStart;
+    const fillWidthPercentage = ((overlapEnd - overlapStart) / slotDuration) * 100;
+    const startOffsetPercentage = ((overlapStart - slotStart) / slotDuration) * 100;
+
+    return {
+        startPercentage: Number(startOffsetPercentage.toFixed(2)),
+        startOffsetPercentage: Number(startOffsetPercentage.toFixed(2)),
+        fillWidthPercentage: Number(fillWidthPercentage.toFixed(2)),
+        overlapMinutes,
+        hasOverlap: true
+    };
+}
+
+interface EventThemeConfig {
+    fillColor: string;
+    borderClass: string;
+    badgeBgClass: string;
+    badgeTextClass: string;
+    badgeBorderClass: string;
+    textClass: string;
+    label: string;
+    icon: string;
+}
+
+/**
+ * Returns dynamic theme colors, borders, and icons for overlapping events in Grid View.
+ * Matches:
+ *  - Break: Red/Pink (rgba(255, 99, 132, 0.25) / rose)
+ *  - Manual Doctor Booking: Orange/Amber (rgba(245, 158, 11, 0.25) / amber)
+ *  - Patient Appointment: Blue/Indigo (online) or Green/Emerald (in-person)
+ */
+function getEventTheme(eventType: string, consultationType?: string): EventThemeConfig {
+    if (eventType === 'break') {
+        return {
+            fillColor: 'rgba(255, 99, 132, 0.25)', // Red / Pink theme
+            borderClass: 'border-rose-400 border-dashed hover:border-rose-600',
+            badgeBgClass: 'bg-rose-100/90',
+            badgeTextClass: 'text-rose-900',
+            badgeBorderClass: 'border-rose-300',
+            textClass: 'text-rose-600',
+            label: 'Break Overlap',
+            icon: 'fa-mug-hot'
+        };
+    }
+
+    if (eventType === 'manual_appointment') {
+        return {
+            fillColor: 'rgba(245, 158, 11, 0.25)', // Orange / Amber theme
+            borderClass: 'border-amber-400 border-dashed hover:border-amber-600',
+            badgeBgClass: 'bg-amber-100/90',
+            badgeTextClass: 'text-amber-900',
+            badgeBorderClass: 'border-amber-300',
+            textClass: 'text-amber-700',
+            label: 'Doctor Booking',
+            icon: 'fa-user-tag'
+        };
+    }
+
+    // Patient Appointment: In-Person (Green/Emerald) or Online (Blue/Indigo)
+    const isPhysical = consultationType === 'offline' || consultationType === 'physical';
+    if (isPhysical) {
+        return {
+            fillColor: 'rgba(16, 185, 129, 0.25)', // Green / Emerald theme
+            borderClass: 'border-emerald-400 border-dashed hover:border-emerald-600',
+            badgeBgClass: 'bg-emerald-100/90',
+            badgeTextClass: 'text-emerald-900',
+            badgeBorderClass: 'border-emerald-300',
+            textClass: 'text-emerald-700',
+            label: 'Clinic Appt Overlap',
+            icon: 'fa-hospital'
+        };
+    }
+
+    return {
+        fillColor: 'rgba(99, 102, 241, 0.25)', // Blue / Indigo theme
+        borderClass: 'border-indigo-400 border-dashed hover:border-indigo-600',
+        badgeBgClass: 'bg-indigo-100/90',
+        badgeTextClass: 'text-indigo-900',
+        badgeBorderClass: 'border-indigo-300',
+        textClass: 'text-indigo-700',
+        label: 'Online Appt Overlap',
+        icon: 'fa-video'
+    };
+}
+
+function getPatientDisplayName(appointmentOrPatient: any): string {
+    if (!appointmentOrPatient) return "Patient";
+    if (appointmentOrPatient.manualPatientDetails?.name) {
+        const op = appointmentOrPatient.manualPatientDetails.opNumber ? ` (OP: ${appointmentOrPatient.manualPatientDetails.opNumber})` : '';
+        return `${appointmentOrPatient.manualPatientDetails.name}${op}`;
+    }
+    if (appointmentOrPatient.profileId?.firstName) {
+        return `${appointmentOrPatient.profileId.firstName} ${appointmentOrPatient.profileId.lastName || ''}`.trim();
+    }
+    if (appointmentOrPatient.firstName) {
+        return `${appointmentOrPatient.firstName} ${appointmentOrPatient.lastName || ''}`.trim();
+    }
+    if (appointmentOrPatient.googleName) return appointmentOrPatient.googleName;
+    if (appointmentOrPatient.email) {
+        const emailName = appointmentOrPatient.email.split('@')[0];
+        return emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
+    }
+    return "Patient";
+}
+
 export default function ScheduleClient() {
     const dispatch = useAppDispatch();
     const { profile: doctorProfile } = useAppSelector((state) => state.doctor);
@@ -117,7 +291,7 @@ export default function ScheduleClient() {
         (typeof user?.profileId === 'string' ? user.profileId : user?.profileId?._id) ||
         doctorProfile?.profileId ||
         doctorProfile?._id ||
-        doctorProfile?.id ||
+        doctorProfile?.id || 
         user?._id ||
         user?.id ||
         doctor?._id ||
@@ -141,8 +315,25 @@ export default function ScheduleClient() {
 
     const slotDuration = doctor.slotDuration || doctorProfile?.slotDuration || 15;
 
+    const isSameDay = (a: Date, b: Date) =>
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate();
+
+    const isPastDate = (d: Date) => d < today;
+
     /* ── State ── */
     const [selectedDate, setSelectedDate] = useState<Date>(today);
+
+    const isSlotInPast = useCallback((timeStr: string) => {
+        if (isPastDate(selectedDate)) return true;
+        if (isSameDay(selectedDate, today)) {
+            const slotMins = parseTimeToMinutes(timeStr);
+            const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+            return slotMins <= nowMins;
+        }
+        return false;
+    }, [selectedDate, today]);
     const [calendarYear, setCalendarYear] = useState(() => today.getFullYear());
     const [calendarMonth, setCalendarMonth] = useState(() => today.getMonth());
     const [showFullCalendar, setShowFullCalendar] = useState<boolean>(false);
@@ -160,6 +351,11 @@ export default function ScheduleClient() {
     const [isBookingManual, setIsBookingManual] = useState<boolean>(false);
     const [isUpdatingSlot, setIsUpdatingSlot] = useState<boolean>(false);
     const [slotActionFeedback, setSlotActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [viewMode, setViewMode] = useState<'grid' | 'agenda'>('grid');
+    const [dayOverrides, setDayOverrides] = useState<any[]>([]);
+    const [cancellingAppointmentId, setCancellingAppointmentId] = useState<string | null>(null);
+    const [appointmentToCancel, setAppointmentToCancel] = useState<any | null>(null);
+    const [isRemovingBreak, setIsRemovingBreak] = useState<boolean>(false);
 
     // Initial data fetch
     useEffect(() => {
@@ -194,24 +390,127 @@ export default function ScheduleClient() {
             const res = await getAvailableSlots(doctorId, dateString, 'all');
             if (res.success) {
                 setAllSlots(res.allSlots || []);
+                setDayOverrides(res.overrides || res.slotOverrides || res.breaks || []);
                 setDoctorWorking(res.doctorWorking !== false);
             } else {
                 setAllSlots([]);
+                setDayOverrides([]);
                 setDoctorWorking(false);
             }
         } catch {
             setAllSlots([]);
+            setDayOverrides([]);
             setDoctorWorking(false);
         } finally {
             setIsLoadingSlots(false);
         }
     }, [doctorId, dateString]);
 
+    const handleRemoveBreak = async (timeStr: string, startTimeForPastCheck?: string) => {
+        const checkTime = startTimeForPastCheck || timeStr;
+        if (isSlotInPast(checkTime)) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: 'Cannot update or remove breaks for times that have already passed.'
+            });
+            return;
+        }
+        setIsRemovingBreak(true);
+        setSlotActionFeedback(null);
+        try {
+            const res = await toggleDoctorSlotOverride(dateString, timeStr, 'open');
+            if (res.success) {
+                setSlotActionFeedback({
+                    type: 'success',
+                    message: res.message || `Break at ${timeStr} removed successfully. Overlapped slot is now open.`
+                });
+                await fetchSlots();
+            } else {
+                setSlotActionFeedback({
+                    type: 'error',
+                    message: res.message || 'Failed to remove break'
+                });
+            }
+        } catch (err: any) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: err?.response?.data?.message || err?.message || 'Error removing break'
+            });
+        } finally {
+            setIsRemovingBreak(false);
+        }
+    };
+
+    const handleCancelManualAppointment = async (appointmentId: string) => {
+        if (appointmentToCancel) {
+            const appDate = new Date(appointmentToCancel.appointmentDate);
+            const isPast = isPastDate(appDate) ||
+                (isSameDay(appDate, today) &&
+                 parseTimeToMinutes(appointmentToCancel.appointmentTime) <= (new Date().getHours() * 60 + new Date().getMinutes()));
+            if (isPast) {
+                setSlotActionFeedback({
+                    type: 'error',
+                    message: 'Cannot cancel an appointment for a time that has already passed.'
+                });
+                setAppointmentToCancel(null);
+                return;
+            }
+        }
+        setCancellingAppointmentId(appointmentId);
+        setSlotActionFeedback(null);
+        try {
+            const res = await dispatch(cancelAppointment({
+                appointmentId,
+                reason: 'Cancelled by doctor via Agenda View'
+            }));
+            if (cancelAppointment.fulfilled.match(res)) {
+                setSlotActionFeedback({
+                    type: 'success',
+                    message: 'Manual appointment cancelled successfully. The slot is now free.'
+                });
+                setAppointmentToCancel(null);
+                await fetchSlots();
+                dispatch(fetchDoctorAppointments());
+            } else {
+                setSlotActionFeedback({
+                    type: 'error',
+                    message: (res.payload as string) || 'Failed to cancel appointment'
+                });
+            }
+        } catch (err: any) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: err?.message || 'Error cancelling appointment'
+            });
+        } finally {
+            setCancellingAppointmentId(null);
+        }
+    };
+
     const handleToggleSlotOverride = async (slotTime: string, action: 'close' | 'open') => {
+        if (isSlotInPast(slotTime)) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: 'Cannot update or modify slot status for times that have already passed.'
+            });
+            return;
+        }
         setIsUpdatingSlot(true);
         setSlotActionFeedback(null);
         try {
-            const res = await toggleDoctorSlotOverride(dateString, slotTime, action, 'Closed / On Break');
+            const startMins = parseTimeToMinutes(slotTime);
+            const duration = slotDuration;
+            const endMins = startMins + duration;
+            const endTimeStr = formatMinutesTo12H(endMins);
+            const res = await toggleDoctorSlotOverride(
+                dateString, 
+                slotTime, 
+                action, 
+                'Closed / On Break',
+                slotTime,
+                endTimeStr,
+                duration
+            );
             if (res.success) {
                 setSlotActionFeedback({
                     type: 'success',
@@ -242,6 +541,13 @@ export default function ScheduleClient() {
     const handleManualBooking = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!managingSlot) return;
+        if (isSlotInPast(managingSlot.time)) {
+            setSlotActionFeedback({
+                type: 'error',
+                message: 'Cannot book a slot for a time that has already passed.'
+            });
+            return;
+        }
         if (!manualPatientName.trim()) {
             setSlotActionFeedback({ type: 'error', message: 'Patient Name is required.' });
             return;
@@ -358,12 +664,6 @@ export default function ScheduleClient() {
         return cells;
     };
 
-    const isSameDay = (a: Date, b: Date) =>
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate();
-
-    const isPastDate = (d: Date) => d < today;
     const isBeyond14Days = (d: Date) => d > maxBookingDate;
     const isDrWorking = (d: Date) => isDoctorAvailableOn(d, rawWH);
 
@@ -427,7 +727,8 @@ export default function ScheduleClient() {
 
             return (
                 (appDateStr === dateString || appUTCStr === dateString) &&
-                app.status !== 'cancelled'
+                app.status !== 'cancelled' &&
+                app.status !== 'cancelled-by-doctor'
             );
         });
     }, [appointments, selectedDate, dateString]);
@@ -446,25 +747,128 @@ export default function ScheduleClient() {
         return map;
     }, [appointmentsForSelectedDate]);
 
-    const getPatientDisplayName = (appointmentOrPatient: any) => {
-        if (!appointmentOrPatient) return "Patient";
-        if (appointmentOrPatient.manualPatientDetails?.name) {
-            const op = appointmentOrPatient.manualPatientDetails.opNumber ? ` (OP: ${appointmentOrPatient.manualPatientDetails.opNumber})` : '';
-            return `${appointmentOrPatient.manualPatientDetails.name}${op}`;
-        }
-        if (appointmentOrPatient.profileId?.firstName) {
-            return `${appointmentOrPatient.profileId.firstName} ${appointmentOrPatient.profileId.lastName || ''}`.trim();
-        }
-        if (appointmentOrPatient.firstName) {
-            return `${appointmentOrPatient.firstName} ${appointmentOrPatient.lastName || ''}`.trim();
-        }
-        if (appointmentOrPatient.googleName) return appointmentOrPatient.googleName;
-        if (appointmentOrPatient.email) {
-            const emailName = appointmentOrPatient.email.split('@')[0];
-            return emailName.charAt(0).toUpperCase() + emailName.slice(1).toLowerCase();
-        }
-        return "Patient";
-    };
+    // Unified Chronological Agenda Events (Appointments + Breaks) for selected day
+    const agendaEvents = useMemo(() => {
+        const events: any[] = [];
+        const seenBreakTimes = new Set<string>();
+
+        const isSelectedDatePast = isPastDate(selectedDate);
+        const isSelectedDateToday = isSameDay(selectedDate, today);
+        const currentMinutesToday = new Date().getHours() * 60 + new Date().getMinutes();
+
+        const checkIsEventPast = (endMins: number, startMins: number) => {
+            if (isSelectedDatePast) return true;
+            if (isSelectedDateToday) return endMins <= currentMinutesToday;
+            return false;
+        };
+
+        // 1. Process active appointments for selected day using exact raw appointment times
+        appointmentsForSelectedDate.forEach((app: any) => {
+            const timeStr = app.appointmentTime ? app.appointmentTime.trim() : "";
+            const startMins = parseTimeToMinutes(timeStr);
+            let durationMins = slotDuration;
+            if (app.scheduledStartAt && app.scheduledEndAt) {
+                const diff = Math.round((new Date(app.scheduledEndAt).getTime() - new Date(app.scheduledStartAt).getTime()) / 60000);
+                if (diff > 0) durationMins = diff;
+            }
+            const endMins = startMins + durationMins;
+            const endTimeStr = formatMinutesTo12H(endMins);
+            const isManual = !!app.isManualBooking || !!app.bookedByDoctor;
+            const isOffGrid = (startMins % slotDuration !== 0) || (durationMins % slotDuration !== 0);
+
+            events.push({
+                id: app._id || `app-${timeStr}`,
+                eventType: isManual ? 'manual_appointment' : 'patient_appointment',
+                startTimeStr: timeStr,
+                endTimeStr,
+                startMinutes: startMins,
+                endMinutes: endMins,
+                durationMinutes: durationMins,
+                rawAppointment: app,
+                patientName: isManual
+                    ? (app.manualPatientDetails?.name || 'Walk-in Patient')
+                    : getPatientDisplayName(app.patientId),
+                opNumber: app.manualPatientDetails?.opNumber,
+                patientPhone: app.manualPatientDetails?.phone,
+                consultationType: app.consultationType || 'online',
+                patientType: app.patientType || 'NEW',
+                fee: app.fee,
+                notes: app.notes || app.manualPatientDetails?.notes,
+                status: app.status,
+                isOffGrid,
+                isPast: checkIsEventPast(endMins, startMins)
+            });
+        });
+
+        // 2. Process breaks directly from RAW dayOverrides / slotOverrides (DB overrides)
+        // DO NOT iterate over generated gridSlots or allSlots to avoid splitting off-grid breaks into multiple entries.
+        // DO NOT add current global duration to start time. Use exact startTime and endTime from raw database object.
+        (dayOverrides || []).forEach((ov: any) => {
+            let startTimeStr = (ov.startTime || ov.startTimeStr || ov.start || "").trim();
+            let endTimeStr = (ov.endTime || ov.endTimeStr || ov.end || "").trim();
+            const rawTime = (ov.time || "").trim();
+
+            if (rawTime.includes("-")) {
+                const parts = rawTime.split("-").map((s: string) => s.trim());
+                if (!startTimeStr) startTimeStr = parts[0];
+                if (!endTimeStr && parts[1]) endTimeStr = parts[1];
+            } else if (rawTime.toLowerCase().includes(" to ")) {
+                const parts = rawTime.split(/ to /i).map((s: string) => s.trim());
+                if (!startTimeStr) startTimeStr = parts[0];
+                if (!endTimeStr && parts[1]) endTimeStr = parts[1];
+            } else if (!startTimeStr && rawTime) {
+                startTimeStr = rawTime;
+            }
+
+            if (!startTimeStr) return;
+
+            const startMins = parseTimeToMinutes(startTimeStr);
+            let endMins = endTimeStr ? parseTimeToMinutes(endTimeStr) : 0;
+            const rawDuration = ov.duration || ov.durationMinutes;
+
+            let durationMins: number;
+            if (endTimeStr && endMins > startMins) {
+                durationMins = endMins - startMins;
+            } else if (rawDuration && rawDuration > 0) {
+                durationMins = rawDuration;
+                endMins = startMins + durationMins;
+                endTimeStr = formatMinutesTo12H(endMins);
+            } else {
+                // If neither explicit endTime nor duration exists on the DB object,
+                // use stored original duration or 10 min break default rather than current global slotDuration
+                durationMins = ov.originalDuration || ov.initialSlotDuration || 10;
+                endMins = startMins + durationMins;
+                endTimeStr = formatMinutesTo12H(endMins);
+            }
+
+            const isOffGrid = (startMins % slotDuration !== 0) || (durationMins % slotDuration !== 0);
+
+            // Deduplicate by override ID or normalized start time
+            const uniqueKey = ov._id ? String(ov._id) : normalizeSlotTime(startTimeStr);
+            if (seenBreakTimes.has(uniqueKey)) return;
+            seenBreakTimes.add(uniqueKey);
+
+            events.push({
+                id: ov._id || `override-${startTimeStr}`,
+                rawId: ov._id,
+                eventType: 'break',
+                startTimeStr,
+                endTimeStr,
+                startMinutes: startMins,
+                endMinutes: endMins,
+                durationMinutes: durationMins,
+                rawTime: ov.time || startTimeStr,
+                rawOverride: ov,
+                reason: ov.reason || 'Closed / On Break',
+                status: ov.status || 'unavailable',
+                isOffGrid,
+                isPast: checkIsEventPast(endMins, startMins)
+            });
+        });
+
+        // 3. Merge appointments + breaks and sort chronologically by start time
+        return events.sort((a, b) => a.startMinutes - b.startMinutes);
+    }, [appointmentsForSelectedDate, dayOverrides, slotDuration, selectedDate, today]);
 
     const availableCount = allSlots.filter(s => s.status === "available" && !s.isBreak && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
     const bookedCount = allSlots.filter(s => s.status === "booked" || s.status === "Booked" || !!appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
@@ -810,37 +1214,105 @@ export default function ScheduleClient() {
                             </div>
                         )}
 
-                        {/* Time Slots Header */}
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-slate-100">
-                            <h2 className="text-sm font-bold text-slate-800 flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
-                                    <i className="fas fa-clock text-indigo-600 text-xs" />
-                                </span>
-                                <span>Scheduled Time Slots</span>
-                                <span className="text-[11px] font-normal text-slate-400">
-                                    — {MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
-                                </span>
-                            </h2>
+                        {/* Inline Feedback Banner */}
+                        {slotActionFeedback && (
+                            <div className={`p-3 sm:p-3.5 rounded-2xl text-xs font-semibold flex items-center justify-between border animate-fade-in ${
+                                slotActionFeedback.type === 'success'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                            }`}>
+                                <div className="flex items-center gap-2">
+                                    <i className={`fas ${slotActionFeedback.type === 'success' ? 'fa-check-circle text-emerald-600' : 'fa-exclamation-circle text-rose-600'}`} />
+                                    <span>{slotActionFeedback.message}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSlotActionFeedback(null)}
+                                    className="text-slate-400 hover:text-slate-600 p-1"
+                                >
+                                    <i className="fas fa-times text-xs" />
+                                </button>
+                            </div>
+                        )}
 
-                            {/* Status Badges */}
-                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                {availableCount > 0 && (
-                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                        {availableCount} Available
+                        {/* Time Slots Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-slate-100">
+                            <div className="flex flex-col gap-0.5">
+                                <h2 className="text-sm sm:text-base font-bold text-slate-800 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                    <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+                                        <i className={`fas ${viewMode === 'agenda' ? 'fa-list-check' : 'fa-clock'} text-indigo-600 text-xs`} />
                                     </span>
-                                )}
-                                {bookedCount > 0 && (
-                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-indigo-200 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                                        {bookedCount} Booked
+                                    <span>{viewMode === 'agenda' ? 'Daily Agenda Timeline' : 'Scheduled Time Slots'}</span>
+                                    <span className="text-[11px] font-normal text-slate-400">
+                                        — {MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
                                     </span>
-                                )}
-                                {lockedCount > 0 && (
-                                    <span className="text-[9.5px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-amber-200 flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                        {lockedCount} In Checkout
-                                    </span>
+                                </h2>
+                                <p className="text-[11px] text-slate-400">
+                                    {viewMode === 'agenda'
+                                        ? 'Detailed chronological timeline showing exact event intervals (bypassing grid intervals)'
+                                        : `Grid view based on your configured ${slotDuration}-minute slot intervals`}
+                                </p>
+                            </div>
+
+                            {/* View Toggle & Status Badges */}
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* Segmented Toggle (Grid View vs Agenda View) */}
+                                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 shadow-2xs">
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('grid')}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            viewMode === 'grid'
+                                                ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <i className="fas fa-border-all text-xs" />
+                                        <span>Grid View</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('agenda')}
+                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                            viewMode === 'agenda'
+                                                ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80'
+                                                : 'text-slate-600 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        <i className="fas fa-list-ul text-xs" />
+                                        <span>Agenda View</span>
+                                        {agendaEvents.length > 0 && (
+                                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                                                viewMode === 'agenda' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                                {agendaEvents.length}
+                                            </span>
+                                        )}
+                                    </button>
+                                </div>
+
+                                {/* Status Badges */}
+                                {viewMode === 'grid' && (
+                                    <div className="hidden lg:flex items-center gap-1.5">
+                                        {availableCount > 0 && (
+                                            <span className="text-[9.5px] sm:text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-emerald-200 flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                {availableCount} Available
+                                            </span>
+                                        )}
+                                        {bookedCount > 0 && (
+                                            <span className="text-[9.5px] sm:text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-indigo-200 flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                                {bookedCount} Booked
+                                            </span>
+                                        )}
+                                        {breakCount > 0 && (
+                                            <span className="text-[9.5px] sm:text-[10px] font-bold text-rose-700 bg-rose-50 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border border-rose-200 flex items-center gap-1">
+                                                <i className="fas fa-mug-hot text-[9px] text-rose-500" />
+                                                {breakCount} Break
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -870,16 +1342,17 @@ export default function ScheduleClient() {
                                     </Link>
                                 </div>
                             </div>
-                        ) : allSlots.length === 0 ? (
-                            <div className="flex flex-col items-center py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                                <span className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-2">
-                                    <i className="far fa-calendar-times text-slate-400 text-xl" />
-                                </span>
-                                <p className="text-slate-700 text-sm font-bold">No slots generated</p>
-                                <p className="text-slate-400 text-xs mt-0.5">Please check your shift start and end times in settings.</p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col gap-5 sm:gap-6">
+                        ) : viewMode === 'grid' ? (
+                            allSlots.length === 0 ? (
+                                <div className="flex flex-col items-center py-10 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                                    <span className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-2">
+                                        <i className="far fa-calendar-times text-slate-400 text-xl" />
+                                    </span>
+                                    <p className="text-slate-700 text-sm font-bold">No slots generated</p>
+                                    <p className="text-slate-400 text-xs mt-0.5">Please check your shift start and end times in settings.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-5 sm:gap-6">
                                 {shiftGroups.map((group, groupIdx) => {
                                     const availableInGroup = group.slots.filter(s => s.status === "available" && !s.isBreak && !appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
                                     const bookedInGroup = group.slots.filter(s => s.status === "booked" || s.status === "Booked" || !!appointmentByTimeMap.get(normalizeSlotTime(s.time))).length;
@@ -956,11 +1429,54 @@ export default function ScheduleClient() {
                                                             : getPatientDisplayName(matchedAppointment.patientId))
                                                         : null;
 
-                                                    const isAnyLocked = status === "locked" || status === "Locked" || isLocked === true;
+                                                    const isSelectedDatePast = isPastDate(selectedDate);
+                                                    const isSelectedDateToday = isSameDay(selectedDate, today);
+                                                    const slotStartMins = parseTimeToMinutes(slotTime);
+                                                    const slotEndMins = slotStartMins + slotDuration;
+                                                    const nowMins = new Date().getHours() * 60 + new Date().getMinutes();
+                                                    const isSlotPastTime = isSelectedDatePast || (isSelectedDateToday && slotStartMins < nowMins) || status === "past" || isExpired === true;
+
+                                                    const isAnyLocked = (status === "locked" || status === "Locked" || isLocked === true) && !isSlotPastTime;
                                                     const isBooked = status === "booked" || status === "Booked" || !!matchedAppointment;
                                                     const isBreak = (status === "unavailable" || status === "break" || status === "closed" || slotObj.isBreak) && !isBooked && !isAnyLocked;
-                                                    const isPast = (status === "past" || isExpired === true) && !isBooked && !isBreak;
-                                                    const isAvailable = status === "available" && !isBooked && !isAnyLocked && !isBreak;
+                                                    const isPastBreak = isBreak && isSlotPastTime;
+                                                    const isPast = isSlotPastTime && !isBooked && !isBreak;
+                                                    const isAvailable = status === "available" && !isBooked && !isAnyLocked && !isBreak && !isSlotPastTime;
+
+                                                    // Identify any event (Patient Appointment, Doctor Manual Booking, or Break) that partially overlaps this slot
+                                                    const conflictingEvent = agendaEvents.find(ev => {
+                                                        const overlaps = slotStartMins < ev.endMinutes && slotEndMins > ev.startMinutes;
+                                                        if (!overlaps) return false;
+                                                        // Overlap is partial ONLY if the event does not completely engulf the slot
+                                                        const isEngulfed = ev.startMinutes <= slotStartMins && ev.endMinutes >= slotEndMins;
+                                                        return !isEngulfed;
+                                                    });
+
+                                                    const overlapData = conflictingEvent
+                                                        ? calculateOverlapPercentages(slotStartMins, slotEndMins, conflictingEvent.startMinutes, conflictingEvent.endMinutes)
+                                                        : null;
+
+                                                    const isPartiallyOverlapped = !!conflictingEvent && !!overlapData?.hasOverlap && !isPast;
+                                                    const eventTheme = (isPartiallyOverlapped && conflictingEvent)
+                                                        ? getEventTheme(conflictingEvent.eventType, conflictingEvent.consultationType)
+                                                        : null;
+
+                                                    // Calculate dynamic linear-gradient CSS background fill using determined eventColor
+                                                    let partialFillStyle: React.CSSProperties | undefined = undefined;
+                                                    if (isPartiallyOverlapped && overlapData && eventTheme) {
+                                                        const startOffset = overlapData.startOffsetPercentage;
+                                                        const fillWidth = overlapData.fillWidthPercentage;
+                                                        const endOffset = Math.min(100, Number((startOffset + fillWidth).toFixed(2)));
+                                                        const eventColor = eventTheme.fillColor;
+
+                                                        const gradient = `linear-gradient(to right, transparent 0%, transparent ${startOffset}%, ${eventColor} ${startOffset}%, ${eventColor} ${endOffset}%, transparent ${endOffset}%, transparent 100%)`;
+
+                                                        partialFillStyle = {
+                                                            background: gradient,
+                                                            backgroundImage: gradient,
+                                                            backgroundColor: '#ffffff'
+                                                        };
+                                                    }
 
                                                     // Determine booking channel type (Online vs In-Person)
                                                     const appConsultType = matchedAppointment?.consultationType || slotBookedType;
@@ -971,53 +1487,73 @@ export default function ScheduleClient() {
                                                         <div
                                                             key={`${slotTime}-${idx}`}
                                                             onClick={() => {
-                                                                if (matchedAppointment) {
+                                                                if (isPartiallyOverlapped && conflictingEvent) {
+                                                                    if (conflictingEvent.rawAppointment) {
+                                                                        setSelectedAppointment(conflictingEvent.rawAppointment);
+                                                                    } else {
+                                                                        setViewMode('agenda');
+                                                                    }
+                                                                } else if (matchedAppointment) {
                                                                     setSelectedAppointment(matchedAppointment);
-                                                                } else if (isAvailable || isBreak) {
+                                                                } else if (!isSlotPastTime && (isAvailable || isBreak)) {
                                                                     setManagingSlot(slotObj);
                                                                     setSlotActionFeedback(null);
                                                                     setManagingSlotTab(isBreak ? 'break' : 'book');
                                                                 }
                                                             }}
+                                                            style={partialFillStyle}
+                                                            title={
+                                                                isPartiallyOverlapped
+                                                                    ? `Partially overlapped (${overlapData?.overlapMinutes || 0}m) by ${eventTheme?.label || 'event'}. Click to view details.`
+                                                                    : undefined
+                                                            }
                                                             className={`
                                                                 relative flex flex-col items-center justify-center p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border-2 transition-all duration-200 text-center
                                                                 ${isPast
                                                                     ? "bg-slate-50/70 text-slate-300 border-slate-100 cursor-default"
-                                                                    : isAnyLocked
-                                                                        ? "bg-amber-50 text-amber-900 border-amber-300 shadow-sm cursor-default"
-                                                                        : isBooked
-                                                                            ? isBookedInPerson 
-                                                                                ? "bg-emerald-50/60 text-emerald-950 border-emerald-300 shadow-sm hover:border-emerald-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
-                                                                                : "bg-indigo-50/60 text-indigo-950 border-indigo-300 shadow-sm hover:border-indigo-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
-                                                                            : isBreak
-                                                                                ? "bg-rose-50/70 text-rose-950 border-rose-300 shadow-2xs hover:border-rose-500 hover:bg-rose-100/60 cursor-pointer active:scale-[0.98] group"
-                                                                                : isAvailable
-                                                                                    ? "bg-white text-slate-800 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer active:scale-[0.98] group"
-                                                                                    : "bg-white text-slate-700 border-slate-200"
+                                                                    : isPastBreak
+                                                                        ? "bg-slate-50/80 text-slate-400 border-slate-200/80 cursor-default opacity-75"
+                                                                        : isPartiallyOverlapped && eventTheme
+                                                                            ? `${eventTheme.borderClass} text-slate-900 shadow-2xs cursor-pointer active:scale-[0.98] group`
+                                                                            : isAnyLocked
+                                                                                ? "bg-amber-50 text-amber-900 border-amber-300 shadow-sm cursor-default"
+                                                                                : isBooked
+                                                                                    ? isBookedInPerson 
+                                                                                        ? "bg-emerald-50/60 text-emerald-950 border-emerald-300 shadow-sm hover:border-emerald-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
+                                                                                        : "bg-indigo-50/60 text-indigo-950 border-indigo-300 shadow-sm hover:border-indigo-500 hover:shadow-md cursor-pointer active:scale-[0.98] group"
+                                                                                    : isBreak
+                                                                                        ? "bg-rose-50/70 text-rose-950 border-rose-300 shadow-2xs hover:border-rose-500 hover:bg-rose-100/60 cursor-pointer active:scale-[0.98] group"
+                                                                                        : isAvailable
+                                                                                            ? "bg-white text-slate-800 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer active:scale-[0.98] group"
+                                                                                            : "bg-white text-slate-700 border-slate-200"
                                                                 }
                                                             `}
                                                         >
-                                                            {/* Slot Time */}
-                                                            <span className={`text-xs sm:text-sm font-extrabold flex items-center gap-1.5 ${isPast ? 'opacity-50' : ''}`}>
+                                                            {/* Slot Time - Always centered and above background */}
+                                                            <span className={`text-xs sm:text-sm font-extrabold flex items-center justify-center gap-1.5 relative z-10 w-full ${isPast || isPastBreak ? 'opacity-50' : ''}`}>
                                                                 {isAnyLocked && <i className="fas fa-lock text-[10px] text-amber-500" />}
-                                                                {isBreak && <i className="fas fa-mug-hot text-[10px] text-rose-500" />}
-                                                                {slotTime}
+                                                                {isPartiallyOverlapped && eventTheme && (
+                                                                    <i className={`fas ${eventTheme.icon} text-[10px] ${eventTheme.textClass}`} />
+                                                                )}
+                                                                {isBreak && !isPastBreak && !isPartiallyOverlapped && <i className="fas fa-mug-hot text-[10px] text-rose-500" />}
+                                                                {isPastBreak && <i className="fas fa-history text-[10px] text-slate-400" />}
+                                                                <span>{slotTime}</span>
                                                             </span>
 
                                                             {/* Slot Capability Mode Badge (Mixed / Online / In-Person) */}
-                                                            <div className="mt-1 flex flex-col items-center w-full">
+                                                            <div className="mt-1 flex flex-col items-center justify-center w-full relative z-10">
                                                                 {slotCapability === 'mixed' ? (
-                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-purple-200 flex items-center gap-1">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-purple-700 bg-purple-50/90 px-1.5 sm:px-2 py-0.5 rounded-md border border-purple-200 flex items-center gap-1 shadow-2xs">
                                                                         <i className="fas fa-arrows-split-up-and-left text-[7px]" />
                                                                         Mixed
                                                                     </span>
                                                                 ) : slotCapability === 'online' ? (
-                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50/90 px-1.5 sm:px-2 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1 shadow-2xs">
                                                                         <i className="fas fa-video text-[7px]" />
                                                                         Online
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50/90 px-1.5 sm:px-2 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1 shadow-2xs">
                                                                         <i className="fas fa-hospital text-[7px]" />
                                                                         In-Person
                                                                     </span>
@@ -1025,7 +1561,24 @@ export default function ScheduleClient() {
                                                             </div>
 
                                                             {/* Booking Status / Break / Lock / Past Details */}
-                                                            {isBooked ? (
+                                                            {isPartiallyOverlapped && eventTheme ? (
+                                                                <div className="mt-1 flex flex-col items-center justify-center w-full relative z-10">
+                                                                    <span className={`text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider ${eventTheme.badgeTextClass} ${eventTheme.badgeBgClass} px-1.5 sm:px-2 py-0.5 rounded-md border ${eventTheme.badgeBorderClass} flex items-center justify-center gap-1 shadow-2xs w-full`}>
+                                                                        <span className="text-[8px]">⚠️</span>
+                                                                        <span className="truncate">{overlapData?.overlapMinutes ? `${overlapData.overlapMinutes}m Overlap` : 'Partial Overlap'}</span>
+                                                                    </span>
+                                                                    <span className={`text-[7.5px] sm:text-[8px] ${eventTheme.textClass} font-bold group-hover:underline flex items-center justify-center gap-0.5 mt-0.5 transition truncate max-w-full`}>
+                                                                        <i className="fas fa-stream text-[6.5px]" />
+                                                                        <span className="truncate">
+                                                                            {conflictingEvent?.patientName 
+                                                                                ? conflictingEvent.patientName 
+                                                                                : conflictingEvent?.eventType === 'break' 
+                                                                                    ? 'Manage Break' 
+                                                                                    : eventTheme.label}
+                                                                        </span>
+                                                                    </span>
+                                                                </div>
+                                                            ) : isBooked ? (
                                                                 <div className="mt-1 flex flex-col items-center w-full">
                                                                     <span className={`text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded-md flex items-center justify-center gap-1 shadow-2xs w-full
                                                                         ${isBookedInPerson ? 'text-emerald-800 bg-emerald-100/90 border border-emerald-200' : 'text-indigo-800 bg-indigo-100/90 border border-indigo-200'}`}>
@@ -1037,6 +1590,13 @@ export default function ScheduleClient() {
                                                                             {patientName}
                                                                         </span>
                                                                     )}
+                                                                </div>
+                                                            ) : isPastBreak ? (
+                                                                <div className="mt-1 flex flex-col items-center w-full">
+                                                                    <span className="text-[7.5px] sm:text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 sm:px-2 py-0.5 rounded-md border border-slate-200 flex items-center justify-center gap-1 shadow-2xs w-full">
+                                                                        <i className="fas fa-history text-[7px] text-slate-400 shrink-0" />
+                                                                        <span className="truncate">Past Break</span>
+                                                                    </span>
                                                                 </div>
                                                             ) : isBreak ? (
                                                                 <div className="mt-1 flex flex-col items-center w-full">
@@ -1101,14 +1661,280 @@ export default function ScheduleClient() {
                                         On Break / Closed (Click to reopen)
                                     </span>
                                     <span className="flex items-center gap-1.5">
-                                        <span className="w-3 h-3 rounded-md bg-amber-50 border border-amber-400 shrink-0" />
-                                        In Checkout
+                                        <span 
+                                            className="w-3 h-3 rounded-md border border-rose-400 border-dashed shrink-0" 
+                                            style={{ background: "linear-gradient(to right, transparent 50%, rgba(255, 99, 132, 0.35) 50%), #ffffff" }}
+                                        />
+                                        Break Overlap
                                     </span>
                                     <span className="flex items-center gap-1.5">
-                                        <span className="w-3 h-3 rounded-md bg-slate-50 border border-slate-100 shrink-0" />
-                                        Past
+                                        <span 
+                                            className="w-3 h-3 rounded-md border border-amber-400 border-dashed shrink-0" 
+                                            style={{ background: "linear-gradient(to right, transparent 50%, rgba(245, 158, 11, 0.35) 50%), #ffffff" }}
+                                        />
+                                        Manual Overlap
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                        <span 
+                                            className="w-3 h-3 rounded-md border border-indigo-400 border-dashed shrink-0" 
+                                            style={{ background: "linear-gradient(to right, transparent 50%, rgba(99, 102, 241, 0.35) 50%), #ffffff" }}
+                                        />
+                                        Appt Overlap
                                     </span>
                                 </div>
+                            </div>
+                        )) : (
+                            /* ─── Agenda View (Chronological Timeline) ─── */
+                            <div className="flex flex-col gap-4 animate-fade-in">
+                                {/* Informational Banner */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 sm:p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl text-xs text-indigo-950">
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                                            <i className="fas fa-stream text-xs" />
+                                        </span>
+                                        <p>
+                                            Timeline displays <strong>exact start and end times</strong> for all events. Removing a break or cancelling a manual booking immediately frees up that time lapse in your Grid View.
+                                        </p>
+                                    </div>
+                                    <span className="text-[11px] font-bold text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-indigo-200 self-start sm:self-auto shrink-0 shadow-2xs">
+                                        {agendaEvents.length} {agendaEvents.length === 1 ? 'Event' : 'Events'} Today
+                                    </span>
+                                </div>
+
+                                {agendaEvents.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                                        <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3 shadow-2xs">
+                                            <i className="fas fa-calendar-check text-2xl" />
+                                        </div>
+                                        <h3 className="text-sm sm:text-base font-extrabold text-slate-800">No Events or Breaks Scheduled</h3>
+                                        <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
+                                            There are no patient consultations, direct manual bookings, or active breaks for this day. All shifts remain open for booking.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setViewMode('grid')}
+                                            className="px-4 py-2 bg-white hover:bg-slate-50 text-indigo-600 border border-indigo-200 rounded-xl text-xs font-bold shadow-2xs transition flex items-center gap-1.5 active:scale-95"
+                                        >
+                                            <i className="fas fa-border-all text-xs" />
+                                            <span>Switch to Grid View</span>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-3">
+                                        {agendaEvents.map((event, idx) => {
+                                            const isManual = event.eventType === 'manual_appointment';
+                                            const isBreak = event.eventType === 'break';
+                                            const isPatient = event.eventType === 'patient_appointment';
+
+                                            return (
+                                                <div
+                                                    key={event.id || idx}
+                                                    className={`p-3.5 sm:p-4.5 rounded-2xl border transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-3.5 shadow-2xs ${
+                                                        isBreak
+                                                            ? "bg-rose-50/40 border-rose-200/90 hover:border-rose-300"
+                                                            : isManual
+                                                                ? "bg-amber-50/40 border-amber-200/90 hover:border-amber-300"
+                                                                : "bg-white border-slate-200/90 hover:border-indigo-300 hover:shadow-xs"
+                                                    }`}
+                                                >
+                                                    {/* Left Section: Time Block & Details */}
+                                                    <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                                                        {/* Precise Time Pill */}
+                                                        <div className={`flex flex-col items-center justify-center py-2 px-3 rounded-xl border shrink-0 min-w-[110px] text-center ${
+                                                            isBreak
+                                                                ? "bg-white text-rose-950 border-rose-200 shadow-2xs"
+                                                                : isManual
+                                                                    ? "bg-white text-amber-950 border-amber-200 shadow-2xs"
+                                                                    : "bg-indigo-50/70 text-indigo-950 border-indigo-200 shadow-2xs"
+                                                        }`}>
+                                                            <span className="text-xs sm:text-sm font-extrabold flex items-center gap-1 whitespace-nowrap">
+                                                                <i className={`fas ${isBreak ? 'fa-mug-hot text-rose-500' : isManual ? 'fa-user-tag text-amber-600' : 'fa-clock text-indigo-600'} text-[10px]`} />
+                                                                {event.startTimeStr}
+                                                            </span>
+                                                            <span className="text-[10.5px] text-slate-500 font-semibold whitespace-nowrap">
+                                                                to {event.endTimeStr}
+                                                            </span>
+                                                            <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                                                ({event.durationMinutes} mins)
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Content / Info */}
+                                                        <div className="flex flex-col gap-1 min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                {/* Type Badges */}
+                                                                {isBreak && (
+                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
+                                                                        <i className="fas fa-ban text-[8px]" />
+                                                                        Doctor Break / Closed
+                                                                    </span>
+                                                                )}
+                                                                {isManual && (
+                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                                                                        <i className="fas fa-user-tag text-[8px] text-amber-700" />
+                                                                        Doctor Direct Booking
+                                                                    </span>
+                                                                )}
+                                                                {isPatient && (
+                                                                    <span className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 border border-indigo-200">
+                                                                        <i className="fas fa-user-check text-[8px] text-indigo-600" />
+                                                                        Patient Booking
+                                                                    </span>
+                                                                )}
+
+                                                                {/* Grid Overlap Warning Badge */}
+                                                                {event.isOffGrid && (
+                                                                    <span 
+                                                                        className="inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+                                                                        title={`This event does not align with the current ${slotDuration}-minute grid intervals and locks adjacent slots.`}
+                                                                    >
+                                                                        <span className="text-[10px]">⚠️</span>
+                                                                        <span>Grid Overlap</span>
+                                                                    </span>
+                                                                )}
+
+                                                                {/* Consultation Channel Badge */}
+                                                                {!isBreak && (
+                                                                    <span className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                                                        event.consultationType === 'offline' || event.consultationType === 'physical'
+                                                                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                                                            : 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                                                                    }`}>
+                                                                        <i className={`fas ${event.consultationType === 'offline' || event.consultationType === 'physical' ? 'fa-hospital' : 'fa-video'} text-[8px]`} />
+                                                                        {event.consultationType === 'offline' || event.consultationType === 'physical' ? 'In-Person Clinic' : 'Telehealth Video'}
+                                                                    </span>
+                                                                )}
+
+                                                                {/* Patient OP / Visit Badge */}
+                                                                {isManual && event.opNumber && (
+                                                                    <span className="text-[9.5px] font-mono font-bold bg-white text-slate-700 border border-slate-200 px-1.5 py-0.5 rounded">
+                                                                        OP: {event.opNumber}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Primary Title / Name */}
+                                                            <div>
+                                                                {isBreak ? (
+                                                                    <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                                                                        <span>{event.reason || 'Doctor Break'}</span>
+                                                                    </h4>
+                                                                ) : (
+                                                                    <h4 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2 truncate">
+                                                                        <span className="truncate">{event.patientName}</span>
+                                                                        {event.fee !== undefined && (
+                                                                            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                                                                                ₹{event.fee}
+                                                                            </span>
+                                                                        )}
+                                                                    </h4>
+                                                                )}
+
+                                                                {/* Subtitle / Metadata */}
+                                                                {isBreak ? (
+                                                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                                                        {event.isOffGrid ? (
+                                                                            <span className="text-amber-800 font-semibold flex items-center gap-1">
+                                                                                <span>⚠️ Non-grid timing ({event.durationMinutes}m) locks adjacent {slotDuration}-minute slots in Grid View.</span>
+                                                                            </span>
+                                                                        ) : (
+                                                                            "Blocks overlapping slots in the grid. Removing this will immediately free up the slot."
+                                                                        )}
+                                                                    </p>
+                                                                ) : (
+                                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 mt-0.5">
+                                                                        {event.isOffGrid && (
+                                                                            <span className="text-amber-800 font-semibold text-[11px] flex items-center gap-1">
+                                                                                <span>⚠️ Non-grid timing locks adjacent slots in Grid View.</span>
+                                                                            </span>
+                                                                        )}
+                                                                        {event.patientPhone && (
+                                                                            <span className="flex items-center gap-1 text-[11px]">
+                                                                                <i className="fas fa-phone text-[9px] text-slate-400" />
+                                                                                {event.patientPhone}
+                                                                            </span>
+                                                                        )}
+                                                                        {event.patientType && (
+                                                                            <span className="text-[11px] font-medium text-slate-600">
+                                                                                {event.patientType === 'FOLLOW_UP' ? 'Follow-Up' : 'New Visit'}
+                                                                            </span>
+                                                                        )}
+                                                                        {event.notes && (
+                                                                            <span className="italic text-slate-400 text-[11px] truncate max-w-xs block">
+                                                                                &ldquo;{event.notes}&rdquo;
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Right Section: Actions */}
+                                                    <div className="flex items-center gap-2 self-end md:self-center shrink-0">
+                                                        {isBreak && (
+                                                            event.isPast ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 font-bold text-xs shadow-2xs">
+                                                                    <i className="fas fa-history text-[10px]" />
+                                                                    <span>Past Break</span>
+                                                                </span>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveBreak(event.rawTime || event.startTimeStr, event.startTimeStr)}
+                                                                    disabled={isRemovingBreak}
+                                                                    className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs shadow-2xs hover:shadow transition flex items-center gap-1.5 active:scale-95 disabled:opacity-60"
+                                                                >
+                                                                    {isRemovingBreak ? (
+                                                                        <>
+                                                                            <i className="fas fa-spinner fa-spin text-xs" />
+                                                                            <span>Removing...</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <i className="fas fa-trash-alt text-[10px]" />
+                                                                            <span>Remove Break</span>
+                                                                        </>
+                                                                    )}
+                                                                </button>
+                                                            )
+                                                        )}
+
+                                                        {isManual && (
+                                                            event.isPast ? (
+                                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-400 border border-slate-200 font-bold text-xs shadow-2xs">
+                                                                    <i className="fas fa-check-double text-[10px]" />
+                                                                    <span>Completed / Past</span>
+                                                                </span>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setAppointmentToCancel(event.rawAppointment)}
+                                                                    disabled={cancellingAppointmentId === event.id}
+                                                                    className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-bold text-xs shadow-2xs hover:shadow transition flex items-center gap-1.5 active:scale-95 disabled:opacity-60"
+                                                                >
+                                                                    <i className="fas fa-times-circle text-[11px]" />
+                                                                    <span>Cancel Booking</span>
+                                                                </button>
+                                                            )
+                                                        )}
+
+                                                        {isPatient && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setSelectedAppointment(event.rawAppointment)}
+                                                                className="px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs shadow-2xs transition flex items-center gap-1.5 active:scale-95"
+                                                            >
+                                                                <i className="fas fa-eye text-[10px]" />
+                                                                <span>View Details</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1193,7 +2019,24 @@ export default function ScheduleClient() {
                         </div>
 
                         {/* Actions Based on Current Status */}
-                        {(managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak) ? (
+                        {isSlotInPast(managingSlot.time) ? (
+                            <div className="space-y-4">
+                                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-600 flex items-center gap-2.5">
+                                    <i className="fas fa-history text-slate-400 text-sm shrink-0" />
+                                    <p>This slot is for a time that has already passed and cannot be updated.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setManagingSlot(null);
+                                        setSlotActionFeedback(null);
+                                    }}
+                                    className="w-full py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        ) : (managingSlot.status === 'unavailable' || managingSlot.status === 'break' || managingSlot.status === 'closed' || managingSlot.isBreak) ? (
                             /* Slot is on break -> Allow reopening */
                             <div className="space-y-4">
                                 <div className="bg-amber-50/70 border border-amber-200 p-3 rounded-2xl text-xs text-amber-900 flex items-start gap-2.5">
@@ -1553,6 +2396,73 @@ export default function ScheduleClient() {
                                 <span>Go to Appointments</span>
                                 <i className="fas fa-arrow-right text-[10px]" />
                             </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Cancel Doctor Manual Appointment Confirmation Modal ─── */}
+            {appointmentToCancel && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+                    <div className="bg-white rounded-t-3xl sm:rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 border border-slate-100">
+                        <div className="flex items-center gap-3">
+                            <span className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                                <i className="fas fa-exclamation-triangle text-base" />
+                            </span>
+                            <div>
+                                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">Cancel Manual Booking?</h3>
+                                <p className="text-xs text-slate-500">This will remove the offline booking and immediately free up the slot.</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-medium">Patient:</span>
+                                <span className="font-bold text-slate-900">
+                                    {appointmentToCancel.manualPatientDetails?.name || 'Walk-in Patient'}
+                                </span>
+                            </div>
+                            {appointmentToCancel.manualPatientDetails?.opNumber && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-medium">OP Number:</span>
+                                    <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                        {appointmentToCancel.manualPatientDetails.opNumber}
+                                    </span>
+                                </div>
+                            )}
+                            <div className="flex justify-between">
+                                <span className="text-slate-400 font-medium">Scheduled Time:</span>
+                                <span className="font-bold text-slate-900">{appointmentToCancel.appointmentTime}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-1">
+                            <button
+                                type="button"
+                                onClick={() => setAppointmentToCancel(null)}
+                                disabled={cancellingAppointmentId === appointmentToCancel._id}
+                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition disabled:opacity-50"
+                            >
+                                Keep Appointment
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleCancelManualAppointment(appointmentToCancel._id)}
+                                disabled={cancellingAppointmentId === appointmentToCancel._id}
+                                className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 shadow-md shadow-rose-200 disabled:opacity-60"
+                            >
+                                {cancellingAppointmentId === appointmentToCancel._id ? (
+                                    <>
+                                        <i className="fas fa-spinner fa-spin text-xs" />
+                                        <span>Cancelling...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-trash-alt text-xs" />
+                                        <span>Confirm Cancel</span>
+                                    </>
+                                )}
+                            </button>
                         </div>
                     </div>
                 </div>

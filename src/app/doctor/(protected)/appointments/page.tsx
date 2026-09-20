@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { fetchDoctorAppointments, completeOfflineAppointment, markNoShowOfflineAppointment } from '@/redux/features/appointment/appointmentThunk';
+import { clearAppointmentError } from '@/redux/features/appointment/appointmentSlice';
 
 import { getAppointmentStatusConfig, getAppointmentStartTimestamp, getAppointmentEndTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
@@ -16,10 +17,102 @@ export default function DoctorAppointmentsPage() {
     const [otpInput, setOtpInput] = useState('');
     const [otpError, setOtpError] = useState('');
     const [otpSuccess, setOtpSuccess] = useState(false);
+    const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    const [isCompletingManual, setIsCompletingManual] = useState(false);
+    const [isMarkingNoShow, setIsMarkingNoShow] = useState(false);
 
     useEffect(() => {
+        dispatch(clearAppointmentError());
         dispatch(fetchDoctorAppointments());
     }, [dispatch]);
+
+    const handleOpenModal = (app: any) => {
+        setSelectedAppointment(app);
+        setOtpInput('');
+        setOtpError('');
+        setOtpSuccess(false);
+    };
+
+    const handleCloseModal = () => {
+        setSelectedAppointment(null);
+        setOtpInput('');
+        setOtpError('');
+        setOtpSuccess(false);
+    };
+
+    const handleCompleteOffline = async (appointmentId: string) => {
+        if (otpInput.length !== 4 || isVerifyingOtp) return;
+        setOtpError('');
+        setIsVerifyingOtp(true);
+        try {
+            const result = await dispatch(
+                completeOfflineAppointment({
+                    appointmentId,
+                    otp: otpInput,
+                })
+            );
+            if (completeOfflineAppointment.fulfilled.match(result)) {
+                setOtpSuccess(true);
+                dispatch(fetchDoctorAppointments());
+                setTimeout(() => {
+                    handleCloseModal();
+                }, 1800);
+            } else {
+                setOtpError((result.payload as string) || 'Invalid verification code. Please ask the patient to check their code.');
+            }
+        } catch (err: any) {
+            setOtpError(err?.message || 'Invalid verification code. Please ask the patient to check their code.');
+        } finally {
+            setIsVerifyingOtp(false);
+        }
+    };
+
+    const handleCompleteManualOffline = async (appointmentId: string) => {
+        if (isCompletingManual) return;
+        setOtpError('');
+        setIsCompletingManual(true);
+        try {
+            const result = await dispatch(
+                completeOfflineAppointment({
+                    appointmentId,
+                    otp: '0000', // Bypassed by backend for manual bookings
+                })
+            );
+            if (completeOfflineAppointment.fulfilled.match(result)) {
+                setOtpSuccess(true);
+                dispatch(fetchDoctorAppointments());
+                setTimeout(() => {
+                    handleCloseModal();
+                }, 1500);
+            } else {
+                setOtpError((result.payload as string) || 'Failed to complete appointment.');
+            }
+        } catch (err: any) {
+            setOtpError(err?.message || 'Failed to complete appointment.');
+        } finally {
+            setIsCompletingManual(false);
+        }
+    };
+
+    const handleMarkNoShow = async (appointmentId: string) => {
+        if (isMarkingNoShow) return;
+        if (confirm("Are you sure you want to mark this patient as a No-Show?")) {
+            setIsMarkingNoShow(true);
+            try {
+                const result = await dispatch(markNoShowOfflineAppointment({ appointmentId }));
+                if (markNoShowOfflineAppointment.fulfilled.match(result)) {
+                    handleCloseModal();
+                    dispatch(fetchDoctorAppointments());
+                } else {
+                    alert((result.payload as string) || "Failed to mark patient as no-show.");
+                }
+            } catch (err: any) {
+                alert(err?.message || "Failed to mark patient as no-show.");
+            } finally {
+                setIsMarkingNoShow(false);
+            }
+        }
+    };
 
     const upcoming = (appointments || [])
         .filter((app: any) => isAppointmentUpcomingOrActive(app))
@@ -29,8 +122,7 @@ export default function DoctorAppointmentsPage() {
         .filter((app: any) => !isAppointmentUpcomingOrActive(app))
         .sort((a: any, b: any) => getAppointmentStartTimestamp(b) - getAppointmentStartTimestamp(a));
 
-
-    if (isLoading) {
+    if (isLoading && (!appointments || appointments.length === 0)) {
         return (
             <div className="p-8 text-center text-slate-500 flex justify-center items-center min-h-[50vh]">
                 <i className="fas fa-spinner fa-spin mr-2"></i> Loading appointments...
@@ -38,10 +130,20 @@ export default function DoctorAppointmentsPage() {
         );
     }
 
-    if (error) {
+    if (error && (!appointments || appointments.length === 0)) {
         return (
             <div className="p-8 text-center text-red-500 bg-red-50 rounded-lg mx-auto max-w-5xl mt-8 border border-red-200">
-                Error loading appointments: {error}
+                <p className="font-bold mb-1">Error loading appointments</p>
+                <p className="text-sm mb-4">{error}</p>
+                <button
+                    onClick={() => {
+                        dispatch(clearAppointmentError());
+                        dispatch(fetchDoctorAppointments());
+                    }}
+                    className="px-4 py-2 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                >
+                    Retry Loading
+                </button>
             </div>
         );
     }
@@ -195,7 +297,7 @@ export default function DoctorAppointmentsPage() {
                         )}
                         {app.consultationFiles && app.consultationFiles.length > 0 && (
                             <button
-                                onClick={() => setSelectedAppointment(app)}
+                                onClick={() => handleOpenModal(app)}
                                 className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 transition-colors flex items-center gap-1.5"
                                 title="View consultation documents"
                             >
@@ -204,7 +306,7 @@ export default function DoctorAppointmentsPage() {
                             </button>
                         )}
                         <button
-                            onClick={() => setSelectedAppointment(app)}
+                            onClick={() => handleOpenModal(app)}
                             className="px-4 py-2 text-sm font-bold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white transition-colors"
                         >
                             View Details
@@ -217,6 +319,20 @@ export default function DoctorAppointmentsPage() {
 
     return (
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
+            {error && appointments && appointments.length > 0 && (
+                <div className="p-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-2">
+                        <i className="fas fa-exclamation-triangle text-red-500"></i>
+                        <span>{error}</span>
+                    </div>
+                    <button
+                        onClick={() => dispatch(clearAppointmentError())}
+                        className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded hover:bg-red-100 transition-colors"
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            )}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Patient Appointments</h1>
@@ -269,8 +385,8 @@ export default function DoctorAppointmentsPage() {
                 );
 
                 return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-                        <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={handleCloseModal}>
+                        <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
                                 <div className="flex items-center gap-2 text-indigo-700">
@@ -278,12 +394,7 @@ export default function DoctorAppointmentsPage() {
                                     <h2 className="text-lg font-bold">Patient Health Card</h2>
                                 </div>
                                 <button
-                                    onClick={() => {
-                                        setSelectedAppointment(null);
-                                        setOtpInput('');
-                                        setOtpError('');
-                                        setOtpSuccess(false);
-                                    }}
+                                    onClick={handleCloseModal}
                                     className="text-slate-400 hover:text-slate-600 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200"
                                 >
                                     <i className="fas fa-times"></i>
@@ -658,36 +769,19 @@ export default function DoctorAppointmentsPage() {
                                                 ) : (
                                                     <button
                                                         id="complete-manual-offline-btn"
-                                                        disabled={isLoading}
-                                                        onClick={async () => {
-                                                            setOtpError('');
-                                                            const result = await dispatch(
-                                                                completeOfflineAppointment({
-                                                                    appointmentId: activeAppointment._id,
-                                                                    otp: '0000', // Bypassed by backend for manual bookings
-                                                                })
-                                                            );
-                                                            if (completeOfflineAppointment.fulfilled.match(result)) {
-                                                                setOtpSuccess(true);
-                                                                dispatch(fetchDoctorAppointments());
-                                                                setTimeout(() => {
-                                                                    setSelectedAppointment(null);
-                                                                    setOtpSuccess(false);
-                                                                }, 1500);
-                                                            } else {
-                                                                setOtpError((result.payload as string) || 'Failed to complete appointment.');
-                                                            }
-                                                        }}
+                                                        disabled={isCompletingManual}
+                                                        onClick={() => handleCompleteManualOffline(activeAppointment._id)}
                                                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
                                                     >
-                                                        {isLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-circle"></i>}
+                                                        {isCompletingManual ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check-circle"></i>}
                                                         Mark Consultation Completed
                                                     </button>
                                                 )}
                                                 {otpError && (
-                                                    <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
-                                                        <i className="fas fa-exclamation-circle"></i> {otpError}
-                                                    </p>
+                                                    <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+                                                        <i className="fas fa-exclamation-circle text-sm shrink-0"></i>
+                                                        <span>{otpError}</span>
+                                                    </div>
                                                 )}
                                             </div>
                                         ) : (
@@ -711,45 +805,35 @@ export default function DoctorAppointmentsPage() {
                                                                 maxLength={4}
                                                                 placeholder="_ _ _ _"
                                                                 value={otpInput}
+                                                                disabled={isVerifyingOtp}
                                                                 onChange={(e) => {
                                                                     const v = e.target.value.replace(/\D/g, '');
                                                                     setOtpInput(v);
                                                                     if (otpError) setOtpError('');
                                                                 }}
-                                                                className="flex-1 text-center tracking-[0.4em] text-lg font-bold border-2 border-emerald-300 focus:border-emerald-500 focus:outline-none rounded-lg px-3 py-2 text-slate-800 bg-emerald-50"
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && otpInput.length === 4 && !isVerifyingOtp) {
+                                                                        handleCompleteOffline(activeAppointment._id);
+                                                                    }
+                                                                }}
+                                                                className={`flex-1 text-center tracking-[0.4em] text-lg font-bold border-2 ${
+                                                                    otpError ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-emerald-300 bg-emerald-50 focus:border-emerald-500'
+                                                                } focus:outline-none rounded-lg px-3 py-2 text-slate-800 transition-colors`}
                                                             />
                                                             <button
                                                                 id="complete-offline-btn"
-                                                                disabled={otpInput.length !== 4 || isLoading}
-                                                                onClick={async () => {
-                                                                    setOtpError('');
-                                                                    const result = await dispatch(
-                                                                        completeOfflineAppointment({
-                                                                            appointmentId: activeAppointment._id,
-                                                                            otp: otpInput,
-                                                                        })
-                                                                    );
-                                                                    if (completeOfflineAppointment.fulfilled.match(result)) {
-                                                                        setOtpSuccess(true);
-                                                                        dispatch(fetchDoctorAppointments());
-                                                                        setTimeout(() => {
-                                                                            setSelectedAppointment(null);
-                                                                            setOtpInput('');
-                                                                            setOtpSuccess(false);
-                                                                        }, 1800);
-                                                                    } else {
-                                                                        setOtpError((result.payload as string) || 'Invalid code. Please try again.');
-                                                                    }
-                                                                }}
-                                                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                disabled={otpInput.length !== 4 || isVerifyingOtp}
+                                                                onClick={() => handleCompleteOffline(activeAppointment._id)}
+                                                                className="px-5 py-2 bg-emerald-600 text-white rounded-lg font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 min-w-[48px]"
                                                             >
-                                                                {isLoading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
+                                                                {isVerifyingOtp ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
                                                             </button>
                                                         </div>
                                                         {otpError && (
-                                                            <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
-                                                                <i className="fas fa-exclamation-circle"></i> {otpError}
-                                                            </p>
+                                                            <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 font-semibold flex items-center gap-2 animate-in fade-in duration-200">
+                                                                <i className="fas fa-exclamation-circle text-sm shrink-0"></i>
+                                                                <span>{otpError}</span>
+                                                            </div>
                                                         )}
                                                     </>
                                                 )}
@@ -760,21 +844,11 @@ export default function DoctorAppointmentsPage() {
                                             const canMarkNoShow = endMs > 0 ? Date.now() >= endMs : true;
                                             return (
                                                 <button 
-                                                    disabled={!canMarkNoShow || isLoading}
+                                                    disabled={!canMarkNoShow || isMarkingNoShow}
                                                     title={!canMarkNoShow ? "Cannot mark no-show before the scheduled end time" : "Mark Patient as No-Show"} 
-                                                    onClick={async () => {
-                                                        if (confirm("Are you sure you want to mark this patient as a No-Show?")) {
-                                                            const result = await dispatch(markNoShowOfflineAppointment({ appointmentId: activeAppointment._id }));
-                                                            if (markNoShowOfflineAppointment.fulfilled.match(result)) {
-                                                                setSelectedAppointment(null);
-                                                                dispatch(fetchDoctorAppointments());
-                                                            } else {
-                                                                alert((result.payload as string) || "Failed to mark patient as no-show.");
-                                                            }
-                                                        }
-                                                    }}
+                                                    onClick={() => handleMarkNoShow(activeAppointment._id)}
                                                     className="flex-1 bg-white border border-red-200 text-red-500 py-2.5 rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-50 shadow-sm flex justify-center items-center transition-colors">
-                                                    {isLoading ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-user-times mr-2"></i>}
+                                                    {isMarkingNoShow ? <i className="fas fa-spinner fa-spin mr-2"></i> : <i className="fas fa-user-times mr-2"></i>}
                                                     Mark No-Show
                                                 </button>
                                             );

@@ -24,7 +24,7 @@ export const appointmentService = {
         return res.data;
     },
 
-    createRazorpayOrder: async (payload: { appointmentId: string }) => {
+    createRazorpayOrder: async (payload: { appointmentId: string; useWallet?: boolean }) => {
         const res = await axiosInstance.post('/appointments/create-razorpay-order', payload);
         return res.data;
     },

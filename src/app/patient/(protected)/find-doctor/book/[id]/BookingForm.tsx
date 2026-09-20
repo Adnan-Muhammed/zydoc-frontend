@@ -6,6 +6,7 @@ import { getAvailableSlots, extendLock } from "@/lib/appointments";
 import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/redux/store";
 import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redux/features/appointment/appointmentThunk";
+import { fetchWalletDetails } from "@/redux/features/wallet/walletThunk";
 import SlotPicker, { Slot } from "@/components/patient/SlotPicker";
 
 /* ═══════════════════════════════════════════════════════════════════ 
@@ -85,8 +86,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const dispatch = useDispatch<AppDispatch>();
     const { isSlotLocked } = useSelector((state: RootState) => state.appointment);
     const { user } = useSelector((state: RootState) => state.auth);
+    const { balance: walletBalance } = useSelector((state: RootState) => state.wallet);
     const currentUserId = user?._id || user?.id;
     const paymentCompleted = useRef(false);
+
+    const [useWallet, setUseWallet] = useState<boolean>(true);
+
+    // Fetch patient wallet balance on mount
+    useEffect(() => {
+        dispatch(fetchWalletDetails());
+    }, [dispatch]);
 
     // 14-Day Rolling Window Boundaries
     const today = new Date();
@@ -275,23 +284,41 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     const handlePayment = async (appointmentId: string, existingOrderId?: string) => {
         setIsPaymentLoading(true);
-        const res = await loadRazorpayScript();
-        if (!res) {
-            setModalError('Razorpay SDK failed to load. Are you online?');
-            setIsPaymentLoading(false);
-            return;
-        }
+
+        const walletDeduction = useWallet && walletBalance > 0 ? Math.min(walletBalance, fee) : 0;
+        const netPayable = Math.max(0, fee - walletDeduction);
+        const isFullWallet = useWallet && walletBalance >= fee;
 
         try {
             let orderId = existingOrderId;
-            let orderAmount = fee * 100;
+            let orderAmount = (useWallet && walletDeduction > 0 ? netPayable : fee) * 100;
             let orderCurrency = 'INR';
 
             if (!orderId) {
-                const orderResult = await dispatch(createRazorpayOrder({ appointmentId })).unwrap();
+                const orderResult = await dispatch(createRazorpayOrder({
+                    appointmentId,
+                    useWallet: Boolean(useWallet && walletBalance > 0)
+                })).unwrap();
+
+                // ── Seamless Full Wallet Completion ──
+                if (orderResult?.status === 'COMPLETED_VIA_WALLET') {
+                    paymentCompleted.current = true;
+                    setShowConfirmModal(false);
+                    dispatch(fetchWalletDetails());
+                    router.push("/patient/appointments");
+                    return;
+                }
+
                 orderId = orderResult.id;
                 orderAmount = orderResult.amount;
                 orderCurrency = orderResult.currency;
+            }
+
+            const res = await loadRazorpayScript();
+            if (!res) {
+                setModalError('Razorpay SDK failed to load. Are you online?');
+                setIsPaymentLoading(false);
+                return;
             }
 
             let heartbeatInterval: NodeJS.Timeout;
@@ -318,6 +345,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         })).unwrap();
                         paymentCompleted.current = true;
                         setShowConfirmModal(false);
+                        dispatch(fetchWalletDetails());
                         router.push("/patient/appointments");
                     } catch (err: any) {
                         if (err?.code === 'SLOT_EXPIRED_REFUNDED') {
@@ -798,98 +826,172 @@ export default function BookingForm({ doctor }: { doctor: any }) {
             </div>
 
             {/* ─── Submit button ─── */}
-            <button
-                type="submit"
-                disabled={!time || isSlotLocked}
-                className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-                <i className="fas fa-lock text-xs" />
-                <span>Book & Proceed to Payment (₹{fee})</span>
-            </button>
+            {(() => {
+                const walletDeduction = useWallet && walletBalance > 0 ? Math.min(walletBalance, fee) : 0;
+                const netPayable = Math.max(0, fee - walletDeduction);
+                const isFullWallet = useWallet && walletBalance >= fee;
+
+                return (
+                    <button
+                        type="submit"
+                        disabled={!time || isSlotLocked}
+                        className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        <i className="fas fa-lock text-xs" />
+                        <span>
+                            {isFullWallet
+                                ? `Book & Pay ₹${fee} via Wallet`
+                                : walletDeduction > 0
+                                ? `Book & Pay ₹${netPayable} (Wallet: -₹${walletDeduction})`
+                                : `Book & Proceed to Payment (₹${fee})`}
+                        </span>
+                    </button>
+                );
+            })()}
 
             {/* ─── Confirmation & Payment Modal ─── */}
-            {showConfirmModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                                <i className="fas fa-shield-halved text-indigo-600" />
-                                Confirm Appointment Slot
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!isPaymentLoading && !isLocking) {
+            {showConfirmModal && (() => {
+                const walletDeduction = useWallet && walletBalance > 0 ? Math.min(walletBalance, fee) : 0;
+                const netPayable = Math.max(0, fee - walletDeduction);
+                const isFullWallet = useWallet && walletBalance >= fee;
+
+                return (
+                    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                    <i className="fas fa-shield-halved text-indigo-600" />
+                                    Confirm Appointment Slot
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!isPaymentLoading && !isLocking) {
+                                            setShowConfirmModal(false);
+                                            setModalError(null);
+                                        }
+                                    }}
+                                    disabled={isPaymentLoading || isLocking}
+                                    className="text-slate-400 hover:text-slate-600 p-1"
+                                >
+                                    <i className="fas fa-times" />
+                                </button>
+                            </div>
+
+                            {modalError && (
+                                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100">
+                                    {modalError}
+                                </div>
+                            )}
+
+                            {/* Wallet Option Card */}
+                            {walletBalance > 0 && (
+                                <div className="rounded-xl border p-4 bg-emerald-50/80 border-emerald-200 transition-all">
+                                    <label className="flex items-center gap-3 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={useWallet}
+                                            onChange={(e) => setUseWallet(e.target.checked)}
+                                            className="h-5 w-5 rounded text-emerald-600 focus:ring-emerald-500 border-emerald-300"
+                                        />
+                                        <div className="flex-1 flex items-center justify-between">
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                                    <i className="fas fa-wallet text-emerald-600" />
+                                                    Use Wallet Balance
+                                                </p>
+                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                    Available: <span className="font-semibold text-emerald-700">₹{walletBalance}</span>
+                                                </p>
+                                            </div>
+                                            {useWallet && walletDeduction > 0 && (
+                                                <span className="text-xs font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md">
+                                                    -₹{walletDeduction}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+                            )}
+
+                            {/* Summary Breakdown */}
+                            <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl text-xs text-slate-600 border border-slate-100">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-medium">Doctor:</span>
+                                    <span className="font-bold text-slate-800">Dr. {doctor.firstName} {doctor.lastName}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-medium">Date & Time:</span>
+                                    <span className="font-bold text-slate-800">{dateString} at {time}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-medium">Channel:</span>
+                                    <span className="font-bold text-slate-800 capitalize">{type === "online" ? "Telehealth (Online)" : "In-Person (Offline)"}</span>
+                                </div>
+
+                                <div className="border-t border-slate-200/60 pt-2.5 space-y-1.5">
+                                    <div className="flex justify-between text-slate-600">
+                                        <span>Consultation Fee:</span>
+                                        <span className="font-semibold">₹{fee}</span>
+                                    </div>
+                                    {useWallet && walletBalance > 0 && (
+                                        <div className="flex justify-between text-emerald-600 font-medium">
+                                            <span>Wallet Applied:</span>
+                                            <span>-₹{walletDeduction}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between pt-1 border-t border-slate-200/40 text-sm font-bold text-slate-800">
+                                        <span>To Pay:</span>
+                                        <span className="text-indigo-600">₹{netPayable}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    disabled={isLocking || isPaymentLoading}
+                                    onClick={() => {
                                         setShowConfirmModal(false);
                                         setModalError(null);
-                                    }
-                                }}
-                                disabled={isPaymentLoading || isLocking}
-                                className="text-slate-400 hover:text-slate-600 p-1"
-                            >
-                                <i className="fas fa-times" />
-                            </button>
-                        </div>
-
-                        {modalError && (
-                            <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100">
-                                {modalError}
+                                    }}
+                                    className="w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={isLocking || isPaymentLoading}
+                                    onClick={handleProceedToPay}
+                                    className="w-1/2 py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5 transition"
+                                >
+                                    {isLocking || isPaymentLoading ? (
+                                        <>
+                                            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                                            <span>Processing…</span>
+                                        </>
+                                    ) : isFullWallet ? (
+                                        <>
+                                            <i className="fas fa-wallet text-xs" />
+                                            <span>Pay ₹{fee} via Wallet</span>
+                                        </>
+                                    ) : useWallet && walletBalance > 0 ? (
+                                        <>
+                                            <i className="fas fa-credit-card text-xs" />
+                                            <span>Pay ₹{netPayable} via Razorpay</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-credit-card text-xs" />
+                                            <span>Pay ₹{fee} via Razorpay</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
-                        )}
-
-                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl text-xs text-slate-600 border border-slate-100">
-                            <div className="flex justify-between">
-                                <span className="text-slate-400 font-medium">Doctor:</span>
-                                <span className="font-bold text-slate-800">Dr. {doctor.firstName} {doctor.lastName}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-400 font-medium">Date & Time:</span>
-                                <span className="font-bold text-slate-800">{dateString} at {time}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-slate-400 font-medium">Channel:</span>
-                                <span className="font-bold text-slate-800 capitalize">{type === "online" ? "Telehealth (Online)" : "In-Person (Offline)"}</span>
-                            </div>
-                            <div className="flex justify-between border-t border-slate-200/60 pt-2 text-sm font-bold text-slate-800">
-                                <span>Total Fee:</span>
-                                <span className="text-indigo-600">₹{fee}</span>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button
-                                type="button"
-                                disabled={isLocking || isPaymentLoading}
-                                onClick={() => {
-                                    setShowConfirmModal(false);
-                                    setModalError(null);
-                                }}
-                                className="w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                disabled={isLocking || isPaymentLoading}
-                                onClick={handleProceedToPay}
-                                className="w-1/2 py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5 transition"
-                            >
-                                {isLocking || isPaymentLoading ? (
-                                    <>
-                                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
-                                        <span>Processing…</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-credit-card text-xs" />
-                                        <span>Pay Now</span>
-                                    </>
-                                )}
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </form>
     );
 }

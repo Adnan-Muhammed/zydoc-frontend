@@ -26,6 +26,7 @@ export interface AppointmentState {
     adminAppointments: any[];
     disputedAppointments: any[];
     currentAppointment: any | null;
+    waitingRoomPresence: Record<string, boolean>;
 }
 
 const initialState: AppointmentState = {
@@ -38,6 +39,7 @@ const initialState: AppointmentState = {
     adminAppointments: [],
     disputedAppointments: [],
     currentAppointment: null,
+    waitingRoomPresence: {},
 };
 
 const appointmentSlice = createSlice({
@@ -88,6 +90,21 @@ const appointmentSlice = createSlice({
                 // Mutating state directly works because Redux Toolkit uses Immer
                 state.doctorAppointments[index].status = status;
             }
+        },
+        setPatientWaiting(state, action) {
+            const { appointmentId } = action.payload;
+            if (appointmentId) {
+                state.waitingRoomPresence[appointmentId] = true;
+            }
+        },
+        setPatientDisconnected(state, action) {
+            const { appointmentId } = action.payload;
+            if (appointmentId) {
+                state.waitingRoomPresence[appointmentId] = false;
+            }
+        },
+        hydrateWaitingRoom(state, action) {
+            state.waitingRoomPresence = action.payload || {};
         }
     },
     extraReducers: (builder) => {
@@ -189,12 +206,10 @@ const appointmentSlice = createSlice({
                 state.isLoading = false;
                 state.error = action.payload as string;
             })
-            .addCase(completeOfflineAppointment.pending, (state) => {
-                state.isLoading = true;
-                state.error = null;
+            .addCase(completeOfflineAppointment.pending, () => {
+                // Do not mutate global state.isLoading or state.error to avoid unmounting appointment views
             })
             .addCase(completeOfflineAppointment.fulfilled, (state, action) => {
-                state.isLoading = false;
                 // Optimistically update the appointment status in the local list
                 const completedAppt = action.payload?.appointment;
                 if (completedAppt?._id) {
@@ -202,17 +217,14 @@ const appointmentSlice = createSlice({
                     if (idx !== -1) state.doctorAppointments[idx].status = 'completed';
                 }
             })
-            .addCase(completeOfflineAppointment.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
+            .addCase(completeOfflineAppointment.rejected, () => {
+                // Do not mutate global state.error so OTP verification error displays locally inside modal
             })
             // Mark No-Show Offline Appointment
-            .addCase(markNoShowOfflineAppointment.pending, (state) => {
-                state.isLoading = true;
-                state.error = null;
+            .addCase(markNoShowOfflineAppointment.pending, () => {
+                // Do not mutate global state.isLoading or state.error
             })
             .addCase(markNoShowOfflineAppointment.fulfilled, (state, action) => {
-                state.isLoading = false;
                 const updated = action.payload?.appointment;
                 if (updated?._id) {
                     const idx = state.doctorAppointments.findIndex(a => a._id === updated._id);
@@ -224,17 +236,14 @@ const appointmentSlice = createSlice({
                     }
                 }
             })
-            .addCase(markNoShowOfflineAppointment.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
+            .addCase(markNoShowOfflineAppointment.rejected, () => {
+                // Do not mutate global state.error
             })
             // Cancel Appointment
-            .addCase(cancelAppointment.pending, (state) => {
-                state.isLoading = true;
-                state.error = null;
+            .addCase(cancelAppointment.pending, () => {
+                // Do not mutate global state.isLoading or state.error
             })
             .addCase(cancelAppointment.fulfilled, (state, action) => {
-                state.isLoading = false;
                 const updatedAppt = action.payload?.appointment;
                 if (updatedAppt?._id) {
                     const idx = state.appointments.findIndex(a => a._id === updatedAppt._id);
@@ -243,17 +252,14 @@ const appointmentSlice = createSlice({
                     }
                 }
             })
-            .addCase(cancelAppointment.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
+            .addCase(cancelAppointment.rejected, () => {
+                // Do not mutate global state.error
             })
             // Dispute Appointment
-            .addCase(disputeAppointment.pending, (state) => {
-                state.isLoading = true;
-                state.error = null;
+            .addCase(disputeAppointment.pending, () => {
+                // Do not mutate global state.isLoading or state.error
             })
             .addCase(disputeAppointment.fulfilled, (state, action) => {
-                state.isLoading = false;
                 const updatedAppt = action.payload?.appointment;
                 if (updatedAppt?._id) {
                     const idx = state.appointments.findIndex(a => a._id === updatedAppt._id);
@@ -262,9 +268,8 @@ const appointmentSlice = createSlice({
                     }
                 }
             })
-            .addCase(disputeAppointment.rejected, (state, action) => {
-                state.isLoading = false;
-                state.error = action.payload as string;
+            .addCase(disputeAppointment.rejected, () => {
+                // Do not mutate global state.error
             })
             // Fetch Disputed Appointments (Admin)
             .addCase(fetchDisputedAppointmentsAdmin.pending, (state) => {
@@ -304,5 +309,5 @@ const appointmentSlice = createSlice({
     },
 });
 
-export const { clearAppointmentError, resetLockState, addBooking, updateAppointmentStatus } = appointmentSlice.actions;
+export const { clearAppointmentError, resetLockState, addBooking, updateAppointmentStatus, setPatientWaiting, setPatientDisconnected, hydrateWaitingRoom } = appointmentSlice.actions;
 export default appointmentSlice.reducer;

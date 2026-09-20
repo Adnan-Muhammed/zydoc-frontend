@@ -71,5 +71,25 @@ const setRole = async (data: { role: string }) => {
     return res.json();
 };
 
-const authService = { login, signup, verifyOtp, logout, getCurrentUser, resendOtp, loginWithGoogle, setRole };
+const forgotPassword = async (data: { email: string }) => {
+    const res = await axiosInstance.post('/auth/forgot-password', data, { withCredentials: true });
+    return res.data;
+};
+
+const verifyResetOtp = async (data: { userId: string; otp: string }) => {
+    const res = await axiosInstance.post('/auth/verify-reset-otp', data, { withCredentials: true });
+    return res.data;
+};
+
+const resetPassword = async (data: { userId: string; otp: string; newPassword: string }) => {
+    const res = await axiosInstance.post('/auth/reset-password', data, { withCredentials: true });
+    return res.data;
+};
+
+const changePassword = async (data: { currentPassword: string; newPassword: string }) => {
+    const res = await axiosInstance.post('/auth/change-password', data, { withCredentials: true });
+    return res.data;
+};
+
+const authService = { login, signup, verifyOtp, logout, getCurrentUser, resendOtp, loginWithGoogle, setRole, forgotPassword, verifyResetOtp, resetPassword, changePassword };
 export default authService;

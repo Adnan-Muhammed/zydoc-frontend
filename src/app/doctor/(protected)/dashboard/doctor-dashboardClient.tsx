@@ -18,19 +18,15 @@ export default function DoctorDashboardPage() {
   const { user, isLoading } = useAppSelector((state) => state.auth);
 
   const isPending =
-    user?.isProfileCompleted &&
-    user?.verificationStatus === 'pending';
+    user?.verificationStatus === 'pending' ||
+    (Boolean(user?.isProfileCompleted) && !user?.verificationStatus);
 
-  const isRejected =
-    user?.isProfileCompleted &&
-    user?.verificationStatus === 'rejected';
+  const isRejected = user?.verificationStatus === 'rejected';
 
-  const isApproved =
-    user?.isProfileCompleted &&
-    user?.verificationStatus === 'approved';
+  const isApproved = user?.verificationStatus === 'approved';
 
   const dispatch = useAppDispatch();
-  const { doctorAppointments: appointments, isLoading: loadingAppointments } = useAppSelector((state) => state.appointment);
+  const { doctorAppointments: appointments, isLoading: loadingAppointments, waitingRoomPresence } = useAppSelector((state) => state.appointment);
 
   const [appointmentFilter, setAppointmentFilter] = useState<'all' | 'video' | 'physical'>('all');
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
@@ -159,25 +155,52 @@ export default function DoctorDashboardPage() {
 
       {/* Rejected Banner */}
       {isRejected && (
-        <div className="mb-8 rounded-3xl border border-red-200 bg-red-50 p-6 shadow-sm">
-
-          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
-
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-2xl text-red-600">
-              <i className="fas fa-ban"></i>
+        <div className="mb-8 rounded-3xl border-2 border-rose-200 bg-gradient-to-br from-rose-50 via-white to-rose-50/50 p-6 sm:p-8 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-5">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-3xl text-rose-600 shadow-xs">
+              <i className="fas fa-circle-exclamation"></i>
             </div>
 
-            <div>
-              <h3 className="text-xl font-bold text-red-800">
-                Application Rejected
-              </h3>
+            <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-xl sm:text-2xl font-bold text-rose-900">
+                  Profile Application Requires Revisions
+                </h3>
+                <span className="self-center sm:self-auto px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
+                  Status: Action Required
+                </span>
+              </div>
 
-              <p className="mt-2 text-red-700">
-                Your application has been rejected by administration.
-                Please contact support for more details.
+              <p className="mt-2 text-sm text-slate-700 leading-relaxed">
+                Your profile submission was reviewed by our medical administration team. One or more documents or credential entries could not be verified and require your attention.
               </p>
-            </div>
 
+              {/* Specific Admin Feedback Reason Box */}
+              <div className="mt-4 p-4 rounded-2xl border border-rose-200 bg-rose-50/80 text-left">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-rose-800">
+                  <i className="fas fa-comment-medical text-sm text-rose-600"></i>
+                  <span>Administrator Feedback & Rejection Reason:</span>
+                </div>
+                <p className="mt-1.5 text-sm sm:text-base font-semibold text-rose-950 whitespace-pre-wrap leading-relaxed">
+                  {user?.rejectionReason || 'Please review your uploaded certificates and ensure all details match your medical credentials.'}
+                </p>
+              </div>
+
+              {/* Call to Action: Resubmit Documents */}
+              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4">
+                <Link
+                  href="/doctor/complete-profile"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-xl transition-all shadow-md shadow-rose-200 hover:shadow-lg"
+                >
+                  <i className="fas fa-pen-to-square"></i>
+                  <span>Edit Profile / Resubmit Documents</span>
+                </Link>
+
+                <p className="text-xs text-slate-500">
+                  Updating your documents will automatically reset your application to <strong>Pending Review</strong>.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -220,10 +243,11 @@ export default function DoctorDashboardPage() {
               const isOffline = nextAppt?.consultationType === 'offline' || nextAppt?.consultationType === 'physical';
               const nowMs = currentTime;
               const startMs = nextAppt ? getAppointmentStartTimestamp(nextAppt) : 0;
-              const fifteenMinsMs = 15 * 60 * 1000;
-              const isWithin15Mins = Boolean(startMs > 0 && nowMs >= startMs - fifteenMinsMs);
+              const tenMinsMs = 10 * 60 * 1000;
+              const isWithin10Mins = Boolean(startMs > 0 && nowMs >= startMs - tenMinsMs);
               const isSlotLive = Boolean(nextAppt && startMs > 0 && nowMs >= startMs);
-              const canJoinCall = isOffline ? false : (isSlotLive || isWithin15Mins || apptStatus === 'patient joined' || apptStatus === 'time reached');
+              const canJoinCall = isOffline ? false : (isSlotLive || isWithin10Mins || apptStatus === 'patient joined' || apptStatus === 'time reached');
+              const isWaiting = nextAppt ? Boolean(waitingRoomPresence?.[nextAppt._id]) : false;
 
               if (nextAppt) {
                 if (isOffline) {
@@ -246,7 +270,8 @@ export default function DoctorDashboardPage() {
                     btnText = 'View Appointment Details';
                     isPulsing = false;
                   }
-                } else if (apptStatus === 'patient joined') {
+                } else if (isWaiting) {
+                  // Rule 1: Green when patient is actively live in the waiting room
                   cardBgClass = 'bg-gradient-to-r from-emerald-600 to-teal-700';
                   textClass = 'text-emerald-700';
                   lightTextClass = 'text-emerald-100';
@@ -256,44 +281,36 @@ export default function DoctorDashboardPage() {
                   isPulsing = true;
                   pulseColor = 'bg-emerald-400';
                   pulseDotColor = 'bg-emerald-500';
-                } else if (apptStatus === 'patient disconnected') {
-                  cardBgClass = 'bg-gradient-to-r from-red-500 to-red-700';
-                  textClass = 'text-red-600';
-                  lightTextClass = 'text-red-100';
-                  hoverClass = 'text-red-700 hover:bg-red-50';
-                  badgeText = 'Patient Ended Call';
-                  btnText = 'Rejoin Call';
-                  isPulsing = false;
                 } else if (isSlotLive || apptStatus === 'time reached') {
-                  // Slot time has arrived for online consultation
-                  cardBgClass = 'bg-gradient-to-r from-emerald-600 to-teal-700';
-                  textClass = 'text-emerald-700';
-                  lightTextClass = 'text-emerald-100';
-                  hoverClass = 'text-emerald-800 hover:bg-emerald-50';
+                  // Rule 2: Orange when scheduled slot time is reached and patient hasn't joined yet
+                  cardBgClass = 'bg-gradient-to-r from-orange-500 to-amber-600';
+                  textClass = 'text-orange-700';
+                  lightTextClass = 'text-orange-100';
+                  hoverClass = 'text-orange-800 hover:bg-orange-50';
                   badgeText = 'Consultation Live';
                   btnText = 'Join Call (Live)';
                   isPulsing = true;
-                  pulseColor = 'bg-emerald-400';
-                  pulseDotColor = 'bg-emerald-500';
-                } else if (isWithin15Mins) {
-                  // Within 15m early join window: Ready to join!
+                  pulseColor = 'bg-orange-400';
+                  pulseDotColor = 'bg-orange-500';
+                } else if (isWithin10Mins) {
+                  // Within 10m early join window: Ready to join!
                   cardBgClass = 'bg-gradient-to-r from-indigo-600 to-blue-700';
                   textClass = 'text-indigo-600';
                   lightTextClass = 'text-indigo-100';
                   hoverClass = 'text-indigo-700 hover:bg-indigo-50';
-                  badgeText = 'Starting Soon (15m Early Join)';
+                  badgeText = 'Starting Soon (10m Early Join)';
                   btnText = 'Join Call Early';
                   isPulsing = true;
                   pulseColor = 'bg-indigo-400';
                   pulseDotColor = 'bg-indigo-500';
                 } else {
-                  // Scheduled in the future (>15m away, e.g. hours or days away)
+                  // Scheduled in the future (>10m away) - Rule 3: Blue
                   cardBgClass = 'bg-gradient-to-r from-blue-600 to-indigo-700';
                   textClass = 'text-blue-600';
                   lightTextClass = 'text-blue-100';
                   hoverClass = 'text-blue-700 hover:bg-blue-50';
                   badgeText = 'Upcoming Online Consultation';
-                  btnText = 'Join Opens 15m Prior';
+                  btnText = 'Join Opens 10m Prior';
                   isPulsing = false;
                 }
               }
@@ -372,7 +389,7 @@ export default function DoctorDashboardPage() {
                         !nextAppt
                           ? undefined
                           : !isOffline && !canJoinCall
-                          ? "You can only join the consultation up to 15 minutes before the scheduled time."
+                          ? "You can only join the consultation up to 10 minutes before the scheduled time."
                           : undefined
                       }
                       onClick={() => {

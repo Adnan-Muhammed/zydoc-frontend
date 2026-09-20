@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { useSocket } from '@/hooks/useSocket';
-import { addBooking, updateAppointmentStatus } from '@/redux/features/appointment/appointmentSlice';
+import { addBooking, updateAppointmentStatus, setPatientWaiting, setPatientDisconnected, hydrateWaitingRoom } from '@/redux/features/appointment/appointmentSlice';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
 import { getAppointmentStartTimestamp, getAppointmentEndTimestamp } from '@/utils/appointmentStatus';
 
@@ -12,6 +12,19 @@ export const useAppointmentTracker = () => {
     const { user } = useAppSelector((state) => state.auth);
     const { doctorAppointments } = useAppSelector((state) => state.appointment);
     const { socket } = useSocket({ userId: user?._id || user?.id, role: user?.role });
+
+    // Hydrate waiting room from sessionStorage on mount
+    useEffect(() => {
+        const stored = sessionStorage.getItem('waitingRoomPresence');
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                dispatch(hydrateWaitingRoom(parsed));
+            } catch (e) {
+                console.error("Failed to parse waitingRoomPresence from sessionStorage", e);
+            }
+        }
+    }, [dispatch]);
 
     // 1. Socket Listeners
     useEffect(() => {
@@ -32,6 +45,13 @@ export const useAppointmentTracker = () => {
                 appointmentId: payload.appointmentId,
                 status: 'Patient Joined'
             }));
+            dispatch(setPatientWaiting({ appointmentId: payload.appointmentId }));
+            
+            // Sync to sessionStorage
+            const currentStored = sessionStorage.getItem('waitingRoomPresence');
+            const presenceMap = currentStored ? JSON.parse(currentStored) : {};
+            presenceMap[payload.appointmentId] = true;
+            sessionStorage.setItem('waitingRoomPresence', JSON.stringify(presenceMap));
         };
 
         const handlePatientDisconnected = (payload: { appointmentId: string }) => {
@@ -39,6 +59,15 @@ export const useAppointmentTracker = () => {
                 appointmentId: payload.appointmentId,
                 status: 'Patient Disconnected'
             }));
+            dispatch(setPatientDisconnected({ appointmentId: payload.appointmentId }));
+
+            // Sync to sessionStorage
+            const currentStored = sessionStorage.getItem('waitingRoomPresence');
+            if (currentStored) {
+                const presenceMap = JSON.parse(currentStored);
+                presenceMap[payload.appointmentId] = false;
+                sessionStorage.setItem('waitingRoomPresence', JSON.stringify(presenceMap));
+            }
         };
 
         socket.on('new_booking', handleNewBooking);
@@ -70,8 +99,8 @@ export const useAppointmentTracker = () => {
                 const startMs = getAppointmentStartTimestamp(appt);
                 const endMs = getAppointmentEndTimestamp(appt);
 
-                // Slot is actively live: current time is >= start time and has not exceeded slot end (+ 15 min buffer)
-                if (startMs > 0 && endMs > 0 && now >= startMs && now <= (endMs + 15 * 60000)) {
+                // Slot is actively live: current time is >= start time and has not exceeded slot end (+ 10 min buffer)
+                if (startMs > 0 && endMs > 0 && now >= startMs && now <= (endMs + 10 * 60000)) {
                     // Skip updating if doctor is already in the consultation room
                     if (pathname === `/doctor/consultation/${appt._id}`) {
                         return;

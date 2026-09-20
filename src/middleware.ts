@@ -24,7 +24,7 @@ function getTokenPayload(token: string): any {
     }
 }
 
-function getRedirectForRole(role: string, pathname: string, isProfileCompleted?: boolean): string | null {
+function getRedirectForRole(role: string, pathname: string, isProfileCompleted?: boolean, verificationStatus?: string): string | null {
     if (role === 'unassigned') {
         // Since we are showing the role selection modal inline on the login/signup page,
         // we just need to let them stay on auth routes or redirect them to login.
@@ -45,6 +45,10 @@ function getRedirectForRole(role: string, pathname: string, isProfileCompleted?:
             if (isProtectedOrAuth) return '/doctor/complete-profile';
         }
         if (isProfileCompleted === true && pathname.startsWith('/doctor/complete-profile')) {
+            // Allow rejected doctors to access complete-profile so they can edit/resubmit documents
+            if (verificationStatus === 'rejected') {
+                return null;
+            }
             return dashboard;
         }
     }
@@ -108,7 +112,7 @@ export async function middleware(req: NextRequest) {
     if (accessToken) {
         const payload = getTokenPayload(accessToken);
         if (payload && payload.role) {
-            const redirectTo = getRedirectForRole(payload.role, pathname, payload.isProfileCompleted);
+            const redirectTo = getRedirectForRole(payload.role, pathname, payload.isProfileCompleted, payload.verificationStatus);
             if (redirectTo) {
                 return NextResponse.redirect(new URL(redirectTo, req.url));
             }
@@ -150,7 +154,7 @@ export async function middleware(req: NextRequest) {
         const role = payload?.role;
 
         const redirectTo = role
-            ? getRedirectForRole(role, pathname, payload?.isProfileCompleted)
+            ? getRedirectForRole(role, pathname, payload?.isProfileCompleted, payload?.verificationStatus)
             : isAuthPage
                 ? (pathname.startsWith('/admin') ? '/admin/dashboard' : '/')
                 : null;

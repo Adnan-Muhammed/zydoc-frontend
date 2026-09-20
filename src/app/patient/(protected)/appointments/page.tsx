@@ -218,7 +218,7 @@ export default function PatientAppointmentsPage() {
             : getAppTimestamp(app);
         const diffHours = (startMs - Date.now()) / (1000 * 60 * 60);
         return {
-            canCancel: diffHours > 12,
+            canCancel: diffHours >= 24,
             hoursLeft: Math.max(0, diffHours)
         };
     };
@@ -229,11 +229,11 @@ export default function PatientAppointmentsPage() {
         try {
             const res = await dispatch(cancelAppointment({ 
                 appointmentId: cancelModalAppointment._id, 
-                reason: cancelReason || 'Patient cancelled (>12h prior)' 
+                reason: cancelReason || 'Patient cancelled (>=24h prior)' 
             })).unwrap();
             setActionMessage({ 
                 type: 'success', 
-                text: res?.message || 'Appointment cancelled successfully. Full refund initiated via Razorpay.' 
+                text: res?.message || 'Appointment cancelled successfully. Full refund credited to your wallet.' 
             });
             setCancelModalAppointment(null);
             dispatch(fetchPatientAppointments());
@@ -281,7 +281,7 @@ export default function PatientAppointmentsPage() {
     const now = new Date();
     
     const isUpcoming = (app: any) => {
-        if (['cancelled', 'completed', 'no-show', 'cancelled-by-doctor', 'disputed', 'refunded'].includes(app.status)) return false;
+        if (['cancelled', 'completed', 'no-show', 'cancelled-by-doctor', 'disputed', 'refunded', 'doctor_missed'].includes(app.status)) return false;
         
         const slotDurationMins = Number(app.doctorId?.slotDuration) || 15;
         const exactAppEndTime = app.scheduledEndAt 
@@ -383,13 +383,13 @@ export default function PatientAppointmentsPage() {
                         </span>
                         
                         {/* Payment & Refund Badge */}
-                        {(app.paymentStatus === 'refunded' || app.status === 'refunded' || app.status === 'cancelled-by-doctor') ? (
+                        {(app.paymentStatus === 'refunded' || app.status === 'refunded' || app.status === 'cancelled-by-doctor' || app.status === 'doctor_missed' || app.status === 'cancelled') ? (
                             <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1.5">
-                                <i className="fas fa-undo text-teal-500"></i> Refunded
+                                <i className="fas fa-undo text-teal-500"></i> Refunded to Wallet
                             </span>
                         ) : (
                             <span className="text-xs font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1.5">
-                                <i className="fas fa-check-circle text-emerald-500"></i> Paid
+                                <i className="fas fa-check-circle text-emerald-500"></i> {app.paymentMethod === 'FULL_WALLET' ? 'Paid via Wallet' : app.paymentMethod === 'SPLIT' ? 'Split Payment' : 'Paid Online'}
                             </span>
                         )}
                     </div>
@@ -466,7 +466,7 @@ export default function PatientAppointmentsPage() {
                                     <button
                                         onClick={() => { setCancelModalAppointment(app); setCancelReason(''); }}
                                         className="px-3 py-1.5 text-xs font-bold rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 transition-colors flex items-center gap-1"
-                                        title="Cancel booking with instant Razorpay auto-refund (>12h before slot)"
+                                        title="Cancel booking with instant wallet auto-refund (>=24h before slot)"
                                     >
                                         <i className="fas fa-ban text-[11px]"></i> Cancel
                                     </button>
@@ -476,7 +476,7 @@ export default function PatientAppointmentsPage() {
                                 <button
                                     disabled
                                     className="px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 text-slate-400 bg-slate-50 cursor-not-allowed flex items-center gap-1"
-                                    title={`Cancellation closed: Only allowed >12h prior (${hoursLeft.toFixed(1)}h remaining)`}
+                                    title={`Cancellation closed: Only allowed >=24h prior (${hoursLeft.toFixed(1)}h remaining)`}
                                 >
                                     <i className="fas fa-lock text-[10px]"></i> Cancel Closed
                                 </button>
@@ -509,9 +509,9 @@ export default function PatientAppointmentsPage() {
                             </span>
                         )}
 
-                        {app.status === 'cancelled-by-doctor' && (
+                        {(app.status === 'cancelled-by-doctor' || app.status === 'doctor_missed') && (
                             <span className="text-xs font-semibold px-2 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                                <i className="fas fa-user-xmark text-rose-500"></i> Doctor Missed
+                                <i className="fas fa-user-xmark text-rose-500"></i> Doctor Missed (Refunded)
                             </span>
                         )}
 
@@ -974,15 +974,15 @@ export default function PatientAppointmentsPage() {
                                     {new Date(cancelModalAppointment.appointmentDate).toDateString()} at {cancelModalAppointment.appointmentTime}
                                 </div>
                                 <div className="text-emerald-700 font-bold pt-1">
-                                    Refund Amount: ₹{cancelModalAppointment.fee} (100% Auto-Refund)
+                                    Refund Amount: ₹{cancelModalAppointment.fee} (100% Wallet Refund)
                                 </div>
                             </div>
 
                             <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-xs text-emerald-800 flex items-start gap-2">
                                 <i className="fas fa-shield-check text-emerald-600 text-sm mt-0.5"></i>
                                 <div>
-                                    <p className="font-bold mb-0.5">12-Hour Cancellation Rule Satisfied</p>
-                                    <p>Your appointment is scheduled more than 12 hours from now. Cancelling will immediately free your slot and trigger a 100% refund via Razorpay to your original payment method.</p>
+                                    <p className="font-bold mb-0.5">24-Hour Cancellation Rule Satisfied</p>
+                                    <p>Your appointment is scheduled more than 24 hours from now. Cancelling will immediately free your slot and credit 100% of the booking fee back to your Zydoc Wallet.</p>
                                 </div>
                             </div>
 

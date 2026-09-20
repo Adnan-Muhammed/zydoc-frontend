@@ -7,6 +7,8 @@ export interface User {
     role: string;
     isProfileCompleted?: boolean;
     verificationStatus?: 'pending' | 'approved' | 'rejected';
+    approvalStatus?: 'pending' | 'approved' | 'rejected';
+    rejectionReason?: string;
     avatarUrl?: string;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any; // Accommodates dynamic role-specific backend fields (consultationSettings, doctorProfile, etc.)

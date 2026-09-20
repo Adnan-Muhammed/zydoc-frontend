@@ -42,15 +42,39 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
       };
 
     case 'cancelled':
+      if (role === 'patient') {
+        return {
+          label: 'Cancelled (Refunded to Wallet)',
+          badgeClass: 'bg-red-50 text-red-700 border border-red-200',
+        };
+      }
       return {
         label: 'Cancelled',
         badgeClass: 'bg-red-50 text-red-700 border border-red-200',
       };
 
+    case 'doctor_missed':
+      if (role === 'patient') {
+        return {
+          label: 'Doctor Missed (Refunded to Wallet)',
+          badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
+        };
+      }
+      if (role === 'doctor') {
+        return {
+          label: 'Missed Consultation',
+          badgeClass: 'bg-red-50 text-red-700 border border-red-200',
+        };
+      }
+      return {
+        label: 'Doctor Missed (Refunded)',
+        badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
+      };
+
     case 'cancelled-by-doctor':
       if (role === 'patient') {
         return {
-          label: 'Doctor No-Show (Refunded)',
+          label: 'Doctor No-Show (Refunded to Wallet)',
           badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
         };
       }
@@ -84,6 +108,12 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
       };
 
     case 'refunded':
+      if (role === 'patient') {
+        return {
+          label: 'Dispute Approved (Refunded to Wallet)',
+          badgeClass: 'bg-teal-50 text-teal-700 border border-teal-200',
+        };
+      }
       return {
         label: 'Refunded',
         badgeClass: 'bg-teal-50 text-teal-700 border border-teal-200',

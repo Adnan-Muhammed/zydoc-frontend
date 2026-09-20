@@ -90,9 +90,25 @@ export async function extendLock(slotId: string) {
     return res.json();
 }
  
-export async function toggleDoctorSlotOverride(date: string, time: string, action: 'close' | 'open', reason?: string) {
+export async function toggleDoctorSlotOverride(
+    date: string, 
+    time: string, 
+    action: 'close' | 'open', 
+    reason?: string,
+    startTime?: string,
+    endTime?: string,
+    duration?: number
+) {
     try {
-        const res = await axiosInstance.post('/appointments/doctor/slot-override', { date, time, action, reason });
+        const res = await axiosInstance.post('/appointments/doctor/slot-override', { 
+            date, 
+            time, 
+            action, 
+            reason,
+            startTime,
+            endTime,
+            duration
+        });
         return res.data;
     } catch (err: any) {
         return {

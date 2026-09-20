@@ -38,7 +38,7 @@ export const unlockSlot = createAsyncThunk(
 
 export const createRazorpayOrder = createAsyncThunk(
     'appointment/createRazorpayOrder',
-    async (payload: { appointmentId: string }, thunkAPI) => {
+    async (payload: { appointmentId: string; useWallet?: boolean }, thunkAPI) => {
         try {
             return await appointmentService.createRazorpayOrder(payload);
         } catch (error: any) {

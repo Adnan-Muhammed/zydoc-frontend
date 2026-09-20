@@ -1,542 +1,656 @@
+// src/app/admin/(protected)/doctors/AdminDoctorsClient.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import axiosInstance from '@/api/axiosInstance';
-import './doctors.css';
-
-interface Doctor {
-    id: string;
-    name: string;
-    email: string;
-    specialty: string;
-    status: string; // Keep for legacy if needed, or remove, but we'll use below
-    verificationStatus: string;
-    accountStatus: string;
-    rating: number;
-    patients: number;
-    joined: string;
-    qualifications: any[];
-}
-
-export default function AdminDoctorsClient({ mode = 'all' }: { mode?: 'all' | 'approvals' }) {
-    const router = useRouter();
-    const [doctors, setDoctors] = useState<Doctor[]>([]);
-    
-    const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
-    const [stats, setStats] = useState({ total: 0, active: 0, newThisMonth: 0, suspended: 0 });
-    
-    // Filters
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [specialtyFilter, setSpecialtyFilter] = useState('');
-    const [sortFilter, setSortFilter] = useState('');
-    
-    // Selection
-    const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-    
-    // Pagination
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalDoctors, setTotalDoctors] = useState(0);
-    const itemsPerPage = 10;
-    
-    // Drawer
-    const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    
-    // Modal & Notifications
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [pendingAction, setPendingAction] = useState<{type: string, id: string, name: string} | null>(null);
-    const [notification, setNotification] = useState({ show: false, msg: '', type: 'success' });
-
-    const fetchDoctors = async () => {
-        try {
-            const params: any = {
-                page: currentPage,
-                limit: itemsPerPage
-            };
-            if (searchQuery) params.search = searchQuery;
-            if (statusFilter) params.status = statusFilter;
-            if (specialtyFilter) params.specialty = specialtyFilter;
-            if (sortFilter) params.sort = sortFilter;
-
-            const res = await axiosInstance.get('/admin/doctors', { params });
-            if (res.data?.success && res.data.doctors) {
-                let mappedDoctors = res.data.doctors.map((u: any) => {
-                    return {
-                        id: u._id,
-                        name: u.name,
-                        email: u.email,
-                        specialty: u.specialty,
-                        status: u.accountStatus === 'suspended' ? 'suspended' : u.verificationStatus === 'approved' ? 'active' : u.verificationStatus === 'rejected' ? 'rejected' : 'pending',
-                        verificationStatus: u.verificationStatus || 'pending',
-                        accountStatus: u.accountStatus || 'active',
-                        rating: u.rating,
-                        patients: u.patients,
-                        joined: u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A',
-                        qualifications: u.qualifications || []
-                    };
-                });
-                
-                if (mode === 'approvals') {
-                    mappedDoctors = mappedDoctors.filter((dr: Doctor) => dr.verificationStatus === 'pending');
-                }
-
-                setDoctors(mappedDoctors);
-                setFilteredDoctors(mappedDoctors);
-                setTotalDoctors(res.data.total || mappedDoctors.length);
-            }
-        } catch (error) {
-            console.error('Failed to fetch doctors', error);
-            showNotif('Failed to load doctors', 'error');
-        }
-    };
-
-    const fetchStats = async () => {
-        try {
-            const res = await axiosInstance.get('/admin/doctors/stats');
-            if (res.data?.success && res.data.stats) {
-                setStats(res.data.stats);
-            }
-        } catch (error) {
-            console.error('Failed to fetch stats', error);
-        }
-    };
-
-    // Reset page to 1 on filter changes
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, statusFilter, specialtyFilter, sortFilter]);
-
-    // Debounce search
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchDoctors();
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [searchQuery, statusFilter, specialtyFilter, sortFilter, currentPage]);
-
-    useEffect(() => {
-        fetchStats();
-    }, []);
-
-    const showNotif = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-        setNotification({ show: true, msg, type });
-        setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3500);
-    };
-
-    const resetFilters = () => {
-        setSearchQuery('');
-        setStatusFilter('');
-        setSpecialtyFilter('');
-        setSortFilter('');
-    }; 
-
-    const viewDoctor = (doctor: Doctor) => {
-        setSelectedDoctor(doctor);
-        setIsDrawerOpen(true);
-    };
-
-    const handleSelectAll = (checked: boolean) => {
-        if (checked) {
-            const newSet = new Set<string>();
-            filteredDoctors.forEach(dr => newSet.add(dr.id));
-            setSelectedRows(newSet);
-        } else {
-            setSelectedRows(new Set());
-        }
-    };
-
-    const handleSelectRow = (id: string) => {
-        const newSet = new Set(selectedRows);
-        if (newSet.has(id)) newSet.delete(id);
-        else newSet.add(id);
-        setSelectedRows(newSet);
-    };
-
-    const bulkAction = async (action: string) => {
-        try {
-            if (action === 'approve') {
-                for (const id of Array.from(selectedRows)) {
-                    await axiosInstance.put(`/admin/users/doctors/${id}/approve`);
-                }
-                showNotif(`Successfully approved ${selectedRows.size} doctor(s).`, 'success');
-            } else if (action === 'suspend') {
-                for (const id of Array.from(selectedRows)) {
-                    await axiosInstance.put(`/admin/users/doctors/${id}/suspend`);
-                }
-                showNotif(`Successfully suspended ${selectedRows.size} doctor(s).`, 'success');
-            } else if (action === 'delete') {
-                for (const id of Array.from(selectedRows)) {
-                    await axiosInstance.delete(`/admin/users/${id}`);
-                }
-                showNotif(`Successfully deleted ${selectedRows.size} doctor(s).`, 'success');
-            }
-            setSelectedRows(new Set());
-            fetchDoctors();
-        } catch (err) {
-            showNotif(`Failed to ${action} doctors.`, 'error');
-        }
-    };
-
-    const confirmAction = async () => {
-        if (!pendingAction) return;
-        setIsModalOpen(false);
-        try {
-            if (pendingAction.type === 'delete') {
-                await axiosInstance.delete(`/admin/users/${pendingAction.id}`);
-            } else if (pendingAction.type === 'suspend') {
-                await axiosInstance.put(`/admin/users/doctors/${pendingAction.id}/suspend`);
-            } else if (pendingAction.type === 'unsuspend') {
-                await axiosInstance.put(`/admin/users/doctors/${pendingAction.id}/unsuspend`);
-            } else if (pendingAction.type === 'approve') {
-                await axiosInstance.put(`/admin/users/doctors/${pendingAction.id}/approve`);
-            } else if (pendingAction.type === 'reject') {
-                await axiosInstance.put(`/admin/users/doctors/${pendingAction.id}/reject`);
-            }
-            showNotif(`Doctor ${pendingAction.type}d successfully.`, 'success');
-            setPendingAction(null);
-            fetchDoctors();
-        } catch (err) {
-            showNotif(`Action failed.`, 'error');
-        }
-    };
-
-    const sortBy = (field: string) => {
-        setSortFilter(field);
-    };
-
-    return (
-        <div className="admin-doctors-page">
-            {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Doctors Management</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage all registered doctors — view, edit, approve, suspend or remove.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors" onClick={() => showNotif('CSV exported!', 'success')}>
-                        <i className="fas fa-download"></i> Export
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors" onClick={() => showNotif('Add Doctor feature coming soon', 'success')}>
-                        <i className="fas fa-user-plus"></i> Add Doctor
-                    </button>
-                </div>
-            </div>
-
-
-
-             {/* Stats Row */}
-            <div className="stats-row">
-                <div className="stat-card">
-                    <div className="stat-icon si-indigo"><i className="fas fa-users"></i></div>
-                    <div><div className="stat-val">{stats.total}</div><div className="stat-lbl">Total Doctors</div></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon si-green"><i className="fas fa-user-check"></i></div>
-                    <div><div className="stat-val">{stats.active}</div><div className="stat-lbl">Active Doctors</div></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon si-orange"><i className="fas fa-user-plus"></i></div>
-                    <div><div className="stat-val">{stats.newThisMonth}</div><div className="stat-lbl">New This Month</div></div>
-                </div>
-                <div className="stat-card">
-                    <div className="stat-icon si-red"><i className="fas fa-user-slash"></i></div>
-                    <div><div className="stat-val">{stats.suspended}</div><div className="stat-lbl">Suspended</div></div>
-                </div>
-            </div>
-
-
-            {/* Toolbar */}
-            <div className="toolbar">
-                <div className="search-wrap">
-                    <i className="fas fa-search"></i>
-                    <input 
-                        type="text" 
-                        placeholder="Search by name, email, specialty..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
-                {mode !== 'approvals' && (
-                    <select className="filter-sel" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                        <option value="">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="pending">Pending</option>
-                        <option value="suspended">Suspended</option>
-                    </select>
-                )}
-                <select className="filter-sel" value={specialtyFilter} onChange={(e) => setSpecialtyFilter(e.target.value)}>
-                    <option value="">All Specialties</option>
-                    <option value="Cardiologist">Cardiologist</option>
-                    <option value="Neurologist">Neurologist</option>
-                    <option value="Dermatologist">Dermatologist</option>
-                    <option value="Orthopedic">Orthopedic</option>
-                    <option value="Pediatrician">Pediatrician</option>
-                    <option value="Psychiatrist">Psychiatrist</option>
-                </select>
-                <select className="filter-sel" value={sortFilter} onChange={(e) => setSortFilter(e.target.value)}>
-                    <option value="">Sort By</option>
-                    <option value="name">Name (A–Z)</option>
-                    <option value="rating">Rating (High)</option>
-                    <option value="patients">Patients (High)</option>
-                    <option value="newest">Newest</option>
-                </select>
-                <button className="btn btn-outline" onClick={resetFilters}>
-                    <i className="fas fa-rotate"></i> Reset
-                </button>
-            </div>
-
-            {/* Bulk Actions Bar */}
-            <div className={`bulk-bar ${selectedRows.size > 0 ? 'show' : ''}`}>
-                <span className="bulk-info">{selectedRows.size} selected</span>
-                <button className="btn btn-outline btn-sm" disabled title="Action only through full profile view"><i className="fas fa-check"></i> Approve</button>
-                <button className="btn btn-outline btn-sm" onClick={() => bulkAction('suspend')}><i className="fas fa-ban"></i> Suspend</button>
-                <button className="btn btn-danger btn-sm" onClick={() => bulkAction('delete')}><i className="fas fa-trash"></i> Delete</button>
-                <button className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setSelectedRows(new Set())}><i className="fas fa-xmark"></i> Clear</button>
-            </div>
-
-            {/* Table */}
-            <div className="table-card">
-                <div className="table-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div className="table-title">All Doctors</div>
-                        <div className="table-count">Showing {filteredDoctors.length} of 6,459</div>
-                    </div>
-                </div>
-                <div className="table-responsive">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style={{ width: '36px' }}>
-                                    <input 
-                                        type="checkbox" 
-                                        onChange={(e) => handleSelectAll(e.target.checked)}
-                                        checked={filteredDoctors.length > 0 && selectedRows.size === filteredDoctors.length}
-                                    />
-                                </th>
-                                <th onClick={() => sortBy('name')}>Doctor <i className="fas fa-sort sort-icon"></i></th>
-                                <th onClick={() => sortBy('specialty')}>Specialty <i className="fas fa-sort sort-icon"></i></th>
-                                <th onClick={() => sortBy('status')}>Status <i className="fas fa-sort sort-icon"></i></th>
-                                <th onClick={() => sortBy('rating')}>Rating <i className="fas fa-sort sort-icon"></i></th>
-                                <th onClick={() => sortBy('patients')}>Patients <i className="fas fa-sort sort-icon"></i></th>
-                                <th onClick={() => sortBy('joined')}>Joined <i className="fas fa-sort sort-icon"></i></th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredDoctors.map(dr => {
-                                const initials = dr.name.split(' ').slice(1).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-                                const statusBadge = { active: 'badge-green', pending: 'badge-yellow', suspended: 'badge-red' }[dr.status] || 'badge-gray';
-                                const stars = dr.rating > 0 ? '★'.repeat(Math.round(dr.rating)) : '—';
-                                
-                                return (
-                                    <tr key={dr.id}>
-                                        <td>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedRows.has(dr.id)}
-                                                onChange={() => handleSelectRow(dr.id)}
-                                            />
-                                        </td>
-                                        <td>
-                                            <div className="dr-cell">
-                                                <div className="dr-avatar">{initials}</div>
-                                                <div>
-                                                    <div className="dr-name">{dr.name}</div>
-                                                    <div className="dr-email">{dr.email}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td>{dr.specialty}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                {dr.verificationStatus === 'pending' ? (
-                                                    <span className="badge badge-yellow"><i className="fas fa-info-circle mr-1"></i> Approval Pending</span>
-                                                ) : dr.verificationStatus === 'rejected' ? (
-                                                    <span className="badge badge-red">Verification Rejected</span>
-                                                ) : (
-                                                    <>
-                                                        <span className="badge badge-green">Verified</span>
-                                                        <span className={`badge ${dr.accountStatus === 'active' ? 'badge-blue' : 'badge-red'}`}>
-                                                            {dr.accountStatus === 'active' ? 'Active Account' : 'Suspended Account'}
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td><span className="stars">{stars}</span> {dr.rating > 0 ? dr.rating : ''}</td>
-                                        <td>{dr.patients.toLocaleString()}</td>
-                                        <td>{dr.joined}</td>
-                                        <td>
-                                            <div className="actions">
-                                                {dr.verificationStatus === 'pending' && (
-                                                    <>
-                                                        <button className="action-btn" style={{color: '#10b981', backgroundColor: '#d1fae5'}} title="Approve" onClick={() => { setPendingAction({ type: 'approve', id: dr.id, name: dr.name }); setIsModalOpen(true); }}><i className="fas fa-check"></i></button>
-                                                        <button className="action-btn" style={{color: '#ef4444', backgroundColor: '#fee2e2'}} title="Reject" onClick={() => { setPendingAction({ type: 'reject', id: dr.id, name: dr.name }); setIsModalOpen(true); }}><i className="fas fa-xmark"></i></button>
-                                                    </>
-                                                )}
-                                                <button className="action-btn action-view" title="View" onClick={() => viewDoctor(dr)}><i className="fas fa-eye"></i></button>
-                                                <button className="action-btn action-edit" title="Edit" onClick={() => showNotif('Edit mode opened', 'success')}><i className="fas fa-pencil"></i></button>
-                                                {dr.verificationStatus === 'approved' && dr.accountStatus === 'active' && (
-                                                    <button className="action-btn action-suspend" title="Suspend" onClick={() => { setPendingAction({ type: 'suspend', id: dr.id, name: dr.name }); setIsModalOpen(true); }}><i className="fas fa-ban"></i></button>
-                                                )}
-                                                {dr.verificationStatus === 'approved' && dr.accountStatus === 'suspended' && (
-                                                    <button className="action-btn" style={{color: '#f59e0b', backgroundColor: '#fef3c7'}} title="Unsuspend" onClick={() => { setPendingAction({ type: 'unsuspend', id: dr.id, name: dr.name }); setIsModalOpen(true); }}><i className="fas fa-rotate-left"></i></button>
-                                                )}
-                                                <button className="action-btn action-delete" title="Delete" onClick={() => { setPendingAction({ type: 'delete', id: dr.id, name: dr.name }); setIsModalOpen(true); }}><i className="fas fa-trash"></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-                <div className="pagination">
-                    <div className="pagination-info">
-                        Showing {totalDoctors === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, totalDoctors)} of {totalDoctors.toLocaleString()} doctors
-                    </div>
-                    <div className="page-btns">
-                        <button className="page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}><i className="fas fa-chevron-left"></i></button>
-                        
-                        {(() => {
-                            const totalPages = Math.ceil(totalDoctors / itemsPerPage);
-                            if (totalPages === 0) return null;
-                            const pages = [];
-                            for (let i = 1; i <= totalPages; i++) {
-                                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-                                    pages.push(
-                                        <button key={i} className={`page-btn ${currentPage === i ? 'active' : ''}`} onClick={() => setCurrentPage(i)}>{i}</button>
-                                    );
-                                } else if (i === currentPage - 2 || i === currentPage + 2) {
-                                    pages.push(<span key={`ellipsis-${i}`} style={{ alignSelf: 'center', color: 'var(--gray-400)' }}>...</span>);
-                                }
-                            }
-                            return pages;
-                        })()}
-
-                        <button className="page-btn" disabled={currentPage >= Math.ceil(totalDoctors / itemsPerPage)} onClick={() => setCurrentPage(p => p + 1)}><i className="fas fa-chevron-right"></i></button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Doctor Detail Drawer */}
-            <div className={`drawer-ov ${isDrawerOpen ? 'open' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) setIsDrawerOpen(false); }}>
-                <div className="drawer">
-                    <div className="drawer-head">
-                        <h3>{selectedDoctor?.name || 'Doctor Details'}</h3>
-                        <button className="drawer-close" onClick={() => setIsDrawerOpen(false)}><i className="fas fa-xmark"></i></button>
-                    </div>
-                    {selectedDoctor && (
-                        <div className="drawer-body">
-                            <div className="profile-top">
-                                <div className="profile-ava" style={{ background: 'var(--indigo-light)', color: 'var(--indigo)' }}>
-                                    {selectedDoctor.name.split(' ').slice(1).map(w=>w[0]).join('').slice(0,2).toUpperCase() || selectedDoctor.name.substring(0,2).toUpperCase()}
-                                </div>
-                                <div>
-                                    <div className="profile-name">{selectedDoctor.name}</div>
-                                    <div className="profile-email">{selectedDoctor.email}</div>
-                                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
-                                        <span className={`badge ${selectedDoctor.verificationStatus === 'approved' ? 'badge-green' : selectedDoctor.verificationStatus === 'pending' ? 'badge-yellow' : 'badge-red'}`}>
-                                            Verification: {selectedDoctor.verificationStatus.charAt(0).toUpperCase() + selectedDoctor.verificationStatus.slice(1)}
-                                        </span>
-                                        {selectedDoctor.verificationStatus === 'approved' && (
-                                            <span className={`badge ${selectedDoctor.accountStatus === 'active' ? 'badge-blue' : 'badge-red'}`}>
-                                                Account: {selectedDoctor.accountStatus.charAt(0).toUpperCase() + selectedDoctor.accountStatus.slice(1)}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="info-grid">
-                                <div className="info-item"><label>Specialty</label><span>{selectedDoctor.specialty}</span></div>
-                                <div className="info-item"><label>Rating</label><span>{selectedDoctor.rating > 0 ? selectedDoctor.rating : 'N/A'}</span></div>
-                                <div className="info-item"><label>Joined</label><span>{selectedDoctor.joined}</span></div>
-                                <div className="info-item"><label>Doctor ID</label><span>#{selectedDoctor.id ? String(selectedDoctor.id).substring(0,6) : 'N/A'}</span></div>
-                            </div>
-                            <div className="stats-mini">
-                                <div className="sm-card"><div className="sm-val">{selectedDoctor.patients.toLocaleString()}</div><div className="sm-lbl">Total Patients</div></div>
-                                <div className="sm-card"><div className="sm-val">{Math.floor(selectedDoctor.patients * 2.5).toLocaleString()}</div><div className="sm-lbl">Consultations</div></div>
-                                <div className="sm-card"><div className="sm-val">₹{(selectedDoctor.patients * 800).toLocaleString()}</div><div className="sm-lbl">Earnings</div></div>
-                            </div>
-                            
-                            {selectedDoctor.qualifications && selectedDoctor.qualifications.length > 0 && (
-                                <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-                                    <h4 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gray-700)', marginBottom: '10px' }}>Qualifications</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {selectedDoctor.qualifications.map((q: any) => (
-                                            <div key={q.id || Math.random()} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: 'var(--gray-50)', borderRadius: '8px', border: '1px solid var(--gray-200)' }}>
-                                                <div>
-                                                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--gray-800)' }}>{q.degree}</div>
-                                                    <div style={{ fontSize: '11px', color: 'var(--gray-500)' }}>{q.institution} • {q.year}</div>
-                                                </div>
-                                                {q.certificateUrl && (
-                                                    <a
-                                                        href={q.certificateUrl.startsWith('http') ? q.certificateUrl : `${process.env.NEXT_PUBLIC_API_URL}${q.certificateUrl.startsWith('/') ? '' : '/'}${q.certificateUrl}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="btn btn-outline btn-sm"
-                                                        style={{ padding: '4px 8px', fontSize: '11px' }}
-                                                    >
-                                                        <i className="fas fa-file-pdf" style={{ marginRight: '4px' }}></i> View
-                                                    </a>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="drawer-acts">
-                                <button className="btn btn-outline btn-sm" onClick={() => router.push(`/admin/doctors/${selectedDoctor.id}`)} style={{ width: '100%', marginBottom: '8px', justifyContent: 'center' }}><i className="fas fa-arrow-up-right-from-square"></i> View Full Profile</button>
-                                <button className="btn btn-indigo btn-sm" onClick={() => showNotif(`Messaging ${selectedDoctor.name}`, 'info')}><i className="fas fa-envelope"></i> Send Message</button>
-                                {selectedDoctor.verificationStatus === 'pending' && (
-                                    <>
-                                        <button className="btn btn-green btn-sm" onClick={() => { setPendingAction({ type: 'approve', id: selectedDoctor.id, name: selectedDoctor.name }); setIsModalOpen(true); }}><i className="fas fa-check"></i> Approve</button>
-                                        <button className="btn btn-danger btn-sm" onClick={() => { setPendingAction({ type: 'reject', id: selectedDoctor.id, name: selectedDoctor.name }); setIsModalOpen(true); }}><i className="fas fa-xmark"></i> Reject</button>
-                                    </>
-                                )}
-                                {selectedDoctor.verificationStatus === 'approved' && selectedDoctor.accountStatus === 'active' && (
-                                    <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#b45309', border: 'none' }} onClick={() => { setPendingAction({ type: 'suspend', id: selectedDoctor.id, name: selectedDoctor.name }); setIsModalOpen(true); }}><i className="fas fa-ban"></i> Suspend</button>
-                                )}
-                                {selectedDoctor.verificationStatus === 'approved' && selectedDoctor.accountStatus === 'suspended' && (
-                                    <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#b45309', border: 'none' }} onClick={() => { setPendingAction({ type: 'unsuspend', id: selectedDoctor.id, name: selectedDoctor.name }); setIsModalOpen(true); }}><i className="fas fa-rotate-left"></i> Unsuspend</button>
-                                )}
-                                <button className="btn btn-sm" style={{ background: '#fee2e2', color: 'var(--danger)', border: 'none' }} onClick={() => { setPendingAction({ type: 'delete', id: selectedDoctor.id, name: selectedDoctor.name }); setIsModalOpen(true); }}><i className="fas fa-trash"></i> Delete</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+import { toast } from 'react-hot-toast';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchMasterDoctors, toggleDoctorStatus } from '@/redux/features/admin/adminThunk';
+import { MasterDoctor } from '@/redux/features/admin/adminTypes';
+import DataTable, { Column } from '@/components/admin/common/DataTable';
+import DoctorDetailDrawer from '@/components/admin/doctors/DoctorDetailDrawer';
+import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConfirmModal';
  
-            {/* Confirm Modal */}
-            <div className={`modal-overlay ${isModalOpen ? 'show' : ''}`}>
-                <div className="modal">
-                    <div className="modal-icon" style={{ 
-                        background: pendingAction?.type === 'delete' ? '#fee2e2' : (pendingAction?.type === 'approve' ? '#d1fae5' : '#fef3c7'), 
-                        color: pendingAction?.type === 'delete' ? '#ef4444' : (pendingAction?.type === 'approve' ? '#10b981' : '#f59e0b') 
-                    }}>
-                        <i className={`fas fa-${pendingAction?.type === 'delete' ? 'trash' : (pendingAction?.type === 'approve' ? 'check' : 'ban')}`}></i>
-                    </div>
-                    <h3 style={{ textTransform: 'capitalize' }}>{pendingAction?.type} Doctor</h3>
-                    <p>Are you sure you want to {pendingAction?.type} {pendingAction?.name}?</p>
-                    <div className="modal-actions">
-                        <button className="btn btn-outline" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                        <button className={`btn ${pendingAction?.type === 'delete' ? 'btn-danger' : (pendingAction?.type === 'approve' ? 'btn-green' : 'btn-indigo')}`} 
-                            style={pendingAction?.type === 'suspend' ? { background: '#f59e0b', color: 'white' } : (pendingAction?.type === 'approve' ? { background: '#10b981', color: 'white' } : {})} 
-                            onClick={confirmAction}>
-                            Confirm
-                        </button>
-                    </div>
-                </div>
-            </div>
+export default function AdminDoctorsClient() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const {
+    doctorsList = [],
+    doctorsTotal = 0,
+    doctorsLoading = false,
+    doctorsPage = 1,
+    doctorsLimit = 15,
+  } = useAppSelector((state) => state.admin || {});
 
-            {/* Notification */}
-            <div className={`notification ${notification.type} ${notification.show ? 'show' : ''}`}>
-                <i className={`fas ${notification.type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation'}`} style={{ color: notification.type === 'success' ? '#10b981' : '#ef4444' }}></i>
-                <span>{notification.msg}</span>
-            </div>
-        </div>
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [accountStatus, setAccountStatus] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState('');
+  const [specialty, setSpecialty] = useState('');
+  const [page, setPage] = useState(1);
+
+  // Selection for bulk actions
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Drawer & Inspection State
+  const [selectedDoctor, setSelectedDoctor] = useState<MasterDoctor | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Status Toggle Modal
+  const [statusModalDoctor, setStatusModalDoctor] = useState<MasterDoctor | null>(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+
+  // 400ms Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  // Load doctors from Redux
+  const loadDoctors = useCallback(() => {
+    dispatch(
+      fetchMasterDoctors({
+        search: debouncedSearch.trim() || undefined,
+        accountStatus: accountStatus || undefined,
+        verificationStatus: verificationStatus || undefined,
+        specialty: specialty || undefined,
+        page,
+        limit: 15,
+      })
     );
+  }, [dispatch, debouncedSearch, accountStatus, verificationStatus, specialty, page]);
+
+  useEffect(() => {
+    loadDoctors();
+  }, [loadDoctors]);
+
+  // Calculate live summary stats from loaded list or total
+  const activeCount = doctorsList.filter((d) => d?.accountStatus === 'active').length;
+  const suspendedCount = doctorsList.filter((d) => d?.accountStatus === 'suspended').length;
+  const pendingCount = doctorsList.filter(
+    (d) => d?.profile?.verificationStatus === 'pending'
+  ).length;
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setAccountStatus('');
+    setVerificationStatus('');
+    setSpecialty('');
+    setPage(1);
+  };
+
+  const handleOpenDrawer = (doctor: MasterDoctor) => {
+    setSelectedDoctor(doctor);
+    setIsDrawerOpen(true);
+  };
+
+  const handleOpenStatusModal = (doctor: MasterDoctor) => {
+    setStatusModalDoctor(doctor);
+    setIsStatusModalOpen(true);
+  };
+
+  const handleConfirmStatusToggle = async (reason: string) => {
+    if (!statusModalDoctor) return;
+    setIsToggling(true);
+    try {
+      const targetId = statusModalDoctor.userId || statusModalDoctor.profile?._id || '';
+      const res = await dispatch(toggleDoctorStatus({ doctorId: targetId, reason })).unwrap();
+      toast.success(res.message || 'Doctor status updated successfully.');
+      setIsStatusModalOpen(false);
+      setStatusModalDoctor(null);
+      loadDoctors();
+    } catch (err: any) {
+      toast.error(typeof err === 'string' ? err : 'Failed to update status');
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
+  // Bulk Actions
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(doctorsList.map((d) => d.userId));
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleToggleRow = (id: string) => {
+    const updated = new Set(selectedIds);
+    if (updated.has(id)) updated.delete(id);
+    else updated.add(id);
+    setSelectedIds(updated);
+  };
+
+  const handleExportCSV = () => {
+    if (!doctorsList || doctorsList.length === 0) {
+      toast.error('No doctor records available to export.');
+      return;
+    }
+
+    const exportData = selectedIds.size > 0
+      ? doctorsList.filter((d) => selectedIds.has(d.userId))
+      : doctorsList;
+
+    const headers = ['Doctor ID', 'Name', 'Email', 'Specialty', 'License Number', 'Account Status', 'Verification Status', 'Joined Date'];
+    const rows = exportData.map((d) => [
+      d.userId || 'N/A',
+      `Dr. ${d.profile?.firstName || ''} ${d.profile?.lastName || ''}`.trim() || 'N/A',
+      d.email || 'N/A',
+      d.profile?.specialty || 'General Practice',
+      d.profile?.licenseNumber || 'Not Provided',
+      d.accountStatus || 'active',
+      d.profile?.verificationStatus || 'pending',
+      d.createdAt ? new Date(d.createdAt).toISOString().split('T')[0] : 'N/A',
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.map((val) => `"${val}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `zydoc_doctors_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${exportData.length} doctor records to CSV.`);
+  };
+
+  // Table Columns
+  const columns: Column<MasterDoctor>[] = [
+    {
+      key: 'select',
+      header: '',
+      width: '40px',
+      render: (doc) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.has(doc.userId)}
+          onChange={() => handleToggleRow(doc.userId)}
+          className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+        />
+      ),
+    },
+    {
+      key: 'doctor',
+      header: 'Doctor Profile',
+      render: (doc) => {
+        const profile = doc.profile || {};
+        const fullName = profile.firstName || profile.lastName
+          ? `Dr. ${profile.firstName || ''} ${profile.lastName || ''}`.trim()
+          : doc.email.split('@')[0];
+
+        const initial = (profile.firstName || doc.email || 'D').charAt(0).toUpperCase();
+
+        return (
+          <div className="flex items-center gap-3">
+            {profile.avatarUrl ? (
+              <img
+                src={
+                  profile.avatarUrl.startsWith('http')
+                    ? profile.avatarUrl
+                    : `${process.env.NEXT_PUBLIC_API_URL || ''}/${profile.avatarUrl.replace(/^\//, '')}`
+                }
+                alt={fullName}
+                className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-100 shadow-2xs shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs shrink-0">
+                {initial}
+              </div>
+            )}
+            <div className="min-w-0">
+              <Link
+                href={`/admin/doctors/${doc.userId}`}
+                className="font-bold text-slate-900 hover:text-indigo-600 transition-colors truncate max-w-[200px] block text-sm"
+              >
+                {fullName}
+              </Link>
+              <div className="text-xs text-slate-400 truncate max-w-[200px] flex items-center gap-1.5 mt-0.5">
+                <i className="fas fa-envelope text-[10px]"></i>
+                <span>{doc.email || 'Not Provided'}</span>
+              </div>
+              {profile.phone && (
+                <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                  <i className="fas fa-phone text-[9px]"></i>
+                  <span>{profile.phone}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'specialty',
+      header: 'Specialty & Credentials',
+      render: (doc) => {
+        const spec = doc.profile?.specialty || 'General Practice';
+        const exp = doc.profile?.yearsOfExperience;
+        const lic = doc.profile?.licenseNumber;
+
+        return (
+          <div className="space-y-1">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/80">
+              {spec}
+            </span>
+            <div className="text-[11px] text-slate-500">
+              {exp ? `${exp} Yrs Exp` : 'Exp: Not Specified'}
+              {lic ? ` • Lic: ${lic}` : ''}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'consultation',
+      header: 'Consultation Fees',
+      render: (doc) => {
+        const settings = doc.profile?.consultationSettings;
+        const onlineFee = settings?.online?.fee ?? settings?.video?.fee ?? settings?.onlineFee ?? settings?.fee;
+        const offlineFee = settings?.offline?.fee ?? settings?.physical?.fee ?? settings?.offlineFee;
+        const isOnline = Boolean(settings?.online?.enabled ?? settings?.video?.enabled ?? true);
+        const isOffline = Boolean(settings?.offline?.enabled ?? settings?.physical?.enabled);
+
+        return (
+          <div className="text-xs space-y-0.5">
+            {isOnline && onlineFee !== undefined ? (
+              <div className="text-slate-800 font-semibold flex items-center gap-1">
+                <i className="fas fa-video text-emerald-500 text-[10px]"></i>
+                <span>₹{onlineFee}</span>
+                <span className="text-[10px] text-slate-400 font-normal">Online</span>
+              </div>
+            ) : null}
+            {isOffline && offlineFee !== undefined ? (
+              <div className="text-slate-700 font-semibold flex items-center gap-1">
+                <i className="fas fa-hospital text-indigo-500 text-[10px]"></i>
+                <span>₹{offlineFee}</span>
+                <span className="text-[10px] text-slate-400 font-normal">Clinic</span>
+              </div>
+            ) : null}
+            {!isOnline && !isOffline && (
+              <span className="text-slate-400 text-xs italic">Fee Not Configured</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Account & Audit Status',
+      render: (doc) => {
+        const isActive = doc.accountStatus === 'active';
+        const vStatus = doc.profile?.verificationStatus || 'pending';
+
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            {/* Account Status Pill */}
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${
+                isActive
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                  isActive ? 'bg-emerald-500' : 'bg-rose-500'
+                }`}
+              />
+              {doc.accountStatus || 'active'}
+            </span>
+
+            {/* Verification Status Pill */}
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                vStatus === 'approved'
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                  : vStatus === 'rejected'
+                  ? 'bg-red-50 text-red-700 border border-red-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}
+            >
+              <i
+                className={`fas ${
+                  vStatus === 'approved'
+                    ? 'fa-check-circle'
+                    : vStatus === 'rejected'
+                    ? 'fa-times-circle'
+                    : 'fa-clock'
+                } mr-1 text-[9px]`}
+              ></i>
+              {vStatus}
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'joined',
+      header: 'Joined Date',
+      render: (doc) => (
+        <span className="text-xs text-slate-500 font-medium">
+          {doc.createdAt
+            ? new Date(doc.createdAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : 'Not Provided'}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (doc) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleOpenDrawer(doc)}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 text-xs font-semibold transition-all border border-transparent hover:border-indigo-100 shadow-2xs"
+            title="Quick Preview Drawer"
+          >
+            <i className="fas fa-eye text-xs"></i>
+            <span className="hidden sm:inline">Preview</span>
+          </button>
+
+          <Link
+            href={`/admin/doctors/${doc.userId}`}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition-all border border-indigo-200 shadow-2xs"
+            title="Full 360° Profile"
+          >
+            <i className="fas fa-id-card text-xs"></i>
+            <span>360° Profile</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => handleOpenStatusModal(doc)}
+            className={`p-1.5 rounded-lg border text-xs transition-colors ${
+              doc.accountStatus === 'active'
+                ? 'border-rose-200 text-rose-600 hover:bg-rose-50'
+                : 'border-emerald-200 text-emerald-600 hover:bg-emerald-50'
+            }`}
+            title={doc.accountStatus === 'active' ? 'Suspend Account' : 'Reactivate Account'}
+          >
+            <i className={`fas ${doc.accountStatus === 'active' ? 'fa-ban' : 'fa-check'}`}></i>
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const totalPages = Math.ceil(doctorsTotal / (doctorsLimit || 15)) || 1;
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Doctors Master Directory
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+              {doctorsTotal} Registered
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Search, audit credentials, monitor platform activity, and manage doctor account permissions.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors"
+          >
+            <i className="fas fa-file-arrow-down text-slate-400"></i>
+            <span>Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={loadDoctors}
+            disabled={doctorsLoading}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors disabled:opacity-50"
+          >
+            <i className={`fas fa-arrows-rotate text-xs ${doctorsLoading ? 'fa-spin text-indigo-600' : 'text-slate-400'}`}></i>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg shrink-0">
+            <i className="fas fa-users-medical"></i>
+          </div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{doctorsTotal}</div>
+            <div className="text-xs font-medium text-slate-500">Total Registered</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg shrink-0">
+            <i className="fas fa-user-check"></i>
+          </div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{activeCount}</div>
+            <div className="text-xs font-medium text-slate-500">Active (Current View)</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg shrink-0">
+            <i className="fas fa-hourglass-half"></i>
+          </div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{pendingCount}</div>
+            <div className="text-xs font-medium text-slate-500">Pending Review</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg shrink-0">
+            <i className="fas fa-user-slash"></i>
+          </div>
+          <div>
+            <div className="text-xl font-bold text-slate-900">{suspendedCount}</div>
+            <div className="text-xs font-medium text-slate-500">Suspended</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Toolbar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col md:flex-row items-center gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1 w-full">
+            <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input
+              type="text"
+              placeholder="Search by doctor name, email, specialty, or license number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all bg-slate-50/50"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            )}
+          </div>
+
+          {/* Account Status Filter */}
+          <div className="w-full md:w-44">
+            <select
+              value={accountStatus}
+              onChange={(e) => {
+                setAccountStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full py-2 px-3 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-hidden focus:border-indigo-500 transition-all"
+            >
+              <option value="">All Account Statuses</option>
+              <option value="active">Active Accounts</option>
+              <option value="suspended">Suspended Accounts</option>
+            </select>
+          </div>
+
+          {/* Verification Status Filter */}
+          <div className="w-full md:w-44">
+            <select
+              value={verificationStatus}
+              onChange={(e) => {
+                setVerificationStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full py-2 px-3 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-hidden focus:border-indigo-500 transition-all"
+            >
+              <option value="">All Audit Statuses</option>
+              <option value="approved">Approved & Verified</option>
+              <option value="pending">Pending Audit</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {/* Specialty Filter */}
+          <div className="w-full md:w-48">
+            <select
+              value={specialty}
+              onChange={(e) => {
+                setSpecialty(e.target.value);
+                setPage(1);
+              }}
+              className="w-full py-2 px-3 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-hidden focus:border-indigo-500 transition-all"
+            >
+              <option value="">All Specialties</option>
+              <option value="Cardiology">Cardiology</option>
+              <option value="Dermatology">Dermatology</option>
+              <option value="General Medicine">General Medicine</option>
+              <option value="Pediatrics">Pediatrics</option>
+              <option value="Orthopedics">Orthopedics</option>
+              <option value="Neurology">Neurology</option>
+              <option value="Psychiatry">Psychiatry</option>
+            </select>
+          </div>
+
+          {(searchTerm || accountStatus || verificationStatus || specialty) && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+
+        {/* Bulk Actions Indicator Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs animate-in fade-in duration-150">
+            <div className="flex items-center gap-2 font-bold text-indigo-900">
+              <i className="fas fa-check-double"></i>
+              <span>{selectedIds.size} Doctor(s) Selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="px-3 py-1 bg-white hover:bg-indigo-100 text-indigo-700 font-semibold rounded-lg border border-indigo-200 transition-colors"
+              >
+                Export Selected CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="px-2 py-1 text-slate-500 hover:text-slate-800 font-semibold"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main Data Table */}
+      <DataTable<MasterDoctor>
+        columns={columns}
+        data={doctorsList}
+        keyExtractor={(doc) => doc.userId}
+        isLoading={doctorsLoading}
+        skeletonRows={8}
+        emptyState={{
+          title: 'No Doctors Found',
+          subtitle:
+            searchTerm || accountStatus || verificationStatus || specialty
+              ? 'No registered doctor matches your current filter criteria.'
+              : 'There are currently no doctors registered on the platform.',
+          icon: 'fas fa-user-doctor',
+          action:
+            searchTerm || accountStatus || verificationStatus || specialty ? (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+              >
+                Clear all filters
+              </button>
+            ) : undefined,
+        }}
+        pagination={{
+          currentPage: doctorsPage,
+          totalPages,
+          totalItems: doctorsTotal,
+          itemsPerPage: doctorsLimit || 15,
+          onPageChange: (newPage) => setPage(newPage),
+        }}
+      />
+
+      {/* Quick Inspection Drawer */}
+      <DoctorDetailDrawer
+        doctor={selectedDoctor}
+        isOpen={isDrawerOpen}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setSelectedDoctor(null);
+        }}
+        onStatusToggled={loadDoctors}
+      />
+
+      {/* Account Status Toggle Confirmation Modal */}
+      <StatusToggleConfirmModal
+        isOpen={isStatusModalOpen}
+        onClose={() => {
+          setIsStatusModalOpen(false);
+          setStatusModalDoctor(null);
+        }}
+        onConfirm={handleConfirmStatusToggle}
+        currentStatus={statusModalDoctor?.accountStatus || 'active'}
+        userName={
+          statusModalDoctor?.profile?.firstName
+            ? `Dr. ${statusModalDoctor.profile.firstName} ${statusModalDoctor.profile.lastName || ''}`.trim()
+            : statusModalDoctor?.email || 'Doctor'
+        }
+        role="doctor"
+        isLoading={isToggling}
+      />
+    </div>
+  );
 }

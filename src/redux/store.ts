@@ -6,6 +6,7 @@ import appointmentReducer from './features/appointment/appointmentSlice';
 import notificationReducer from './features/notification/notificationSlice';
 import doctorReducer from './features/doctor/doctorSlice';
 import consultationReducer from './features/consultation/consultationSlice';
+import walletReducer from './features/wallet/walletSlice';
 // NOTE: patientSlice is scaffolded but patient state is handled server-side
 // via Next.js layout fetches. Uncomment if client-side patient state is needed.
 // import patientReducer from './features/patient/patientSlice';
@@ -19,6 +20,7 @@ export const store = configureStore({
         appointment: appointmentReducer,
         notification: notificationReducer,
         consultation: consultationReducer,
+        wallet: walletReducer,
     },
     devTools: process.env.NODE_ENV !== 'production',
 });
