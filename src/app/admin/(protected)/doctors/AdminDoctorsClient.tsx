@@ -17,7 +17,7 @@ export default function AdminDoctorsClient() {
   const dispatch = useAppDispatch();
   const {
     doctorsList = [],
-    doctorsTotal = 0,
+    doctorsTotal = 0, 
     doctorsLoading = false,
     doctorsPage = 1,
     doctorsLimit = 15,
@@ -66,7 +66,7 @@ export default function AdminDoctorsClient() {
     );
   }, [dispatch, debouncedSearch, accountStatus, verificationStatus, specialty, page]);
 
-  useEffect(() => {
+  useEffect(() => { 
     loadDoctors();
   }, [loadDoctors]);
 

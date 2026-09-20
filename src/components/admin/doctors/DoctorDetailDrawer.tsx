@@ -35,7 +35,7 @@ export default function DoctorDetailDrawer({
   onClose,
   onStatusToggled,
 }: DoctorDetailDrawerProps) {
-  const dispatch = useAppDispatch();
+  const dispatch = useAppDispatch(); 
 
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [currentStatus, setCurrentStatus] = useState<'active' | 'suspended' | string>('active');

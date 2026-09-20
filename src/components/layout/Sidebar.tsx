@@ -80,6 +80,7 @@ function getDoctorNav(isDoctorLocked: boolean): NavSection[] {
         {
             label: 'Patients',
             links: [
+                { href: '/doctor/patients', icon: 'fas fa-users', label: 'My Patients', disabled: isDoctorLocked },
                 { href: '/doctor/prescriptions', icon: 'fas fa-prescription-bottle', label: 'Prescriptions', disabled: isDoctorLocked },
             ],
         },
@@ -100,7 +101,8 @@ const PATIENT_NAV: NavSection[] = [
         label: 'Healthcare',
         links: [
             { href: '/patient/dashboard', icon: 'fas fa-gauge-high', label: 'Dashboard' },
-            { href: '/patient/find-doctor', icon: 'fas fa-user-doctor', label: 'Find Doctors' },
+            { href: '/patient/find-doctor', icon: 'fas fa-magnifying-glass', label: 'Find Doctors' },
+            { href: '/patient/my-doctors', icon: 'fas fa-user-doctor', label: 'My Doctors' },
             { href: '/patient/appointments', icon: 'fas fa-calendar-alt', label: 'My Appointments' },
         ],
     },

@@ -611,7 +611,7 @@ export interface DerivedDashboardStats {
     totalPatients: number;
     activePatients: number;
     
-    totalAppointments: number;
+    totalAppointments: number; 
     completedAppointments: number;
     upcomingAppointments: number;
     cancelledAppointments: number;

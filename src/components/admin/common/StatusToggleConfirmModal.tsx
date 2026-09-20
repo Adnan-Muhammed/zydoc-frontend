@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 
 interface StatusToggleConfirmModalProps {
-  isOpen: boolean;
+  isOpen: boolean; 
   onClose: () => void;
   onConfirm: (reason: string) => Promise<void>;
   currentStatus: 'active' | 'suspended' | string;

@@ -10,7 +10,7 @@ import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConf
 
 interface DoctorDetailPageProps {
   params: { id: string };
-}
+} 
  
 const DAYS = [
   { key: 'monday', label: 'Monday', short: 'Mon' },
@@ -31,13 +31,31 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  // Status toggle modal state
+  // Status toggle modal state (for Reactivation)
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
+ 
+  // Suspension modal state
+  const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
+  const [suspensionReasonInput, setSuspensionReasonInput] = useState('');
+  const [isSuspending, setIsSuspending] = useState(false);
 
   // Rejection modal prompt
-  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  interface RejectModalState {
+    isOpen: boolean;
+    type: 'doctor' | 'medicalCertificate' | 'governmentId' | 'qualification';
+    qualId?: string;
+    title: string;
+    subtitle: string;
+  }
+  const [rejectModal, setRejectModal] = useState<RejectModalState>({
+    isOpen: false,
+    type: 'doctor',
+    title: 'Reject Doctor Application',
+    subtitle: 'Provide a reason for rejecting this application.',
+  });
   const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   // Fetch complete doctor record
   const fetchDoctor = useCallback(async () => {
@@ -90,25 +108,85 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
     }
   };
 
-  const handleRejectDoctor = async () => {
-    if (!rejectionReasonInput.trim() || rejectionReasonInput.trim().length < 10) {
-      toast.error('Please enter a descriptive rejection reason (at least 10 characters).');
+  const openRejectModal = (
+    type: 'doctor' | 'medicalCertificate' | 'governmentId' | 'qualification',
+    title: string,
+    subtitle: string,
+    qualId?: string
+  ) => {
+    setRejectModal({
+      isOpen: true,
+      type,
+      title,
+      subtitle,
+      qualId,
+    });
+    setRejectionReasonInput('');
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectionReasonInput.trim()) {
+      toast.error('Please enter a rejection reason.');
+      return;
+    }
+    if (rejectModal.type === 'doctor' && rejectionReasonInput.trim().length < 10) {
+      toast.error('Application rejection reason must be at least 10 characters.');
       return;
     }
 
     try {
-      setActionLoading(true);
-      await axiosInstance.post(`/admin/doctors/${doctorId}/reject`, {
-        rejectionReason: rejectionReasonInput.trim(),
-      });
-      toast.success('Doctor application rejected.');
-      setIsRejectModalOpen(false);
+      setIsRejecting(true);
+      const reason = rejectionReasonInput.trim();
+
+      if (rejectModal.type === 'doctor') {
+        await axiosInstance.post(`/admin/doctors/${doctorId}/reject`, {
+          rejectionReason: reason,
+        });
+        toast.success('Doctor application rejected.');
+      } else if (rejectModal.type === 'medicalCertificate' || rejectModal.type === 'governmentId') {
+        await axiosInstance.put(`/admin/doctors/${doctorId}/documents/${rejectModal.type}/status`, {
+          status: 'rejected',
+          reason,
+        });
+        toast.success('Document marked as rejected.');
+      } else if (rejectModal.type === 'qualification' && rejectModal.qualId) {
+        await axiosInstance.put(`/admin/doctors/${doctorId}/qualifications/${rejectModal.qualId}/status`, {
+          status: 'rejected',
+          reason,
+        });
+        toast.success('Qualification certificate marked as rejected.');
+      }
+
+      setRejectModal((prev) => ({ ...prev, isOpen: false }));
       setRejectionReasonInput('');
       fetchDoctor();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to reject doctor.');
+      toast.error(err.response?.data?.message || 'Failed to reject.');
     } finally {
-      setActionLoading(false);
+      setIsRejecting(false);
+    }
+  };
+
+  // Suspension confirmation
+  const handleConfirmSuspend = async () => {
+    if (!suspensionReasonInput.trim() || suspensionReasonInput.trim().length < 5) {
+      toast.error('Please enter a descriptive suspension reason (at least 5 characters).');
+      return;
+    }
+
+    try {
+      setIsSuspending(true);
+      await axiosInstance.put(`/admin/doctors/${doctorId}/suspend`, {
+        reason: suspensionReasonInput.trim(),
+      });
+      toast.success('Doctor account has been suspended.');
+      setIsSuspendModalOpen(false);
+      setSuspensionReasonInput('');
+      fetchDoctor();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to suspend doctor.');
+    } finally {
+      setIsSuspending(false);
     }
   };
 
@@ -116,7 +194,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
     try {
       setIsTogglingStatus(true);
       await axiosInstance.post(`/admin/users/doctors/${doctorId}/toggle-status`, { reason });
-      toast.success('Doctor account status toggled successfully.');
+      toast.success('Doctor account status updated successfully.');
       setIsStatusModalOpen(false);
       fetchDoctor();
     } catch (err: any) {
@@ -142,36 +220,60 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
   };
 
   // Document status updates
-  const handleDocStatus = async (docType: 'medicalCertificate' | 'governmentId', status: 'approved' | 'rejected') => {
+  const handleApproveDoc = async (docType: 'medicalCertificate' | 'governmentId') => {
     try {
-      let reason = '';
-      if (status === 'rejected') {
-        const promptReason = window.prompt(`Please enter a rejection reason for this document:`);
-        if (promptReason === null) return;
-        reason = promptReason;
-      }
-      await axiosInstance.put(`/admin/doctors/${doctorId}/documents/${docType}/status`, { status, reason });
-      toast.success(`Document marked as ${status}!`);
+      setActionLoading(true);
+      await axiosInstance.put(`/admin/doctors/${doctorId}/documents/${docType}/status`, {
+        status: 'approved',
+      });
+      toast.success('Document marked as approved!');
       fetchDoctor();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update document status.');
+      toast.error(err.response?.data?.message || 'Failed to approve document.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   // Qualification status updates
-  const handleQualStatus = async (qualId: string, status: 'approved' | 'rejected') => {
+  const handleApproveQual = async (qualId: string) => {
     try {
-      let reason = '';
-      if (status === 'rejected') {
-        const promptReason = window.prompt(`Please enter a reason for rejecting this certificate:`);
-        if (promptReason === null) return;
-        reason = promptReason;
-      }
-      await axiosInstance.put(`/admin/doctors/${doctorId}/qualifications/${qualId}/status`, { status, reason });
-      toast.success(`Certificate marked as ${status}!`);
+      setActionLoading(true);
+      await axiosInstance.put(`/admin/doctors/${doctorId}/qualifications/${qualId}/status`, {
+        status: 'approved',
+      });
+      toast.success('Certificate marked as approved!');
       fetchDoctor();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update qualification status.');
+      toast.error(err.response?.data?.message || 'Failed to approve certificate.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Bulk approve all documents at once
+  const handleApproveAllDocs = async () => {
+    try {
+      setActionLoading(true);
+      const promises: Promise<any>[] = [
+        axiosInstance.put(`/admin/doctors/${doctorId}/documents/medicalCertificate/status`, { status: 'approved' }),
+        axiosInstance.put(`/admin/doctors/${doctorId}/documents/governmentId/status`, { status: 'approved' }),
+      ];
+      if (Array.isArray(doctor?.qualifications)) {
+        doctor.qualifications.forEach((q: any, idx: number) => {
+          const qualId = q.id || String(idx);
+          promises.push(
+            axiosInstance.put(`/admin/doctors/${doctorId}/qualifications/${qualId}/status`, { status: 'approved' })
+          );
+        });
+      }
+      await Promise.all(promises);
+      toast.success('All documents marked as approved!');
+      fetchDoctor();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to approve all documents.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -212,8 +314,9 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
   const dPhone = doctor?.phone || 'Not Provided';
   const dSpecialty = doctor?.specialty || 'General Practice';
   const vStatus = doctor?.verificationStatus || 'pending';
-  const aStatus = doctor?.accountStatus || 'active';
+  const aStatus = doctor?.accountStatus || (doctor as any)?.status || 'active';
   const isActive = aStatus === 'active';
+  const isPostApproval = vStatus === 'approved' || aStatus === 'suspended';
 
   // Safe consultation values
   const consultation = doctor?.consultationSettings || {};
@@ -279,16 +382,22 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                 type="button"
                 onClick={handleApproveDoctor}
                 disabled={actionLoading}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <i className="fas fa-check"></i>
                 <span>Approve Doctor</span>
               </button>
               <button
                 type="button"
-                onClick={() => setIsRejectModalOpen(true)}
+                onClick={() =>
+                  openRejectModal(
+                    'doctor',
+                    'Reject Doctor Application',
+                    'Please provide a clear reason for rejecting this doctor application.'
+                  )
+                }
                 disabled={actionLoading}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
               >
                 <i className="fas fa-xmark"></i>
                 <span>Reject Application</span>
@@ -296,25 +405,38 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
             </>
           )}
 
-          <button
-            type="button"
-            onClick={() => setIsStatusModalOpen(true)}
-            disabled={actionLoading}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs border ${
-              isActive
-                ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
-            }`}
-          >
-            <i className={`fas ${isActive ? 'fa-ban' : 'fa-check-circle'}`}></i>
-            <span>{isActive ? 'Suspend Doctor' : 'Reactivate Doctor'}</span>
-          </button>
+          {vStatus === 'approved' && isActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setSuspensionReasonInput('');
+                setIsSuspendModalOpen(true);
+              }}
+              disabled={actionLoading || isSuspending}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs border bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 cursor-pointer"
+            >
+              <i className="fas fa-ban"></i>
+              <span>Suspend Doctor</span>
+            </button>
+          )}
+
+          {vStatus === 'approved' && !isActive && (
+            <button
+              type="button"
+              onClick={() => setIsStatusModalOpen(true)}
+              disabled={actionLoading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-colors shadow-2xs border bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200 cursor-pointer"
+            >
+              <i className="fas fa-check-circle"></i>
+              <span>Reactivate Doctor</span>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={handleDeleteDoctor}
             disabled={actionLoading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-semibold transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 text-xs font-semibold transition-colors cursor-pointer"
             title="Permanently remove doctor account"
           >
             <i className="fas fa-trash"></i>
@@ -355,6 +477,19 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                 {aStatus} Account
               </span>
             </div>
+
+            {doctor?.suspensionReason && (
+              <div className="mt-3 p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs text-left">
+                <strong className="block font-semibold">Suspension Reason:</strong>
+                <span>{doctor.suspensionReason}</span>
+              </div>
+            )}
+            {doctor?.rejectionReason && (
+              <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs text-left">
+                <strong className="block font-semibold">Rejection Reason:</strong>
+                <span>{doctor.rejectionReason}</span>
+              </div>
+            )}
 
             {/* Quick Metrics */}
             <div className="grid grid-cols-3 gap-2 mt-5 pt-5 border-t border-slate-100 text-center">
@@ -544,7 +679,22 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                 <i className="fas fa-file-shield text-indigo-600"></i>
                 Official Verification Documents
               </span>
-              <span className="text-[11px] font-normal text-slate-400">Audit & Verify</span>
+              <div className="flex items-center gap-2">
+                {!isPostApproval && (
+                  <button
+                    type="button"
+                    onClick={handleApproveAllDocs}
+                    disabled={actionLoading}
+                    className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <i className="fas fa-check-double text-[10px]"></i>
+                    <span>Approve All</span>
+                  </button>
+                )}
+                <span className="text-[11px] font-normal text-slate-400">
+                  {isPostApproval ? 'Verified & Locked' : 'Audit & Verify'}
+                </span>
+              </div>
             </h4>
 
             <div className="space-y-3">
@@ -590,22 +740,34 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                       <span>View</span>
                     </a>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleDocStatus('medicalCertificate', 'approved')}
-                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 text-xs"
-                    title="Approve Medical Certificate"
-                  >
-                    <i className="fas fa-check"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDocStatus('medicalCertificate', 'rejected')}
-                    className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs"
-                    title="Reject Medical Certificate"
-                  >
-                    <i className="fas fa-xmark"></i>
-                  </button>
+                  {!isPostApproval && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveDoc('medicalCertificate')}
+                        disabled={actionLoading}
+                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 text-xs transition-colors cursor-pointer"
+                        title="Approve Medical Certificate"
+                      >
+                        <i className="fas fa-check"></i>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openRejectModal(
+                            'medicalCertificate',
+                            'Reject Medical Certificate',
+                            'Please specify why the medical registration certificate was rejected.'
+                          )
+                        }
+                        disabled={actionLoading}
+                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs transition-colors cursor-pointer"
+                        title="Reject Medical Certificate"
+                      >
+                        <i className="fas fa-xmark"></i>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -651,22 +813,34 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                       <span>View</span>
                     </a>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => handleDocStatus('governmentId', 'approved')}
-                    className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 text-xs"
-                    title="Approve Government ID"
-                  >
-                    <i className="fas fa-check"></i>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDocStatus('governmentId', 'rejected')}
-                    className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs"
-                    title="Reject Government ID"
-                  >
-                    <i className="fas fa-xmark"></i>
-                  </button>
+                  {!isPostApproval && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleApproveDoc('governmentId')}
+                        disabled={actionLoading}
+                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 text-xs transition-colors cursor-pointer"
+                        title="Approve Government ID"
+                      >
+                        <i className="fas fa-check"></i>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openRejectModal(
+                            'governmentId',
+                            'Reject Government Photo ID',
+                            'Please specify why the government photo ID was rejected.'
+                          )
+                        }
+                        disabled={actionLoading}
+                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs transition-colors cursor-pointer"
+                        title="Reject Government ID"
+                      >
+                        <i className="fas fa-xmark"></i>
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -723,22 +897,35 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                           <span>Certificate</span>
                         </a>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => handleQualStatus(q.id, 'approved')}
-                        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200"
-                        title="Approve Certificate"
-                      >
-                        <i className="fas fa-check"></i>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleQualStatus(q.id, 'rejected')}
-                        className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200"
-                        title="Reject Certificate"
-                      >
-                        <i className="fas fa-xmark"></i>
-                      </button>
+                      {!isPostApproval && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveQual(q.id)}
+                            disabled={actionLoading}
+                            className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 border border-emerald-200 text-xs transition-colors cursor-pointer"
+                            title="Approve Certificate"
+                          >
+                            <i className="fas fa-check"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openRejectModal(
+                                'qualification',
+                                `Reject Qualification (${q.degree})`,
+                                'Please specify why this degree certificate was rejected.',
+                                q.id
+                              )
+                            }
+                            disabled={actionLoading}
+                            className="p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs transition-colors cursor-pointer"
+                            title="Reject Certificate"
+                          >
+                            <i className="fas fa-xmark"></i>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -861,7 +1048,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
         </div>
       </div>
 
-      {/* Account Status Toggle Modal */}
+      {/* Account Status Toggle Modal (for Reactivation) */}
       <StatusToggleConfirmModal
         isOpen={isStatusModalOpen}
         onClose={() => setIsStatusModalOpen(false)}
@@ -873,38 +1060,79 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
       />
 
       {/* Rejection Prompt Modal */}
-      {isRejectModalOpen && (
+      {rejectModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <i className="fas fa-triangle-exclamation text-rose-600"></i>
-              Reject Doctor Application
+              {rejectModal.title}
             </h3>
             <p className="text-xs text-slate-500">
-              Please state the specific reason for rejecting Dr. {dName}. This feedback will be sent directly to the applicant.
+              {rejectModal.subtitle}
             </p>
             <textarea
               value={rejectionReasonInput}
               onChange={(e) => setRejectionReasonInput(e.target.value)}
-              placeholder="e.g. The submitted Medical Registration certificate is expired or illegible..."
+              placeholder="e.g. The document is unreadable, expired, or details mismatch..."
               rows={4}
               className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-hidden focus:border-rose-500 focus:ring-2 focus:ring-rose-100"
             />
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setIsRejectModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                onClick={() => setRejectModal((prev) => ({ ...prev, isOpen: false }))}
+                disabled={isRejecting}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleRejectDoctor}
-                disabled={actionLoading}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors disabled:opacity-50"
+                onClick={handleConfirmReject}
+                disabled={isRejecting}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
               >
-                {actionLoading ? 'Rejecting...' : 'Confirm Rejection'}
+                {isRejecting ? 'Rejecting...' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suspension Modal */}
+      {isSuspendModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <i className="fas fa-ban text-amber-600"></i>
+              Suspend Doctor Account
+            </h3>
+            <p className="text-xs text-slate-500">
+              Please state the reason for suspending Dr. {dName}. While suspended, the doctor will not be able to accept appointments or log in normally.
+            </p>
+            <textarea
+              value={suspensionReasonInput}
+              onChange={(e) => setSuspensionReasonInput(e.target.value)}
+              placeholder="e.g. Under investigation for patient dispute or compliance breach..."
+              rows={4}
+              className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:outline-hidden focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            />
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsSuspendModalOpen(false)}
+                disabled={isSuspending}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSuspend}
+                disabled={isSuspending}
+                className="px-4 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {isSuspending ? 'Suspending...' : 'Confirm Suspension'}
               </button>
             </div>
           </div>

@@ -11,7 +11,7 @@ export interface SystemStats {
     revenue?: string;
     commission?: string;
     pendingApprovals?: number;
-    uptime?: string;
+    uptime?: string; 
     responseTime?: string;
     openTickets?: number;
 }

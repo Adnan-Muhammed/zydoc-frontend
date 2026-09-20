@@ -90,7 +90,7 @@ export interface DoctorProfile {
     phone?: string;
     specialty?: string;
     yearsOfExperience?: number;
-    bio?: string;
+    bio?: string; 
     avatarUrl?: string;
     verificationStatus?: 'pending' | 'approved' | 'rejected';
     accountStatus?: 'active' | 'suspended';

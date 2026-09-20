@@ -30,7 +30,7 @@ export default function PatientDetailDrawer({
   useEffect(() => {
     if (patient) {
       setCurrentStatus(patient.accountStatus || 'active');
-    }
+    } 
   }, [patient]);
 
   if (!isOpen || !patient) return null;
