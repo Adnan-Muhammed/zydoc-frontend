@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
 import { useAppDispatch } from '../redux/hooks';
 import { addRealTimeNotification } from '../redux/features/notification/notificationSlice';
+import { markAppointmentCompleted } from '../redux/features/appointment/appointmentSlice';
 
 interface UseSocketProps {
   userId?: string | null;
@@ -80,6 +81,30 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
 
     socket.on('disconnect', () => {
       console.log('Disconnected from socket server');
+    });
+
+    // ── Consultation Completed (Rule 4 / Rule 1.3) ────────────────────────────
+    // Emitted by EndRoomUseCase when doctor ends the call.
+    // Immediately disables the patient's rejoin button by updating Redux state.
+    socket.on('consultation_completed', (payload: any) => {
+      const { appointmentId } = payload || {};
+      if (appointmentId) {
+        dispatch(markAppointmentCompleted({ appointmentId }));
+        console.log(`[useSocket] Consultation ${appointmentId} marked completed in Redux.`);
+      }
+    });
+
+    // ── Doctor Absence Warning (Rule 2.1) ─────────────────────────────────────
+    // Emitted when patient joins/re-joins after lateJoinCutoffAt but the doctor
+    // has never appeared. Surface a clear, informational toast.
+    socket.on('doctor_absence_warning', (payload: any) => {
+      const msg = payload?.message || 'The doctor has not joined yet. A refund will be issued automatically if the doctor misses this consultation.';
+      toast(msg, {
+        icon: '⚠️',
+        duration: 8000,
+        position: 'top-center',
+        style: { maxWidth: '420px' },
+      });
     });
 
     const handleBeforeUnload = () => {

@@ -1,7 +1,7 @@
 // src/app/(public)/layout.tsx
 import { cookies } from 'next/headers';
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
+import Navbar from "@/components/landing/Navbar";
+import Footer from "@/components/landing/Footer";
 import "@/app/(public)/landing.css";
 
 async function getUser(cookieHeader: string) {
@@ -36,14 +36,14 @@ export default async function PublicLayout({
     const user = accessToken ? await getUser(cookieHeader) : null;
 
     return (
-        <div className="flex min-h-screen flex-col">
-            <Header user={user} />
+        <div className="flex min-h-screen flex-col bg-[#f8faff]">
+            <Navbar user={user} />
 
-            <main className=''>
+            <main className="flex-1">
                 {children}
             </main>
 
             <Footer />
         </div>
     );
-}
+}

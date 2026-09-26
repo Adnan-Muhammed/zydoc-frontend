@@ -17,8 +17,17 @@ export interface SingleConsultationState {
   isLoaded: boolean;
 }
 
+export interface ActiveSessionMetadata {
+  appointmentId: string;
+  role: string;
+  sessionStartedAt?: string;
+  isReconnecting?: boolean;
+  lastConnectedAt?: number;
+}
+
 export interface ConsultationHubState {
   consultations: Record<string, SingleConsultationState>;
+  activeSession: ActiveSessionMetadata | null;
 }
 
 const initialSingleState: SingleConsultationState = {
@@ -33,12 +42,25 @@ const initialSingleState: SingleConsultationState = {
 
 const initialState: ConsultationHubState = {
   consultations: {},
+  activeSession: null,
 };
 
 export const consultationSlice = createSlice({
   name: 'consultation',
   initialState,
   reducers: {
+    setActiveSession: (state, action: PayloadAction<ActiveSessionMetadata>) => {
+      state.activeSession = action.payload;
+    },
+    updateActiveSessionReconnecting: (state, action: PayloadAction<boolean>) => {
+      if (state.activeSession) {
+        state.activeSession.isReconnecting = action.payload;
+        state.activeSession.lastConnectedAt = Date.now();
+      }
+    },
+    clearActiveSession: (state) => {
+      state.activeSession = null;
+    },
     initConsultation: (
       state,
       action: PayloadAction<{
@@ -261,6 +283,9 @@ export const consultationSlice = createSlice({
 });
 
 export const {
+  setActiveSession,
+  updateActiveSessionReconnecting,
+  clearActiveSession,
   initConsultation,
   cleanupConsultationState,
   resetAllConsultations,

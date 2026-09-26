@@ -31,10 +31,10 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
       const visitTypeStr = patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : '';
       
       if (isBusy) {
-        // Scenario B: Doctor is BUSY
-        toast(`Next patient ${visitTypeStr ? `(${visitTypeStr}) ` : ''}is in the waiting room`, { 
-          icon: "ℹ️",
-          duration: 3500, // 3.5 seconds
+        // Scenario B: Doctor is BUSY in another consultation (allowed 20-30s buffer to wrap up)
+        toast(`Next patient ${patientName ? `${patientName} ` : ''}${visitTypeStr ? `(${visitTypeStr}) ` : ''}is waiting. You have a 20–30s buffer to wrap up and switch rooms.`, { 
+          icon: "⏳",
+          duration: 5000,
         });
       } else {
         // Scenario A: Doctor is FREE
@@ -60,10 +60,10 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
             }}
             className="cursor-pointer font-medium"
           >
-            {visitTypeStr ? `${visitTypeStr} patient ` : 'Patient '}{patientName || "A patient"} is waiting. Click to join.
+            {visitTypeStr ? `${visitTypeStr} patient ` : 'Patient '}{patientName || "A patient"} has entered the room (20–30s buffer). Click to join now.
           </div>
         ), {
-          duration: 7000, // 7 seconds
+          duration: 8000,
           position: "top-center",
           style: { cursor: 'pointer' },
           icon: "🔔",

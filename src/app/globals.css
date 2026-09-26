@@ -110,31 +110,103 @@ h6 {
 
 
 .dashboard-sidebar {
-  width: 255px;
-  background-color: #1e1b4b;
+  width: 260px;
+  background-color: #101044;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   color: white;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, left 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   position: fixed;
   top: 0;
   bottom: 0;
+  left: 0;
   z-index: 100;
+  box-shadow: 4px 0 25px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-logo-area {
-  padding: 18px 20px;
-  font-size: 1.2rem;
-  font-weight: bold;
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
+}
+
+.sidebar-logo-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #313a9d 0%, #10b981 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(49, 58, 157, 0.4);
+  flex-shrink: 0;
+}
+
+.sidebar-brand-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-logo-text {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.sidebar-logo-text span {
+  color: #38bdf8;
+}
+
+.sidebar-portal-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.sidebar-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 15px 0;
+  padding: 16px 12px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
 }
 
 .nav-section {
@@ -142,60 +214,186 @@ h6 {
 }
 
 .nav-label {
-  padding: 0 20px;
+  padding: 0 12px;
   font-size: 0.65rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: #64748b;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.nav-items-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 10px 20px;
+  padding: 9px 12px;
   color: #94a3b8;
   text-decoration: none;
-  gap: 10px;
-  font-size: 0.85rem;
+  gap: 12px;
+  font-size: 0.84rem;
+  font-weight: 500;
+  border-radius: 12px;
+  transition: all 0.15s ease;
+  position: relative;
+  border: 1px solid transparent;
 }
 
-.nav-item i {
-  width: 20px;
-  font-size: 0.9rem;
+.nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 
 .nav-item.active {
-  background-color: #1e293b;
-  color: #6366f1;
-  border-left: 4px solid #6366f1;
+  background: linear-gradient(90deg, rgba(49, 58, 157, 0.5) 0%, rgba(49, 58, 157, 0.2) 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  box-shadow: 0 2px 12px rgba(16, 24, 68, 0.5);
 }
 
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 4px;
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  opacity: 1;
+  color: #38bdf8;
+}
+
+.nav-text {
+  flex: 1;
+}
+
+.nav-lock-icon {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+.nav-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nav-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.badge-yellow {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-red {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* User Card at bottom */
 .sidebar-user {
-  padding: 15px;
-  border-top: 1px solid #1e293b;
+  padding: 12px 14px;
+  margin: 0 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.sidebar-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1f2268 0%, #313a9d 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #ffffff;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sidebar-user-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-user-name {
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
 }
 
 .sidebar-user-role {
   font-size: 0.7rem;
   color: #94a3b8;
+  margin-top: 1px;
+}
+
+.sidebar-logout {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-logout:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
 }
 
 /* Main Content Area */
 .dashboard-main {
   flex: 1;
-  /* margin-left: 240px; */
-  margin-left: 255px;
+  margin-left: 260px;
   /* Must match Sidebar width */
-  width: calc(100% - 255px);
-  max-width: calc(100% - 255px);
+  width: calc(100% - 260px);
+  max-width: calc(100% - 260px);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -207,11 +405,10 @@ h6 {
 /*   app shell       */
 .shell-main {
   flex: 1;
-  /* margin-left: 240px; */
-  margin-left: 255px;
+  margin-left: 260px;
   /* Must match Sidebar width */
-  width: calc(100% - 255px);
-  max-width: calc(100% - 255px);
+  width: calc(100% - 260px);
+  max-width: calc(100% - 260px);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -258,16 +455,14 @@ h6 {
 
 /* app shell */
 .shell-content {
-  /* padding: 25px 40px; */
-  padding: 40px;
-  background-color: transparent;
+  padding: 32px 36px;
+  background-color: #f1f5f9;
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 28px;
   width: 100%;
-  /* Ensure it takes full available width */
   box-sizing: border-box;
-  /* Crucial: ensures padding doesn't add to width */
+  min-height: calc(100vh - 64px);
 }
 
 /* Consultation Mode (Zero Scrolling, 100vh Fixed Viewport) */
@@ -425,8 +620,7 @@ h6 {
 
 @media (max-width: 900px) {
   .dashboard-sidebar {
-    /* left: -240px; */
-    left: -255px;
+    left: -260px;
     /* Hide offscreen */
   }
 
@@ -480,7 +674,7 @@ h6 {
 
   /* app shell */
   .shell-content {
-    padding: 10px;
+    padding: 16px 14px 80px;
   }
 
   .dashboard-topbar {

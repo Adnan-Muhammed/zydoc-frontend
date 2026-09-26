@@ -1,146 +1,60 @@
-// src/components/HowItWorks.tsx
+'use client'
 
-import React from 'react';
+const searchDoctorsImage =
+  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_2_image-nALL898pIn3wN6C0CMBYMPvnx6A0Q1.png'
+const bookingImage =
+  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_1_image-ZYmBWpZw4QgxYakr9SCEycDP1CmRMn.png'
+const videoConsultationImage =
+  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_3_image-I3ICWoElozMt2umxPEikMC80OgAF6m.jpeg'
 
-const HowItWorks = () => { 
-    return (
-        <section className="how-it-works" id="how-it-works">
-            <div className="steps-container">
-                <div className="section-title">
-                    <h2>How It Works</h2>
-                    <p>Get expert medical consultation in just a few simple steps.</p>
-                </div>
+const steps = [
+  {
+    number: '01',
+    image: searchDoctorsImage,
+    title: 'Search & Choose',
+    text: 'Find a specialist that fits your needs, from trusted doctors across every field.',
+  },
+  {
+    number: '02',
+    image: bookingImage,
+    title: 'Pick Your Slot',
+    text: 'Choose a convenient time for a video consult or an in-person visit.',
+  },
+  {
+    number: '03',
+    image: videoConsultationImage,
+    title: 'Get Expert Care',
+    text: 'Meet your doctor, get clear answers, and take the next step with confidence.',
+  },
+]
 
-                <div className="steps-grid">
-                    <div className="step">
-                        <div className="step-number">1</div>
-                        <h3>Sign Up</h3>
-                        <p>Create your account in minutes with basic information and preferences.</p>
-                    </div>
-
-                    <div className="step">
-                        <div className="step-number">2</div>
-                        <h3>Find Doctor</h3>
-                        <p>Browse through our verified doctors and select based on specialty and availability.</p>
-                    </div>
-
-                    <div className="step">
-                        <div className="step-number">3</div>
-                        <h3>Book Appointment</h3>
-                        <p>Choose your preferred time slot and consultation type (video, chat, or call).</p>
-                    </div>
-
-                    <div className="step">
-                        <div className="step-number">4</div>
-                        <h3>Consult Online</h3>
-                        <p>Attend your appointment and get expert medical advice from your home.</p>
-                    </div>
-                </div>
+export default function HowItWorks() {
+  return (
+    <section id="how" className="mx-auto max-w-7xl px-5 py-16 sm:px-8 lg:px-10 lg:py-24">
+      <h2 className="text-center text-3xl font-bold tracking-[-0.04em] text-[#101044] sm:text-4xl">
+        Simple, seamless care in 3 steps
+      </h2>
+      <div className="mt-12 grid gap-5 md:grid-cols-3">
+        {steps.map((step) => (
+          <article
+            key={step.number}
+            className="relative overflow-hidden rounded-2xl bg-white shadow-[0_12px_28px_rgba(29,40,93,0.1)] transition-transform hover:-translate-y-1"
+          >
+            <div className="absolute left-4 top-[-22px] text-7xl font-bold text-[#b6c6fa] select-none">
+              {step.number}
             </div>
-        </section>
-    );
-};
-
-export default HowItWorks;
-
-
-// 'use client';
-
-// import { UserPlus, Search, Calendar, Video } from 'lucide-react';
-
-// const HowItWorks = () => {
-//     const steps = [
-//         {
-//             icon: UserPlus,
-//             title: 'Create Account',
-//             description: 'Sign up in seconds with your basic information and health preferences.'
-//         },
-//         {
-//             icon: Search,
-//             title: 'Find Doctor',
-//             description: 'Browse verified doctors by specialty, experience, and availability.'
-//         },
-//         {
-//             icon: Calendar,
-//             title: 'Book Appointment',
-//             description: 'Choose your preferred time and consultation type—video, chat, or call.'
-//         },
-//         {
-//             icon: Video,
-//             title: 'Get Treatment',
-//             description: 'Consult with your doctor and receive prescriptions and health advice.'
-//         }
-//     ];
-
-//     return (
-//         <section id="how-it-works" className="w-full py-16 md:py-24 bg-gradient-to-b from-white to-slate-50/50">
-//             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-//                 {/* SECTION HEADER */}
-//                 <div className="text-center mb-12 md:mb-16 space-y-4">
-//                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-slate-900">
-//                         Simple, Four-Step Process
-//                     </h2>
-//                     <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-//                         Get expert medical consultation in just a few minutes.
-//                     </p>
-//                 </div>
-
-//                 {/* STEPS GRID */}
-//                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-//                     {steps.map((step, index) => {
-//                         const Icon = step.icon;
-//                         const isLast = index === steps.length - 1;
-                        
-//                         return (
-//                             <div key={index} className="relative">
-//                                 {/* STEP CARD */}
-//                                 <div className="group relative bg-white rounded-xl border border-slate-200/60 p-6 md:p-8 h-full hover:shadow-lg hover:border-blue-200 transition-all duration-300">
-//                                     {/* STEP NUMBER BADGE */}
-//                                     <div className="absolute -top-4 -left-4 flex items-center justify-center h-10 w-10 rounded-lg bg-blue-600 text-white font-bold shadow-lg text-sm">
-//                                         {index + 1}
-//                                     </div>
-
-//                                     {/* ICON */}
-//                                     <div className="inline-flex items-center justify-center h-14 w-14 rounded-lg bg-blue-50 text-blue-600 mb-4 group-hover:bg-blue-100 group-hover:scale-110 transition-all duration-300">
-//                                         <Icon className="h-7 w-7" />
-//                                     </div>
-
-//                                     {/* CONTENT */}
-//                                     <div className="space-y-2">
-//                                         <h3 className="text-lg font-bold text-slate-900">
-//                                             {step.title}
-//                                         </h3>
-//                                         <p className="text-sm text-slate-600 leading-relaxed">
-//                                             {step.description}
-//                                         </p>
-//                                     </div>
-//                                 </div>
-
-//                                 {/* CONNECTOR LINE (hidden on last item and mobile) */}
-//                                 {!isLast && (
-//                                     <div className="hidden lg:block absolute top-1/2 -right-8 w-8 h-0.5 bg-gradient-to-r from-blue-200 to-transparent transform -translate-y-1/2 group-hover:from-blue-400 transition-colors duration-300" />
-//                                 )}
-//                             </div>
-//                         );
-//                     })}
-//                 </div>
-
-//                 {/* ADDITIONAL INFO */}
-//                 <div className="mt-12 md:mt-16 bg-gradient-to-r from-blue-50 to-blue-50/50 rounded-xl border border-blue-200/60 p-6 md:p-8">
-//                     <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-//                         <div className="flex-1">
-//                             <h3 className="text-lg font-bold text-slate-900 mb-2">Average time to consultation</h3>
-//                             <p className="text-slate-600">Most appointments are scheduled within 24 hours. Emergency consultations available 24/7.</p>
-//                         </div>
-//                         <div className="flex-1">
-//                             <h3 className="text-lg font-bold text-slate-900 mb-2">What you'll need</h3>
-//                             <p className="text-slate-600">A smartphone or computer with internet access. Video consultation recommended for best experience.</p>
-//                         </div>
-//                     </div>
-//                 </div>
-//             </div>
-//         </section>
-//     );
-// };
-
-// export default HowItWorks;
+            <img
+              src={step.image}
+              alt={step.title}
+              className="h-44 w-full object-cover object-[70%_center]"
+            />
+            <div className="p-5 pt-4">
+              <h3 className="text-lg font-bold text-[#101044]">{step.title}</h3>
+              <p className="mt-2 text-sm leading-5 text-[#6f708a]">{step.text}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+}

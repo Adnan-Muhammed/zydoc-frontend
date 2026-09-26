@@ -18,6 +18,12 @@ interface UseWebRTCOptions {
   /** "doctor" | "patient" — forwarded to the server for logging. */
   role: string;
   onCallEnded?: () => void;
+  /**
+   * Optional async hook called right before any internal router.replace.
+   * Use this to rewind sentinel history entries so the browser Back button
+   * lands on the correct previous page instead of "/".
+   */
+  rewindBeforeNavigate?: () => Promise<void>;
 }
 
 interface UseWebRTCReturn {
@@ -71,6 +77,7 @@ export function useWebRTC({
   userId,
   role,
   onCallEnded,
+  rewindBeforeNavigate,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const router = useRouter();
 
@@ -87,11 +94,11 @@ export function useWebRTC({
   const [isRemoteReady, setIsRemoteReady] = useState(false);
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
-  
+
   const [timerConfig, setTimerConfig] = useState<TimerConfig | null>(null);
 
   // ── Multi-Tab Coordination ─────────────────────────────────────────────
@@ -260,7 +267,7 @@ export function useWebRTC({
               localStreamRef.current.getTracks().forEach((t) => {
                 try {
                   t.stop();
-                } catch (e) {}
+                } catch (e) { }
               });
               localStreamRef.current = null;
               setLocalStream(null);
@@ -372,11 +379,11 @@ export function useWebRTC({
           console.error("[useWebRTC] Backend rejected join:", payload.message);
           if (isMounted) {
             console.log(1);
-            
+
             setError(payload.message);
             if (
-              payload.message === 'This consultation has already ended.' || 
-              payload.message?.includes('expired') || 
+              payload.message === 'This consultation has already ended.' ||
+              payload.message?.includes('expired') ||
               payload.message?.includes('ended') ||
               payload.message?.toLowerCase().includes('in-person')
             ) {
@@ -385,7 +392,12 @@ export function useWebRTC({
                 sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
               }
               const destination = role?.toLowerCase() === "doctor" ? "/doctor/appointments" : "/patient/appointments";
-              router.replace(destination);
+              const doNavigate = () => router.replace(destination);
+              if (rewindBeforeNavigate) {
+                rewindBeforeNavigate().then(doNavigate);
+              } else {
+                doNavigate();
+              }
             }
             setIsCallEnded(true);
           }
@@ -418,7 +430,7 @@ export function useWebRTC({
             sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
           }
-          
+
           setTimeout(() => {
             if (onCallEnded) {
               onCallEnded();
@@ -436,7 +448,7 @@ export function useWebRTC({
         newSocket.on("force_end_call", (payload) => {
           console.log("[useWebRTC] force_end_call received from server. Hard-terminating call.", payload);
           if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+            localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch (_) { } });
             localStreamRef.current = null;
             setLocalStream(null);
           }
@@ -450,13 +462,22 @@ export function useWebRTC({
           if (typeof window !== "undefined") {
             sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
+            if (payload?.appointmentId && (payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached')) {
+              sessionStorage.setItem('pending_patient_b', JSON.stringify({
+                appointmentId: payload.appointmentId,
+                patientName: payload.patientName || 'Next Patient',
+              }));
+            }
           }
           if (onCallEnded) {
             onCallEnded();
           } else {
+            const isNextPatientCut = payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached';
             const destination =
               role?.toLowerCase() === "doctor"
-                ? "/doctor/dashboard"
+                ? (isNextPatientCut && payload?.appointmentId
+                  ? `/doctor/dashboard?promptJoin=true&patientBId=${payload.appointmentId}&patientBName=${encodeURIComponent(payload.patientName || '')}`
+                  : "/doctor/dashboard")
                 : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
             router.replace(destination);
           }
@@ -517,7 +538,7 @@ export function useWebRTC({
   }, [appointmentId, userId, role, isActiveTab, isDuplicateTab, isTakenOver, createPeerConnection, setDuplicateDetected]);
 
   // ── Actions ─────────────────────────────────────────────────────────────
-  
+
   const toggleAudio = useCallback(() => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -572,7 +593,7 @@ export function useWebRTC({
         setTimeout(() => {
           try {
             sock.disconnect();
-          } catch (_) {}
+          } catch (_) { }
         }, 300);
       } catch (err) {
         console.warn("[useWebRTC] Failed to disconnect socket:", err);
@@ -609,7 +630,7 @@ export function useWebRTC({
           },
           credentials: "include"
         }).catch((e) => console.warn("[useWebRTC] Fallback end-call REST failed:", e));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (typeof window !== "undefined") {
@@ -628,10 +649,15 @@ export function useWebRTC({
         const destination = isDoctor
           ? "/doctor/dashboard"
           : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
-        router.replace(destination);
+        const doNavigate = () => router.replace(destination);
+        if (rewindBeforeNavigate) {
+          rewindBeforeNavigate().then(doNavigate);
+        } else {
+          doNavigate();
+        }
       }
     }, 150);
-  }, [cleanupMediaAndConnections, role, appointmentId, router, onCallEnded]);
+  }, [cleanupMediaAndConnections, role, appointmentId, router, onCallEnded, rewindBeforeNavigate]);
 
   return {
     localVideoRef,

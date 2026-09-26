@@ -5,6 +5,17 @@ import { useAppSelector, useAppDispatch } from '../../redux/hooks';
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from '../../redux/features/notification/notificationThunk';
 import { NotificationItem } from '../../redux/features/notification/notificationService';
 import { useRouter } from 'next/navigation';
+import {
+  Bell,
+  BellOff,
+  Calendar,
+  CreditCard,
+  CheckCheck,
+  Clock,
+  Sparkles,
+  ArrowRight,
+  Info
+} from 'lucide-react';
 
 const timeAgo = (date: string | Date) => {
   const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
@@ -58,87 +69,122 @@ export default function NotificationList({ role }: NotificationListProps) {
 
   if (loading && notifications.length === 0) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="flex flex-col justify-center items-center h-80 space-y-3">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-indigo-600 border-t-transparent"></div>
+        <p className="text-xs font-medium text-slate-400">Loading notifications...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 border-b border-slate-200">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <div className="bg-white rounded-3xl shadow-xs border border-slate-100 overflow-hidden">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 sm:p-7 border-b border-slate-100 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-800">Notifications</h1>
-            <p className="text-sm text-slate-500 mt-1">
-              You have {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-[#101044] tracking-tight">Notifications</h1>
+              {unreadCount > 0 && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  {unreadCount} New
+                </span>
+              )}
+            </div>
+            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+              You have {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''} across your consultations and account.
             </p>
           </div>
+
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="mt-4 sm:mt-0 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all active:scale-98 shadow-2xs"
             >
-              <i className="fas fa-check-double mr-2"></i>
-              Mark all as read
+              <CheckCheck className="w-4 h-4 text-indigo-600" />
+              <span>Mark all as read</span>
             </button>
           )}
         </div>
 
         {error && (
-          <div className="p-4 bg-red-50 text-red-600 text-sm border-b border-red-100">
-            {error}
+          <div className="p-4 bg-rose-50 text-rose-700 text-xs font-medium border-b border-rose-100 flex items-center gap-2">
+            <Info className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{error}</span>
           </div>
         )}
 
+        {/* Notifications Feed */}
         <div className="divide-y divide-slate-100">
           {notifications.length > 0 ? (
-            notifications.map((notif) => (
-              <div 
-                key={notif._id}
-                onClick={() => handleNotificationClick(notif)}
-                className={`p-6 flex gap-4 transition-colors cursor-pointer hover:bg-slate-50 border-l-4 ${!notif.isRead ? 'bg-green-50 border-green-500' : 'bg-white border-transparent'}`}
-              >
-                <div className="flex-shrink-0 mt-1">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    notif.type === 'BOOKING' ? 'bg-blue-100 text-blue-600' :
-                    notif.type === 'PAYMENT' ? 'bg-green-100 text-green-600' :
-                    'bg-slate-100 text-slate-600'
-                  }`}>
-                    <i className={`fas ${
-                      notif.type === 'BOOKING' ? 'fa-calendar-alt' :
-                      notif.type === 'PAYMENT' ? 'fa-credit-card' :
-                      'fa-bell'
-                    }`}></i>
-                  </div>
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
-                    <p className={`text-base truncate ${!notif.isRead ? 'font-semibold text-slate-900' : 'font-medium text-slate-700'}`}>
-                      {notif.title}
-                    </p>
-                    <span className="text-xs text-slate-400 whitespace-nowrap">
-                      {timeAgo(notif.createdAt)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-600">{notif.message}</p>
-                </div>
+            notifications.map((notif) => {
+              const isBooking = notif.type === 'BOOKING';
+              const isPayment = notif.type === 'PAYMENT';
 
-                {!notif.isRead && (
-                  <div className="flex-shrink-0 flex items-center justify-center pl-2">
-                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
+              return (
+                <div 
+                  key={notif._id}
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`p-5 sm:p-6 flex items-start gap-4 transition-all cursor-pointer hover:bg-slate-50/80 ${
+                    !notif.isRead 
+                      ? 'bg-indigo-50/25 border-l-4 border-l-indigo-600' 
+                      : 'bg-white border-l-4 border-l-transparent'
+                  }`}
+                >
+                  <div className="flex-shrink-0 mt-0.5">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center border shadow-2xs ${
+                      isBooking 
+                        ? 'bg-blue-50 text-blue-600 border-blue-100/80' 
+                        : isPayment 
+                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100/80' 
+                        : 'bg-slate-100 text-slate-600 border-slate-200/80'
+                    }`}>
+                      {isBooking ? (
+                        <Calendar className="w-5 h-5" />
+                      ) : isPayment ? (
+                        <CreditCard className="w-5 h-5" />
+                      ) : (
+                        <Bell className="w-5 h-5" />
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
-            ))
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                      <p className={`text-sm sm:text-base truncate ${
+                        !notif.isRead 
+                          ? 'font-bold text-[#101044]' 
+                          : 'font-semibold text-slate-700'
+                      }`}>
+                        {notif.title}
+                      </p>
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-slate-400 whitespace-nowrap">
+                        <Clock className="w-3 h-3" />
+                        {timeAgo(notif.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">{notif.message}</p>
+                  </div>
+
+                  {!notif.isRead && (
+                    <div className="flex-shrink-0 flex items-center justify-center pt-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           ) : (
-            <div className="p-12 text-center text-slate-500">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="fas fa-bell-slash text-3xl text-slate-300"></i>
+            <div className="p-16 text-center text-slate-500">
+              <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-4 text-slate-400 shadow-2xs">
+                <BellOff className="w-9 h-9" />
               </div>
-              <h3 className="text-lg font-medium text-slate-700 mb-1">No notifications</h3>
-              <p className="text-sm">You're all caught up! Check back later for updates.</p>
+              <h3 className="text-base font-bold text-[#101044] mb-1">No notifications yet</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                You're all caught up! New appointment bookings, messages, and payout updates will appear here.
+              </p>
             </div>
           )}
         </div>

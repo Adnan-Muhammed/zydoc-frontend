@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Input from '@/components/ui/Input';
 import { DraftState, Qualification } from './types';
-import { SYSTEMS_LIST, getSystemConfigById } from '@/constants/systemsOfMedicine';
+import { SYSTEMS_LIST, getSystemConfigById, deduceSystemOfMedicine } from '@/constants/systemsOfMedicine';
 
 const AVAILABLE_LANGUAGES = ['English', 'Malayalam', 'Hindi', 'Tamil', 'Spanish', 'French'];
 
@@ -80,11 +80,14 @@ export default function StepCredentialsSection({
             return;
         }
         const id = Date.now().toString();
+        const updatedQualifications = [
+            ...qualifications,
+            { id, degree: newDegree, institution: newInstitution, year: newYear, certificateName: newCertificate?.name },
+        ];
+        const deducedSystem = deduceSystemOfMedicine(updatedQualifications, systemOfMedicine);
         setDraft({
-            qualifications: [
-                ...qualifications,
-                { id, degree: newDegree, institution: newInstitution, year: newYear, certificateName: newCertificate?.name },
-            ],
+            qualifications: updatedQualifications,
+            systemOfMedicine: deducedSystem,
         });
         if (newCertificate) {
             setQualificationFiles((prev) => ({ ...prev, [id]: newCertificate! }));
@@ -342,6 +345,36 @@ export default function StepCredentialsSection({
                                         ))}
                                     </div>
                                 )}
+                                {(() => {
+                                    if (!newDegree.trim()) return null;
+                                    const detected = deduceSystemOfMedicine([{ degree: newDegree }]);
+                                    if (detected && detected !== systemOfMedicine) {
+                                        return (
+                                            <div className="mt-1.5 p-2 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-[11px] text-blue-700 dark:text-blue-300 flex items-center justify-between gap-2">
+                                                <span>&quot;{newDegree}&quot; is recognized under <strong>{detected}</strong>.</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSystemChange(detected)}
+                                                    className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-600 text-white hover:bg-blue-700 transition"
+                                                >
+                                                    Switch to {detected}
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                    if (
+                                        (newDegree.toUpperCase().trim() === 'MD' || newDegree.toUpperCase().trim() === 'MS' || newDegree.toUpperCase().startsWith('MD ') || newDegree.toUpperCase().startsWith('MS ')) &&
+                                        systemOfMedicine === 'Modern Medicine'
+                                    ) {
+                                        return (
+                                            <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium flex items-center gap-1">
+                                                <i className="fas fa-check-circle text-[9px]" />
+                                                Post-graduate degree ({newDegree}) is linked to Modern Medicine (Allopathy).
+                                            </p>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </div>
                             <Input
                                 label="Institution Name"

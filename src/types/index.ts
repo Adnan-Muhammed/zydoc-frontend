@@ -101,6 +101,7 @@ export interface DoctorProfile {
     bankDetails?: BankDetails;
     expertiseTags?: string[];
     languages?: string[];
+    qualifications?: any[];
     consultationSettings?: {
         video?: { enabled: boolean; fee: number };
         physical?: { enabled: boolean; fee: number; clinicName?: string; clinicAddress?: string };

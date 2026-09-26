@@ -13,8 +13,23 @@ import {
 import { AdminNotification } from '@/redux/features/admin/adminTypes';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-
 import { logoutUser } from '@/redux/auth/authThunk';
+import {
+  Menu,
+  Bell,
+  ChevronDown,
+  ChevronRight,
+  User,
+  LogOut,
+  ShieldCheck,
+  Stethoscope,
+  CheckCircle2,
+  AlertTriangle,
+  UserCheck,
+  HandCoins,
+  Settings,
+  LayoutDashboard
+} from 'lucide-react';
 
 const timeAgo = (date: string | Date) => {
   const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
@@ -149,15 +164,21 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
     <header className="dashboard-topbar flex justify-between w-full h-16 bg-white border-b border-slate-200 px-4 sm:px-6 sticky top-0 z-40">
       <div className="topbar-left flex items-center gap-3 sm:gap-4 h-full">
         {!isConsultation ? (
-          <button className="topbar-menu-btn text-slate-500 hover:text-slate-800" onClick={onToggleSidebar}>
-            <i className="fas fa-bars text-lg"></i>
+          <button
+            className="topbar-menu-btn text-slate-500 hover:text-slate-800 p-1.5 rounded-lg hover:bg-slate-100 transition"
+            onClick={onToggleSidebar}
+            aria-label="Toggle navigation menu"
+          >
+            <Menu className="size-5" />
           </button>
         ) : (
-          <div className="flex items-center gap-2 text-indigo-600 font-bold text-base mr-1">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-sm shadow-sm">
-              <i className="fas fa-stethoscope"></i>
+          <div className="flex items-center gap-2 mr-1">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#313a9d] to-[#10b981] text-white flex items-center justify-center text-sm shadow-xs">
+              <Stethoscope className="size-4" />
             </div>
-            <span className="hidden sm:inline text-slate-900 font-bold">Docti<span className="text-indigo-600">fy</span></span>
+            <span className="hidden sm:inline text-[#101044] font-extrabold text-lg tracking-tight">
+              Zy<span className="text-[#313a9d]">doc</span>
+            </span>
           </div>
         )}
         <h2 className="topbar-page-title text-base sm:text-lg font-semibold text-slate-800 m-0 whitespace-nowrap truncate max-w-[150px] sm:max-w-none">
@@ -166,15 +187,6 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
       </div>
 
       <div className="topbar-right flex items-center gap-2 sm:gap-4 h-full">
-        <div className="topbar-search-container hidden md:flex items-center bg-slate-100 rounded-lg px-3 py-2 gap-2 border border-slate-200">
-          <i className="fas fa-search text-slate-400"></i>
-          <input
-            type="text"
-            placeholder="Search anything..."
-            className="topbar-search-input bg-transparent border-none outline-none text-sm text-slate-700 w-48 focus:ring-0"
-          />
-        </div>
-
         <div className="topbar-actions flex items-center gap-2 sm:gap-3 relative">
           
           {/* Notifications Dropdown Container */}
@@ -186,10 +198,11 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                   dispatch(fetchAdminNotifications());
                 }
               }}
-              className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors relative"
+              className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors relative shadow-xs"
               title="Notifications & Alerts"
+              aria-label="Notifications"
             >
-              <i className="fas fa-bell"></i>
+              <Bell className="size-4.5 text-slate-600" />
               {totalBadges > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[20px] h-5 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white px-1 shadow-sm animate-pulse">
                   {totalBadges > 99 ? '99+' : totalBadges}
@@ -416,17 +429,13 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
             )}
           </div>
 
-          <button className="topbar-icon-btn flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
-            <i className="fas fa-envelope"></i>
-          </button>
-
           {/* Profile Dropdown Container */}
           <div ref={profileMenuRef} className="relative">
             <div 
               onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-              className="topbar-profile flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 sm:px-3 sm:py-1.5 hover:bg-slate-100 transition-colors"
+              className="topbar-profile flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1.5 sm:px-3 sm:py-1.5 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs"
             >
-              <div className="topbar-avatar flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-indigo-600 text-white text-xs font-semibold overflow-hidden shadow-sm">
+              <div className="topbar-avatar flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#181852] text-white text-xs font-semibold overflow-hidden shadow-xs shrink-0">
                 {user?.avatarUrl ? (
                   <img
                     src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
@@ -437,18 +446,23 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                   getInitials(user?.name || role)
                 )}
               </div>
-              <span className="topbar-user-name text-xs sm:text-sm font-medium text-slate-700 hidden sm:block">
-                {user?.name || `Demo ${role}`}
-              </span>
-              <i className={`fas fa-chevron-down text-[10px] text-slate-400 transition-transform duration-200 ${profileMenuOpen ? 'rotate-180' : ''}`}></i>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="topbar-user-name text-xs font-bold text-[#101044] leading-tight truncate max-w-[130px]">
+                  {user?.name || `Demo ${role}`}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 capitalize">
+                  {role}
+                </span>
+              </div>
+              <ChevronDown className={`size-3.5 text-slate-400 transition-transform duration-200 ${profileMenuOpen ? 'rotate-180' : ''}`} />
             </div>
 
             {/* Profile Dropdown Popover */}
             {profileMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/70">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#181852] text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 shadow-xs">
                       {user?.avatarUrl ? (
                         <img
                           src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
@@ -460,11 +474,11 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">
+                      <p className="text-sm font-bold text-[#101044] truncate">
                         {user?.name || `${role.charAt(0).toUpperCase() + role.slice(1)}`}
                       </p>
-                      <p className="text-xs text-slate-500 truncate">{user?.email || 'admin@zydoc.com'}</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-indigo-100 text-indigo-700 uppercase tracking-wide">
+                      <p className="text-xs text-slate-400 truncate">{user?.email || 'admin@zydoc.com'}</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-50 text-indigo-700 uppercase tracking-wide">
                         {role === 'admin' ? 'Administrator' : role}
                       </span>
                     </div>
@@ -477,25 +491,25 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                       <Link
                         href="/admin/dashboard"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                       >
-                        <i className="fas fa-gauge-high text-slate-400 w-4"></i>
+                        <LayoutDashboard className="size-4 text-slate-400" />
                         <span>Admin Dashboard</span>
                       </Link>
                       <Link
                         href="/admin/approvals"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                       >
-                        <i className="fas fa-user-check text-slate-400 w-4"></i>
+                        <UserCheck className="size-4 text-slate-400" />
                         <span>Doctor Approvals</span>
                       </Link>
                       <Link
                         href="/admin/settings"
                         onClick={() => setProfileMenuOpen(false)}
-                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                       >
-                        <i className="fas fa-gear text-slate-400 w-4"></i>
+                        <Settings className="size-4 text-slate-400" />
                         <span>System Settings</span>
                       </Link>
                     </>
@@ -503,9 +517,9 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                     <Link
                       href={`/${role}/profile`}
                       onClick={() => setProfileMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                     >
-                      <i className="fas fa-user text-slate-400 w-4"></i>
+                      <User className="size-4 text-slate-400" />
                       <span>My Profile</span>
                     </Link>
                   )}
@@ -514,9 +528,9 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                 <div className="p-2 border-t border-slate-100 bg-slate-50/50">
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-left"
                   >
-                    <i className="fas fa-right-from-bracket text-red-500 w-4"></i>
+                    <LogOut className="size-4 text-rose-500" />
                     <span>Log Out</span>
                   </button>
                 </div>

@@ -59,6 +59,8 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [phase, setPhase] = useState<TimerPhase>('Normal');
+  const [sessionStatus, setSessionStatus] = useState<'EARLY' | 'ON_TIME' | 'LATE'>('ON_TIME');
+  const [durationEndTimestamp, setDurationEndTimestamp] = useState<number | null>(null);
   
   const [isExtended, setIsExtended] = useState(timerConfig?.isAlreadyExtended ?? false);
   const [wrapUpEndTime, setWrapUpEndTime] = useState<number | null>(null);
@@ -159,9 +161,45 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
       return;
     }
 
-    const { sessionStartedAt, baseDurationMinutes } = timerConfig;
+    const { sessionStartedAt, scheduledEndTime, baseDurationMinutes, primaryEndTime } = timerConfig;
     const startTime = new Date(sessionStartedAt).getTime();
     const standardDurationMs = baseDurationMinutes * 60 * 1000;
+
+    // ── DurationEndAt & 3-State Calculation (Part 1 of appointment-timing-rules.md) ──
+    let durationEndMs: number;
+    let computedSessionStatus: 'EARLY' | 'ON_TIME' | 'LATE' = 'ON_TIME';
+
+    if (primaryEndTime) {
+      durationEndMs = new Date(primaryEndTime).getTime();
+      const scheduledEndMs = scheduledEndTime ? new Date(scheduledEndTime).getTime() : (startTime + standardDurationMs);
+      const scheduledStartMs = scheduledEndMs - standardDurationMs;
+      const diffFromScheduledStart = startTime - scheduledStartMs;
+      if (diffFromScheduledStart < -60000) {
+        computedSessionStatus = 'EARLY';
+      } else if (diffFromScheduledStart > 60000) {
+        computedSessionStatus = 'LATE';
+      } else {
+        computedSessionStatus = 'ON_TIME';
+      }
+    } else {
+      const scheduledEndMs = scheduledEndTime ? new Date(scheduledEndTime).getTime() : (startTime + standardDurationMs);
+      const scheduledStartMs = scheduledEndMs - standardDurationMs;
+      const diffFromScheduledStart = startTime - scheduledStartMs;
+
+      if (diffFromScheduledStart < -60000) {
+        computedSessionStatus = 'EARLY';
+        durationEndMs = startTime + standardDurationMs;
+      } else if (diffFromScheduledStart > 60000) {
+        computedSessionStatus = 'LATE';
+        durationEndMs = Math.min(startTime + standardDurationMs, scheduledEndMs);
+      } else {
+        computedSessionStatus = 'ON_TIME';
+        durationEndMs = startTime + standardDurationMs;
+      }
+    }
+
+    setSessionStatus(computedSessionStatus);
+    setDurationEndTimestamp(durationEndMs);
 
     const updateTimer = () => {
       const now = Date.now();
@@ -173,11 +211,6 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
 
       // ────────────────────────────────────────────────────────────────────
       // PHASE 3: Wrap-Up (highest priority — once started, irreversible)
-      //
-      // The wrap-up countdown is driven by the server's `server_wrap_up_warning`
-      // event. Once triggered (wrapUpStartedRef = true), it CANNOT be cancelled,
-      // even if the next patient leaves the waiting room.
-      // (Satisfies Race Condition #2: irreversible wrap-up)
       // ────────────────────────────────────────────────────────────────────
       if (currentWrapUpEndTime) {
         const remainingWrapUp = Math.max(0, Math.floor((currentWrapUpEndTime - now) / 1000));
@@ -188,11 +221,6 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
 
       // ────────────────────────────────────────────────────────────────────
       // PHASE 2: Extension Countdown (if extension has been granted)
-      //
-      // Shows the remaining time until the extension deadline.
-      // The deadline was calculated server-side:
-      //   - Condition A: nextSlotStartMs (next patient waiting)
-      //   - Condition B: baseDurationEnd + MAX_EXTENSION_MINUTES
       // ────────────────────────────────────────────────────────────────────
       if (currentExtensionDeadline && isExtendedRef.current) {
         const remainingExtension = Math.max(0, Math.floor((currentExtensionDeadline - now) / 1000));
@@ -204,13 +232,12 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
       // ────────────────────────────────────────────────────────────────────
       // PHASE 1: Base Time Monitoring (Normal / Warning)
       //
-      // Shows elapsed time counting up. Switches to "Warning" phase when
-      // 5 minutes or less remain in the base duration.
-      // When base time is exceeded, switches to "Extension" phase to prompt
-      // the doctor with "End Call" or "Extend" options.
+      // Counts down to durationEndMs based on the 3 states:
+      // - Early Start: ends at ActualStart + Duration
+      // - On-Time:     ends at ActualStart + Duration
+      // - Late Start:  ends at MIN(ActualStart + Duration, ScheduledEnd)
       // ────────────────────────────────────────────────────────────────────
-      const elapsedMs = now - startTime;
-      const remainingBase = Math.floor((standardDurationMs - elapsedMs) / 1000);
+      const remainingBase = Math.floor((durationEndMs - now) / 1000);
       
       if (remainingBase > 0) {
         setRemainingSeconds(remainingBase);
@@ -253,6 +280,9 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
     formattedElapsed: formatTime(elapsedSeconds),
     formattedRemaining: formatTime(remainingSeconds),
     phase,
+    sessionStatus,
+    durationEndMs: durationEndTimestamp,
+    formattedDurationEnd: durationEndTimestamp ? new Date(durationEndTimestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null,
     isWarningPhase: phase === 'Warning',
     isWrapUpPhase: phase === 'WrapUp',
     // Client-side backup: auto-disconnect when wrap-up reaches 0.

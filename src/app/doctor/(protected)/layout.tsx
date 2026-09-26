@@ -1,10 +1,10 @@
-
-
 // src/app/doctor/(protected)/layout.tsx
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import AuthHydrator from '@/components/auth/AuthHydrator';
 import AppShell from '@/components/layout/AppShell';
+import DoctorBottomNav from '@/components/doctor/DoctorBottomNav';
+import './doctor-premium.css';
 
 export default async function DoctorLayout({
   children,
@@ -38,14 +38,12 @@ export default async function DoctorLayout({
 
   if (!user || user.role !== 'doctor') redirect('/');
 
-
-
-  // Routing guards moved to Client Components because x-invoke-path is unreliable in layouts.
   return (
     <AuthHydrator user={user}>
       <AppShell role="doctor">
         {children}
       </AppShell>
+      <DoctorBottomNav />
     </AuthHydrator>
   );
 }  

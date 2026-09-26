@@ -59,7 +59,7 @@ export default function CallExitConfirmModal({
         {/* Description */}
         <p className="mt-2 text-sm text-slate-300 leading-relaxed">
           {isDoctor
-            ? "Are you sure you want to leave the consultation room? This will conclude the session for all participants and mark the consultation as completed."
+            ? "Are you sure you want to end this consultation? The session will be marked as Completed, the room will close, and the patient will no longer be able to rejoin."
             : "Are you sure you want to leave the consultation room? Your video call will be disconnected. You can rejoin later from your appointments page."}
         </p>
 

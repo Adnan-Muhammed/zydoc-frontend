@@ -1,11 +1,37 @@
 'use client';
 
+// src/app/patient/(protected)/my-doctors/page.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import axiosInstance from '@/api/axiosInstance';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 import { useAppSelector } from '@/redux/hooks';
 import toast from 'react-hot-toast';
+import { deduceSystemOfMedicine, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
+import {
+  Stethoscope,
+  Calendar,
+  Clock,
+  Search,
+  X,
+  Star,
+  Award,
+  FileText,
+  Pill,
+  Download,
+  ExternalLink,
+  ChevronRight,
+  UserCheck,
+  MapPin,
+  Video,
+  Building,
+  CheckCircle2,
+  CalendarPlus,
+  Loader2,
+  Paperclip,
+  User,
+  Users
+} from 'lucide-react';
 
 interface DoctorItem {
   _id: string;
@@ -14,6 +40,8 @@ interface DoctorItem {
   lastName: string;
   name: string;
   specialty: string;
+  systemOfMedicine?: string;
+  qualifications?: any[];
   avatarUrl: string;
   yearsOfExperience: number;
   rating: number;
@@ -74,7 +102,8 @@ interface DoctorHistoryData {
     rating: number;
     reviewCount: number;
     consultationSettings?: any;
-    qualifications?: string[];
+    systemOfMedicine?: string;
+    qualifications?: any[];
     bio?: string;
     phone?: string;
   };
@@ -82,58 +111,68 @@ interface DoctorHistoryData {
   consultations: ConsultationRecord[];
 }
 
+function formatDoctorQualifications(qualifications: any): string {
+  if (!qualifications) return '';
+  if (typeof qualifications === 'string') return qualifications.trim();
+  if (Array.isArray(qualifications)) {
+    return qualifications
+      .map((q: any) => {
+        if (!q) return '';
+        if (typeof q === 'string') return q.trim();
+        if (typeof q === 'object') {
+          return (q.degree || q.name || q.qualification || q.institution || '').trim();
+        }
+        return String(q).trim();
+      })
+      .filter(Boolean)
+      .join(', ');
+  }
+  return '';
+}
+
 export default function MyDoctorsPage() {
   const { user } = useAppSelector((state) => state.auth);
-  const patientName = user?.name || user?.googleName || user?.email || 'Patient';
-
   const [doctors, setDoctors] = useState<DoctorItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSpecialty, setSelectedSpecialty] = useState('all');
 
-  // History modal state
+  // History slide-over state
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(null);
-  const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [historyData, setHistoryData] = useState<DoctorHistoryData | null>(null);
-
-  const fetchMyDoctors = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await axiosInstance.get('/patient/my-doctors');
-      if (res.data?.success) {
-        setDoctors(res.data.doctors || []);
-      } else {
-        setDoctors([]);
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch consulted doctors:', err);
-      setError(err?.response?.data?.message || 'Failed to load your doctors directory.');
-      toast.error('Unable to fetch your doctors');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     fetchMyDoctors();
   }, []);
 
+  const fetchMyDoctors = async () => {
+    setLoading(true);
+    try {
+      const res = await axiosInstance.get('/api/patient/my-doctors');
+      if (res.data && res.data.success) {
+        setDoctors(res.data.data.doctors || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch consulted doctors:', err);
+      toast.error(err.response?.data?.message || 'Failed to load consulted doctors');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openHistoryModal = async (doctorId: string) => {
     setSelectedDoctorId(doctorId);
     setHistoryLoading(true);
-    setHistoryData(null);
     try {
-      const res = await axiosInstance.get(`/patient/my-doctors/${doctorId}/history`);
-      if (res.data?.success) {
-        setHistoryData(res.data);
-      } else {
-        toast.error('Could not load consultation history');
+      const res = await axiosInstance.get(`/api/patient/my-doctors/${doctorId}/history`);
+      if (res.data && res.data.success) {
+        setHistoryData(res.data.data);
       }
     } catch (err: any) {
-      console.error('Error fetching doctor history:', err);
-      toast.error(err?.response?.data?.message || 'Failed to load consultation history');
+      console.error('Failed to load consultation history:', err);
+      toast.error(err.response?.data?.message || 'Failed to load consultation history');
+      setSelectedDoctorId(null);
     } finally {
       setHistoryLoading(false);
     }
@@ -144,75 +183,63 @@ export default function MyDoctorsPage() {
     setHistoryData(null);
   };
 
-  const handleDownloadPdf = (consultation: ConsultationRecord, doctorInfo: any) => {
-    try {
-      const doctorDisplayName = doctorInfo?.name || `Dr. ${doctorInfo?.firstName || ''} ${doctorInfo?.lastName || ''}`.trim() || 'Dr. Consultant';
-      const clinicName =
-        doctorInfo?.consultationSettings?.offline?.clinicName ||
-        doctorInfo?.consultationSettings?.physical?.clinicName;
-
-      const formattedPrescriptions = (consultation.prescriptions || []).map((rx, idx) => ({
-        id: rx.id || `rx-${idx}`,
-        medicine: rx.medicine || 'Medicine',
-        dosage: rx.dosage || '-',
-        frequency: rx.frequency || '-',
-        duration: rx.duration || '-',
-        instructions: rx.instructions || '-',
-        prescribedBy: doctorDisplayName,
-        date: new Date(consultation.appointmentDate).toDateString(),
-      }));
-
-      generatePrescriptionPdf({
-        appointmentId: consultation.appointmentId || consultation.id,
-        date: new Date(consultation.appointmentDate).toDateString(),
-        time: consultation.appointmentTime,
-        consultationType:
-          consultation.consultationType === 'offline' || consultation.consultationType === 'physical'
-            ? 'In-Person Consultation'
-            : 'Online Video Consultation',
-        patient: {
-          name: patientName,
-        },
-        doctor: {
-          name: doctorDisplayName,
-          specialty: doctorInfo?.specialty || 'General Practice',
-          qualifications: Array.isArray(doctorInfo?.qualifications)
-            ? doctorInfo.qualifications.join(', ')
-            : doctorInfo?.qualifications,
-          clinicName,
-        },
-        prescriptions: formattedPrescriptions,
-        clinicalAdvice:
-          consultation.clinicalAdvice ||
-          'Take medications strictly as directed. Contact doctor if any adverse reactions occur.',
-      });
-      toast.success('Prescription downloaded successfully');
-    } catch (err) {
-      console.error('Failed to generate prescription PDF:', err);
-      toast.error('Failed to generate prescription document.');
-    }
+  const handleDownloadPdf = (consultation: ConsultationRecord, doctor: any) => {
+    const patientName = user?.name || (user as any)?.googleName || user?.email || 'Patient';
+    generatePrescriptionPdf({
+      appointmentId: consultation.appointmentId,
+      date: new Date(consultation.appointmentDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      time: consultation.appointmentTime,
+      consultationType:
+        consultation.consultationType === 'offline' || consultation.consultationType === 'physical'
+          ? 'In-Person Consultation'
+          : 'Online Video Consultation',
+      patient: {
+        name: patientName,
+      },
+      doctor: {
+        name: doctor.name || `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
+        specialty: doctor.specialty || 'General Practice',
+        qualifications: doctor.qualifications,
+        clinicName:
+          doctor.consultationSettings?.offline?.clinicName ||
+          doctor.consultationSettings?.physical?.clinicName,
+      },
+      prescriptions: (consultation.prescriptions || []).map((rx, idx) => ({
+        id: rx.id || String(idx),
+        medicine: rx.medicine || '',
+        dosage: rx.dosage || '',
+        frequency: rx.frequency || '',
+        duration: rx.duration || '',
+        instructions: rx.instructions || '',
+        prescribedBy: rx.prescribedBy || doctor.name || 'Doctor',
+        date: rx.date || consultation.appointmentDate || new Date().toISOString(),
+      })),
+      clinicalAdvice:
+        consultation.clinicalAdvice ||
+        'Take medications strictly as directed. Contact your doctor if symptoms persist.',
+    });
   };
 
-  // Specialties list for filter
   const specialties = useMemo(() => {
-    const list = new Set<string>();
-    doctors.forEach((doc) => {
-      if (doc.specialty) list.add(doc.specialty);
+    const set = new Set<string>();
+    doctors.forEach((d) => {
+      if (d.specialty) set.add(d.specialty);
     });
-    return Array.from(list);
+    return Array.from(set);
   }, [doctors]);
 
-  // Filtered doctors
   const filteredDoctors = useMemo(() => {
     return doctors.filter((doc) => {
+      const fullName = (doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`).toLowerCase();
+      const spec = (doc.specialty || '').toLowerCase();
       const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        (doc.name && doc.name.toLowerCase().includes(q)) ||
-        (doc.specialty && doc.specialty.toLowerCase().includes(q));
 
-      const matchesSpecialty =
-        selectedSpecialty === 'all' || doc.specialty === selectedSpecialty;
+      const matchesSearch = !q || fullName.includes(q) || spec.includes(q);
+      const matchesSpecialty = selectedSpecialty === 'all' || doc.specialty === selectedSpecialty;
 
       return matchesSearch && matchesSpecialty;
     });
@@ -223,103 +250,133 @@ export default function MyDoctorsPage() {
   }, [doctors]);
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-8">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 pb-6">
+    <div className="pat-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      {/* ── Page Header ── */}
+      <div className="pat-page-header">
         <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
-              <i className="fas fa-user-doctor text-lg"></i>
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Consulted Doctors</h1>
-              <p className="text-sm text-slate-500 mt-0.5">
-                Your trusted care providers, consultation records, and 1-click rebooking
-              </p>
-            </div>
-          </div>
+          <h1>My Consulted Doctors</h1>
+          <p>Your trusted care specialists, previous consultations, and 1-click rebooking.</p>
         </div>
-
-        <Link
-          href="/patient/find-doctor"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm transition-all hover:shadow-indigo-200"
-        >
-          <i className="fas fa-plus text-xs"></i>
+        <Link href="/patient/find-doctor" className="pat-btn pat-btn-primary pat-btn-lg">
+          <Stethoscope size={16} />
           <span>Find New Doctors</span>
         </Link>
       </div>
 
-      {/* Stats Counter Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">
-            <i className="fas fa-user-md"></i>
+      {/* ── Stats Counter Bar ── */}
+      <div className="pat-stats-grid" style={{ marginBottom: 24 }}>
+        <div className="pat-stat-card indigo">
+          <div className="pat-stat-icon-wrap">
+            <Users size={20} />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Doctors</p>
-            <p className="text-2xl font-bold text-slate-800">{doctors.length}</p>
-          </div>
+          <div className="pat-stat-value">{doctors.length}</div>
+          <div className="pat-stat-label">Total Doctors</div>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">
-            <i className="fas fa-calendar-check"></i>
+        <div className="pat-stat-card emerald">
+          <div className="pat-stat-icon-wrap">
+            <Calendar size={20} />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Consultations</p>
-            <p className="text-2xl font-bold text-slate-800">{totalConsultationsSum}</p>
-          </div>
+          <div className="pat-stat-value">{totalConsultationsSum}</div>
+          <div className="pat-stat-label">Consultations Completed</div>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
-            <i className="fas fa-clock-rotate-left"></i>
+        <div className="pat-stat-card sky">
+          <div className="pat-stat-icon-wrap">
+            <Clock size={20} />
           </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Last Consultation</p>
-            <p className="text-sm font-bold text-slate-800 truncate">
-              {doctors.length > 0 && doctors[0].lastConsultationDate
-                ? new Date(doctors[0].lastConsultationDate).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                : 'None yet'}
-            </p>
+          <div className="pat-stat-value" style={{ fontSize: '1.25rem', paddingTop: 6 }}>
+            {doctors.length > 0 && doctors[0].lastConsultationDate
+              ? new Date(doctors[0].lastConsultationDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : 'None yet'}
           </div>
+          <div className="pat-stat-label">Last Consultation</div>
         </div>
       </div>
 
-      {/* Search & Filter Controls */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-96">
-          <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+      {/* ── Search & Specialty Filters ── */}
+      <div
+        className="pat-card"
+        style={{
+          padding: 14,
+          marginBottom: 24,
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12
+        }}
+      >
+        <div style={{ position: 'relative', flex: '1 1 280px', maxWidth: 380 }}>
+          <Search
+            size={16}
+            style={{
+              position: 'absolute',
+              left: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--pat-muted)'
+            }}
+          />
           <input
             type="text"
             placeholder="Search by doctor name or specialty..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+            style={{
+              width: '100%',
+              padding: '9px 36px 9px 36px',
+              borderRadius: 12,
+              border: '1.5px solid var(--pat-border)',
+              background: '#f8fafc',
+              fontSize: '0.84rem',
+              outline: 'none',
+              boxSizing: 'border-box',
+              color: 'var(--pat-text)',
+              fontFamily: 'inherit'
+            }}
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--pat-muted)',
+                cursor: 'pointer',
+                padding: 4
+              }}
             >
-              <i className="fas fa-times text-xs"></i>
+              <X size={14} />
             </button>
           )}
         </div>
 
         {specialties.length > 0 && (
-          <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
             <button
               onClick={() => setSelectedSpecialty('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                selectedSpecialty === 'all'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 999,
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                border: selectedSpecialty === 'all' ? '1px solid var(--pat-primary)' : '1px solid var(--pat-border)',
+                background: selectedSpecialty === 'all' ? 'var(--pat-primary)' : 'var(--pat-surface)',
+                color: selectedSpecialty === 'all' ? '#fff' : 'var(--pat-text-soft)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
+              }}
             >
               All Specialties
             </button>
@@ -327,11 +384,18 @@ export default function MyDoctorsPage() {
               <button
                 key={spec}
                 onClick={() => setSelectedSpecialty(spec)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                  selectedSpecialty === spec
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  border: selectedSpecialty === spec ? '1px solid var(--pat-primary)' : '1px solid var(--pat-border)',
+                  background: selectedSpecialty === spec ? 'var(--pat-primary)' : 'var(--pat-surface)',
+                  color: selectedSpecialty === spec ? '#fff' : 'var(--pat-text-soft)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease'
+                }}
               >
                 {spec}
               </button>
@@ -340,164 +404,172 @@ export default function MyDoctorsPage() {
         )}
       </div>
 
-      {/* Main Content Area */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm animate-pulse space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-slate-200"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-5 bg-slate-200 rounded w-3/4"></div>
-                  <div className="h-4 bg-slate-100 rounded w-1/2"></div>
-                </div>
-              </div>
-              <div className="h-10 bg-slate-50 rounded-xl"></div>
-              <div className="h-10 bg-slate-100 rounded-xl"></div>
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-8 text-center max-w-lg mx-auto">
-          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center mx-auto mb-3">
-            <i className="fas fa-circle-exclamation text-xl"></i>
-          </div>
-          <h3 className="text-base font-bold text-rose-900">Failed to Load Directory</h3>
-          <p className="text-sm text-rose-700 mt-1 mb-4">{error}</p>
-          <button
-            onClick={fetchMyDoctors}
-            className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-lg hover:bg-rose-700 transition"
-          >
-            Try Again
-          </button>
+      {/* ── Doctor Cards Grid ── */}
+      {loading ? (
+        <div className="pat-card" style={{ padding: 48, textAlign: 'center' }}>
+          <Loader2 size={36} className="animate-spin" style={{ margin: '0 auto 12px', color: 'var(--pat-primary)' }} />
+          <p style={{ color: 'var(--pat-text-soft)', fontSize: '0.9rem' }}>Loading your consulted doctors...</p>
         </div>
       ) : filteredDoctors.length === 0 ? (
-        <div className="bg-white rounded-3xl p-12 border border-slate-200/80 shadow-sm text-center max-w-xl mx-auto space-y-4">
-          <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto text-3xl shadow-inner">
-            <i className="fas fa-stethoscope"></i>
+        <div className="pat-card pat-empty">
+          <div className="pat-empty-icon">
+            <Stethoscope size={30} />
           </div>
-          <div>
-            <h3 className="text-xl font-bold text-slate-800">
-              {searchQuery || selectedSpecialty !== 'all' ? 'No Doctors Match Your Search' : 'No Consultations Yet'}
-            </h3>
-            <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
-              {searchQuery || selectedSpecialty !== 'all'
-                ? 'Try resetting your search query or specialty filter to view your full care team.'
-                : 'When you complete consultations with our certified medical specialists, they will automatically appear in this directory for effortless follow-ups and record tracking.'}
-            </p>
-          </div>
-          {searchQuery || selectedSpecialty !== 'all' ? (
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedSpecialty('all');
-              }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl transition"
-            >
-              <i className="fas fa-rotate-left text-xs"></i>
-              Reset Search
-            </button>
-          ) : (
-            <Link
-              href="/patient/find-doctor"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-100 transition"
-            >
-              <i className="fas fa-magnifying-glass text-xs"></i>
-              Find & Book Doctors
-            </Link>
-          )}
+          <h3>{searchQuery ? 'No matching doctors found' : 'No Consulted Doctors Yet'}</h3>
+          <p>
+            {searchQuery
+              ? `No doctors found matching "${searchQuery}".`
+              : 'Doctors you consult with through video calls or clinic visits will be saved here for instant rebooking and record access.'}
+          </p>
+          <Link href="/patient/find-doctor" className="pat-btn pat-btn-primary" style={{ marginTop: 12 }}>
+            <Search size={15} />
+            <span>Find a Specialist Now</span>
+          </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
           {filteredDoctors.map((doc) => {
-            const initials = `${doc.firstName?.[0] || ''}${doc.lastName?.[0] || ''}`.toUpperCase() || 'DR';
+            const rawName = doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`.trim();
+            const doctorName = rawName.toLowerCase().startsWith('dr.') ? rawName : `Dr. ${rawName}`;
+            const primaryDeg = extractPrimaryQualifications(doc.qualifications);
+            const system = doc.systemOfMedicine || deduceSystemOfMedicine(doc.qualifications);
+
             return (
               <div
-                key={doc.doctorId || doc._id}
-                className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden group"
+                key={doc._id || doc.doctorId}
+                className="pat-card"
+                style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}
               >
-                {/* Doctor Top Card Header */}
-                <div className="p-6 flex-1 space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
+                <div style={{ padding: 20 }}>
+                  {/* Doctor Info Row */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 16,
+                        background: 'linear-gradient(135deg, #ede9fe, #dbeafe)',
+                        color: 'var(--pat-primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.2rem',
+                        fontWeight: 800,
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                        border: '1px solid rgba(79,70,229,0.15)'
+                      }}
+                    >
                       {doc.avatarUrl ? (
-                        <img
-                          src={doc.avatarUrl}
-                          alt={doc.name}
-                          className="w-16 h-16 rounded-2xl object-cover border border-slate-100 shadow-sm"
-                        />
+                        <img src={doc.avatarUrl} alt={doctorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-                          {initials}
-                        </div>
+                        <span>{doc.firstName?.[0] || 'DR'}</span>
                       )}
-                      <span className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-[10px] text-white">
-                        <i className="fas fa-check"></i>
-                      </span>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-bold text-slate-900 truncate group-hover:text-indigo-600 transition-colors">
-                          {doc.name}
-                        </h3>
-                      </div>
-                      <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
-                        {doc.specialty || 'General Practice'}
-                      </span>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-slate-500">
-                        {doc.yearsOfExperience > 0 && (
-                          <span>
-                            <i className="fas fa-briefcase mr-1 text-slate-400"></i>
-                            {doc.yearsOfExperience} yrs exp
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--pat-text)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {doctorName}
+                      </h3>
+                      {primaryDeg && (
+                        <p style={{ fontSize: '0.74rem', color: 'var(--pat-text-soft)', margin: '2px 0 0' }}>
+                          {primaryDeg}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            background: '#ede9fe',
+                            color: 'var(--pat-primary)'
+                          }}
+                        >
+                          {doc.specialty || 'General Physician'}
+                        </span>
+                        {system && (
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              padding: '2px 7px',
+                              borderRadius: 999,
+                              background: '#f1f5f9',
+                              color: 'var(--pat-text-soft)'
+                            }}
+                          >
+                            {system}
                           </span>
                         )}
-                        <span className="flex items-center text-amber-500 font-semibold">
-                          <i className="fas fa-star mr-1 text-xs"></i>
-                          {doc.rating ? doc.rating.toFixed(1) : '5.0'}
-                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Consultation Stats Box */}
-                  <div className="bg-slate-50 rounded-xl p-3 grid grid-cols-2 gap-2 text-xs border border-slate-100">
+                  {/* Rating & Consultations Count */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginTop: 16,
+                      padding: '10px 14px',
+                      borderRadius: 12,
+                      background: '#f8fafc',
+                      border: '1px solid var(--pat-border)',
+                      fontSize: '0.78rem'
+                    }}
+                  >
                     <div>
-                      <p className="text-slate-400 font-medium">Total Visits</p>
-                      <p className="text-slate-800 font-bold mt-0.5">
-                        {doc.totalConsultations} {doc.totalConsultations === 1 ? 'consultation' : 'consultations'}
-                      </p>
+                      <span style={{ color: 'var(--pat-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+                        Visits
+                      </span>
+                      <strong style={{ color: 'var(--pat-text)', fontSize: '0.86rem' }}>
+                        {doc.totalConsultations} {doc.totalConsultations === 1 ? 'visit' : 'visits'}
+                      </strong>
                     </div>
-                    <div>
-                      <p className="text-slate-400 font-medium">Last Visit</p>
-                      <p className="text-slate-800 font-bold mt-0.5">
+
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ color: 'var(--pat-muted)', fontSize: '0.7rem', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+                        Last Consulted
+                      </span>
+                      <strong style={{ color: 'var(--pat-text)', fontSize: '0.86rem' }}>
                         {doc.lastConsultationDate
                           ? new Date(doc.lastConsultationDate).toLocaleDateString('en-US', {
                               month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
+                              day: 'numeric'
                             })
                           : 'Recent'}
-                      </p>
+                      </strong>
                     </div>
                   </div>
                 </div>
 
-                {/* Card Actions */}
-                <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5">
+                {/* Card Action Buttons */}
+                <div
+                  style={{
+                    padding: '14px 20px',
+                    borderTop: '1px solid var(--pat-border)',
+                    background: '#fafbff',
+                    display: 'flex',
+                    gap: 10
+                  }}
+                >
                   <button
                     onClick={() => openHistoryModal(doc.doctorId || doc._id)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200 shadow-sm transition"
+                    className="pat-btn pat-btn-outline pat-btn-sm"
+                    style={{ flex: 1, justifyContent: 'center' }}
                   >
-                    <i className="fas fa-file-medical text-indigo-600"></i>
-                    <span>View History</span>
+                    <FileText size={14} />
+                    <span>Records</span>
                   </button>
-
                   <Link
                     href={`/patient/find-doctor/book/${doc.doctorId || doc._id}`}
-                    className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition hover:shadow-indigo-100"
+                    className="pat-btn pat-btn-primary pat-btn-sm"
+                    style={{ flex: 1, justifyContent: 'center' }}
                   >
-                    <i className="fas fa-calendar-plus text-xs"></i>
+                    <CalendarPlus size={14} />
                     <span>Book Again</span>
                   </Link>
                 </div>
@@ -507,234 +579,279 @@ export default function MyDoctorsPage() {
         </div>
       )}
 
-      {/* History Slide-Over / Modal */}
+      {/* ── Consultation History Slide-Over / Modal ── */}
       {selectedDoctorId && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex justify-end transition-opacity">
-          <div className="w-full max-w-3xl bg-white min-h-screen shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-white z-10 border-b border-slate-200 px-6 py-5 flex items-center justify-between shadow-xs">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
-                  <i className="fas fa-stethoscope"></i>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            animation: 'patFadeUp 0.2s ease'
+          }}
+          onClick={closeHistoryModal}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 720,
+              background: '#fff',
+              height: '100%',
+              boxShadow: '-8px 0 32px rgba(0,0,0,0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--pat-border)',
+                background: 'linear-gradient(to right, #fafbff, #fff)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexShrink: 0
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    background: '#ede9fe',
+                    color: 'var(--pat-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Stethoscope size={18} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900">Consultation History & Prescriptions</h2>
-                  <p className="text-xs text-slate-500">
-                    Medical interactions strictly with this specialist
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--pat-text)', margin: 0 }}>
+                    Consultation History & Prescriptions
+                  </h3>
+                  <p style={{ fontSize: '0.74rem', color: 'var(--pat-text-soft)', margin: '2px 0 0' }}>
+                    Visits and documents with this doctor
                   </p>
                 </div>
               </div>
+
               <button
                 onClick={closeHistoryModal}
-                className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: 10,
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: 'var(--pat-text-soft)'
+                }}
               >
-                <i className="fas fa-times text-sm"></i>
+                <X size={16} />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-6 flex-1 overflow-y-auto space-y-6">
+            {/* Scrollable Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
               {historyLoading ? (
-                <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                  <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-sm font-medium text-slate-500">Loading consultation records...</p>
+                <div style={{ textAlign: 'center', padding: 48 }}>
+                  <Loader2 size={36} className="animate-spin" style={{ margin: '0 auto 12px', color: 'var(--pat-primary)' }} />
+                  <p style={{ color: 'var(--pat-text-soft)', fontSize: '0.88rem' }}>Loading consultation records...</p>
                 </div>
               ) : !historyData ? (
-                <div className="text-center py-16">
-                  <p className="text-sm text-slate-500">Failed to load consultation records.</p>
+                <div style={{ textAlign: 'center', padding: 48 }}>
+                  <p style={{ color: 'var(--pat-text-soft)' }}>Failed to load records.</p>
                 </div>
               ) : (
-                <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {/* Doctor Profile Banner */}
-                  <div className="bg-gradient-to-r from-indigo-50 via-slate-50 to-white rounded-2xl p-5 border border-indigo-100/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {historyData.doctor?.avatarUrl ? (
-                        <img
-                          src={historyData.doctor.avatarUrl}
-                          alt={historyData.doctor.name}
-                          className="w-14 h-14 rounded-2xl object-cover border border-indigo-200"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold text-base">
-                          {historyData.doctor?.firstName?.[0] || 'D'}
-                        </div>
-                      )}
-                      <div>
-                        <h3 className="text-base font-bold text-slate-900">{historyData.doctor?.name}</h3>
-                        <p className="text-xs font-semibold text-indigo-600">{historyData.doctor?.specialty}</p>
-                        {Array.isArray(historyData.doctor?.qualifications) && historyData.doctor.qualifications.length > 0 && (
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            {historyData.doctor.qualifications.join(', ')}
-                          </p>
+                  <div
+                    style={{
+                      padding: 18,
+                      borderRadius: 16,
+                      background: 'linear-gradient(135deg, #ede9fe, #dbeafe)',
+                      border: '1px solid rgba(79,70,229,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 14
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div
+                        style={{
+                          width: 52,
+                          height: 52,
+                          borderRadius: 14,
+                          background: 'var(--pat-primary)',
+                          color: '#fff',
+                          fontWeight: 800,
+                          fontSize: '1.2rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden'
+                        }}
+                      >
+                        {historyData.doctor?.avatarUrl ? (
+                          <img src={historyData.doctor.avatarUrl} alt={historyData.doctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span>{historyData.doctor?.firstName?.[0] || 'D'}</span>
                         )}
+                      </div>
+                      <div>
+                        <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--pat-text)', margin: 0 }}>
+                          {historyData.doctor?.name}
+                        </h4>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--pat-primary)', fontWeight: 600, margin: '2px 0 0' }}>
+                          {historyData.doctor?.specialty}
+                        </p>
                       </div>
                     </div>
 
                     <Link
                       href={`/patient/find-doctor/book/${historyData.doctor?.doctorId || historyData.doctor?.id}`}
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition"
+                      className="pat-btn pat-btn-primary pat-btn-sm"
                     >
-                      <i className="fas fa-calendar-check"></i>
+                      <CalendarPlus size={14} />
                       <span>Book New Appointment</span>
                     </Link>
                   </div>
 
                   {/* Consultation Timeline */}
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-slate-400">
-                        Past Consultations ({historyData.consultations?.length || 0})
-                      </h4>
-                    </div>
+                  <div>
+                    <h5 style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--pat-muted)', marginBottom: 14 }}>
+                      Past Consultations ({historyData.consultations?.length || 0})
+                    </h5>
 
                     {(!historyData.consultations || historyData.consultations.length === 0) ? (
-                      <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200">
-                        <p className="text-sm text-slate-500">No completed consultations found with this doctor.</p>
+                      <div className="pat-card pat-empty" style={{ padding: 36 }}>
+                        <p style={{ color: 'var(--pat-text-soft)', fontSize: '0.86rem', margin: 0 }}>
+                          No completed consultations found with this doctor.
+                        </p>
                       </div>
                     ) : (
-                      <div className="space-y-4">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         {historyData.consultations.map((c, index) => {
                           const hasPrescriptions = Array.isArray(c.prescriptions) && c.prescriptions.length > 0;
                           const hasFiles = Array.isArray(c.consultationFiles) && c.consultationFiles.length > 0;
 
                           return (
-                            <div
-                              key={c.id || c.appointmentId || index}
-                              className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4"
-                            >
-                              {/* Consultation Item Header */}
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                                    #{index + 1}
+                            <div key={c.id || c.appointmentId || index} className="pat-card" style={{ padding: 18 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--pat-border)', paddingBottom: 12, marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: '0.72rem', fontWeight: 800, background: '#ede9fe', color: 'var(--pat-primary)', padding: '2px 8px', borderRadius: 6 }}>
+                                    Visit #{index + 1}
                                   </span>
-                                  <div>
-                                    <p className="text-sm font-bold text-slate-900">
-                                      {new Date(c.appointmentDate).toLocaleDateString('en-US', {
-                                        weekday: 'short',
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                      })}
-                                    </p>
-                                    <p className="text-xs text-slate-400 font-medium">{c.appointmentTime}</p>
-                                  </div>
+                                  <strong style={{ fontSize: '0.88rem', color: 'var(--pat-text)' }}>
+                                    {new Date(c.appointmentDate).toLocaleDateString('en-US', {
+                                      weekday: 'short',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })}
+                                  </strong>
+                                  <span style={{ color: 'var(--pat-muted)', fontSize: '0.8rem' }}>• {c.appointmentTime}</span>
                                 </div>
 
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                                      c.consultationType === 'offline' || c.consultationType === 'physical'
-                                        ? 'bg-amber-50 text-amber-700'
-                                        : 'bg-indigo-50 text-indigo-700'
-                                    }`}
-                                  >
-                                    <i
-                                      className={`fas ${
-                                        c.consultationType === 'offline' || c.consultationType === 'physical'
-                                          ? 'fa-hospital-user'
-                                          : 'fa-video'
-                                      } mr-1.5`}
-                                    ></i>
-                                    {c.consultationType === 'offline' || c.consultationType === 'physical'
-                                      ? 'In-Person'
-                                      : 'Video Call'}
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <span className="pat-badge pat-badge-scheduled" style={{ fontSize: '0.68rem' }}>
+                                    {c.consultationType === 'offline' || c.consultationType === 'physical' ? 'In-Person' : 'Video Call'}
                                   </span>
-
-                                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-                                    <i className="fas fa-check-circle mr-1"></i>
+                                  <span className="pat-badge pat-badge-completed" style={{ fontSize: '0.68rem' }}>
                                     Completed
                                   </span>
                                 </div>
                               </div>
 
-                              {/* Clinical Advice Note */}
-                              {c.clinicalAdvice && (
-                                <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100">
-                                  <p className="text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
-                                    <i className="fas fa-notes-medical text-indigo-500"></i>
-                                    Doctor's Clinical Advice
-                                  </p>
-                                  <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
-                                    {c.clinicalAdvice}
-                                  </p>
-                                </div>
-                              )}
-
                               {/* Prescriptions */}
                               {hasPrescriptions && (
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <h5 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                      <i className="fas fa-pills text-emerald-600"></i>
-                                      Prescribed Medications ({c.prescriptions.length})
-                                    </h5>
+                                <div style={{ marginBottom: 14 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--pat-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <Pill size={14} style={{ color: 'var(--pat-primary)' }} /> Medications ({c.prescriptions.length})
+                                    </span>
                                     <button
                                       onClick={() => handleDownloadPdf(c, historyData.doctor)}
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition"
+                                      className="pat-btn pat-btn-outline pat-btn-sm"
+                                      style={{ padding: '4px 10px', fontSize: '0.72rem' }}
                                     >
-                                      <i className="fas fa-file-pdf"></i>
-                                      <span>Download Official PDF</span>
+                                      <Download size={12} />
+                                      <span>Download PDF</span>
                                     </button>
                                   </div>
 
-                                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                                    <table className="w-full text-left text-xs">
-                                      <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                                        <tr>
-                                          <th className="py-2.5 px-3">Medicine</th>
-                                          <th className="py-2.5 px-3">Dosage</th>
-                                          <th className="py-2.5 px-3">Frequency</th>
-                                          <th className="py-2.5 px-3">Duration</th>
-                                          <th className="py-2.5 px-3">Instructions</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-slate-100 text-slate-700">
-                                        {c.prescriptions.map((rx, rxIdx) => (
-                                          <tr key={rxIdx} className="hover:bg-slate-50/50">
-                                            <td className="py-2.5 px-3 font-semibold text-slate-900">{rx.medicine}</td>
-                                            <td className="py-2.5 px-3">{rx.dosage || '-'}</td>
-                                            <td className="py-2.5 px-3">{rx.frequency || '-'}</td>
-                                            <td className="py-2.5 px-3">{rx.duration || '-'}</td>
-                                            <td className="py-2.5 px-3 text-slate-500">{rx.instructions || '-'}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {c.prescriptions.map((rx, rxIdx) => (
+                                      <div
+                                        key={rxIdx}
+                                        style={{
+                                          padding: '8px 12px',
+                                          borderRadius: 8,
+                                          background: '#f8fafc',
+                                          border: '1px solid var(--pat-border)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          fontSize: '0.78rem'
+                                        }}
+                                      >
+                                        <strong style={{ color: 'var(--pat-text)' }}>{rx.medicine}</strong>
+                                        <span style={{ color: 'var(--pat-text-soft)' }}>
+                                          {rx.dosage} • {rx.frequency} ({rx.duration})
+                                        </span>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                               )}
 
                               {/* Consultation Files */}
                               {hasFiles && (
-                                <div className="space-y-2 pt-2 border-t border-slate-100">
-                                  <p className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                    <i className="fas fa-paperclip text-slate-400"></i>
-                                    Attached Documents ({c.consultationFiles.length})
-                                  </p>
-                                  <div className="flex flex-wrap gap-2">
+                                <div>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--pat-text)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                                    <Paperclip size={14} style={{ color: 'var(--pat-teal)' }} /> Attached Documents ({c.consultationFiles.length})
+                                  </span>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                     {c.consultationFiles.map((file, fIdx) => (
                                       <a
                                         key={fIdx}
                                         href={file.url || file.fileUrl || '#'}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+                                        style={{
+                                          padding: '6px 12px',
+                                          borderRadius: 8,
+                                          background: '#f1f5f9',
+                                          color: 'var(--pat-text)',
+                                          fontSize: '0.74rem',
+                                          fontWeight: 600,
+                                          textDecoration: 'none',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 6
+                                        }}
                                       >
-                                        <i className="fas fa-file text-slate-500"></i>
-                                        <span className="truncate max-w-[180px]">{file.name || 'Attachment'}</span>
-                                        <i className="fas fa-arrow-up-right-from-square text-[10px] text-slate-400"></i>
+                                        <FileText size={13} style={{ color: 'var(--pat-primary)' }} />
+                                        <span>{file.name || 'Document'}</span>
+                                        <ExternalLink size={11} style={{ color: 'var(--pat-muted)' }} />
                                       </a>
                                     ))}
                                   </div>
                                 </div>
-                              )}
-
-                              {/* If no prescription and no notes */}
-                              {!hasPrescriptions && !c.clinicalAdvice && !hasFiles && (
-                                <p className="text-xs text-slate-400 italic">
-                                  No prescription or notes attached to this consultation record.
-                                </p>
                               )}
                             </div>
                           );
@@ -742,16 +859,22 @@ export default function MyDoctorsPage() {
                       </div>
                     )}
                   </div>
-                </>
+                </div>
               )}
             </div>
 
-            {/* Modal Sticky Footer */}
-            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 p-4 flex justify-end">
-              <button
-                onClick={closeHistoryModal}
-                className="px-5 py-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition"
-              >
+            {/* Footer */}
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--pat-border)',
+                background: '#fafbff',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                flexShrink: 0
+              }}
+            >
+              <button onClick={closeHistoryModal} className="pat-btn pat-btn-outline">
                 Close Record
               </button>
             </div>

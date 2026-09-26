@@ -4,11 +4,13 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import AuthHydrator from '@/components/auth/AuthHydrator';
 import AppShell from '@/components/layout/AppShell';
+import PatientBottomNav from '@/components/patient/PatientBottomNav';
+import './patient-premium.css';
 
 export default async function PatientLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode; 
 }) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
@@ -42,6 +44,7 @@ export default async function PatientLayout({
       <AppShell role="patient">
         {children}
       </AppShell>
+      <PatientBottomNav />
     </AuthHydrator>
   );
 } 

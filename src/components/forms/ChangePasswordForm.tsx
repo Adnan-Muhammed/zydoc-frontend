@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import authService from '@/redux/auth/authService';
 import { useAppSelector } from '@/redux/hooks';
+import { Eye, EyeOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export default function ChangePasswordForm() {
     const { user } = useAppSelector((state) => state.auth);
@@ -64,15 +65,15 @@ export default function ChangePasswordForm() {
             )}
 
             {error && (
-                <div className="rounded-lg bg-red-50 p-4 text-sm text-red-600 border border-red-100 flex items-center gap-2">
-                    <i className="fas fa-exclamation-triangle"></i>
-                    {error}
+                <div className="rounded-xl bg-rose-50 p-4 text-xs font-semibold text-rose-700 border border-rose-200 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{error}</span>
                 </div>
             )}
             {success && (
-                <div className="rounded-lg bg-green-50 p-4 text-sm text-green-600 border border-green-100 flex items-center gap-2">
-                    <i className="fas fa-check-circle"></i>
-                    {success}
+                <div className="rounded-xl bg-emerald-50 p-4 text-xs font-semibold text-emerald-700 border border-emerald-200 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{success}</span>
                 </div>
             )}
 
@@ -92,7 +93,7 @@ export default function ChangePasswordForm() {
                         className="absolute right-3 top-9 text-slate-400 hover:text-slate-600 text-sm"
                         aria-label={showCurrent ? 'Hide password' : 'Show password'}
                     >
-                        <i className={`fas fa-eye${showCurrent ? '-slash' : ''}`}></i>
+                        {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                 </div>
             )}
@@ -112,7 +113,7 @@ export default function ChangePasswordForm() {
                     className="absolute right-3 top-9 text-slate-400 hover:text-slate-600 text-sm"
                     aria-label={showNew ? 'Hide password' : 'Show password'}
                 >
-                    <i className={`fas fa-eye${showNew ? '-slash' : ''}`}></i>
+                    {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
             </div>
 

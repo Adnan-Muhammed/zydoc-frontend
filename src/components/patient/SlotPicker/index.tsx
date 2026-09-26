@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { CalendarX, CalendarOff, Globe, Clock, Lock, Ban, Zap } from 'lucide-react';
 
 export interface Slot {
     time: string;               // Display string e.g. "09:00 AM" — for rendering only
@@ -92,22 +93,22 @@ export default function SlotPicker({
 
     if (isLoading) {
         return (
-            <div className="flex items-center gap-2 text-slate-400 text-sm py-8 justify-center">
+            <div className="flex items-center gap-2.5 text-slate-500 text-xs sm:text-sm py-10 justify-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-600 border-t-transparent" />
-                <span>Checking live slot availability…</span>
+                <span className="font-medium">Checking live slot availability…</span>
             </div>
         );
     }
 
     if (!doctorWorking) {
         return (
-            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                <span className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <i className="fas fa-calendar-xmark text-amber-500 text-sm" />
+            <div className="flex items-start gap-3.5 p-4 bg-amber-50/90 border border-amber-200/90 rounded-2xl shadow-2xs">
+                <span className="size-9 rounded-xl bg-amber-100/90 flex items-center justify-center shrink-0 text-amber-600">
+                    <CalendarX className="size-4.5" />
                 </span>
                 <div>
-                    <p className="text-amber-800 text-sm font-bold">Doctor not scheduled on this day</p>
-                    <p className="text-amber-600 text-xs mt-0.5">Please choose a different date within the 14-day booking window.</p>
+                    <p className="text-amber-900 text-xs sm:text-sm font-bold">Doctor not scheduled on this day</p>
+                    <p className="text-amber-700/80 text-[11px] sm:text-xs mt-0.5">Please select another date within the 14-day booking window.</p>
                 </div>
             </div>
         );
@@ -115,12 +116,12 @@ export default function SlotPicker({
 
     if (allSlots.length === 0) {
         return (
-            <div className="flex flex-col items-center py-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                <span className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-2">
-                    <i className="far fa-calendar-times text-slate-400 text-xl" />
+            <div className="flex flex-col items-center py-10 text-center bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
+                <span className="size-12 rounded-2xl bg-white shadow-2xs border border-slate-200 flex items-center justify-center mb-2.5 text-slate-400">
+                    <CalendarOff className="size-5" />
                 </span>
-                <p className="text-slate-700 text-sm font-bold">No slots available</p>
-                <p className="text-slate-400 text-xs mt-0.5">Please select another date from the calendar.</p>
+                <p className="text-slate-800 text-xs sm:text-sm font-bold">No slots available for this date</p>
+                <p className="text-slate-400 text-xs mt-0.5">Please choose a different date from the calendar above.</p>
             </div>
         );
     }
@@ -129,15 +130,15 @@ export default function SlotPicker({
         <div className={`space-y-5 ${isSlotLocked ? "pointer-events-none opacity-75" : ""}`}>
             {/* Timezone Context Banner */}
             {doctorTimezone && (
-                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs text-slate-600">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs text-slate-600 shadow-2xs">
                     <div className="flex items-center gap-2">
-                        <i className="fas fa-globe text-indigo-500 text-xs" />
-                        <span>Doctor's Operating Time: <strong className="text-slate-800">{doctorTimezone}</strong></span>
+                        <Globe className="size-3.5 text-indigo-600 shrink-0" />
+                        <span>Doctor's Operating Timezone: <strong className="text-[#101044] font-bold">{doctorTimezone}</strong></span>
                     </div>
                     {patientTimezone && patientTimezone !== doctorTimezone && (
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md text-[11px] text-indigo-700 font-medium">
-                            <i className="far fa-clock text-indigo-500" />
-                            <span>Your Time: <strong>{patientTimezone}</strong> (converted on each slot)</span>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50/80 border border-indigo-100 rounded-xl text-[11px] text-indigo-700 font-semibold">
+                            <Clock className="size-3 text-indigo-600 shrink-0" />
+                            <span>Your Local Time: <strong>{patientTimezone}</strong> (converted per slot)</span>
                         </div>
                     )}
                 </div>
@@ -247,29 +248,29 @@ export default function SlotPicker({
                                                     ? "bg-rose-50/50 text-slate-400 border-rose-200/80 cursor-not-allowed opacity-75 select-none pointer-events-none"
                                                 : isSelected
                                                     ? isOngoing 
-                                                        ? "bg-amber-50 text-amber-900 border-amber-500 shadow-md ring-2 ring-amber-400/50"
-                                                        : "bg-indigo-50 text-indigo-700 border-indigo-600 shadow-md"
+                                                        ? "bg-amber-600 text-white border-amber-600 shadow-md ring-2 ring-amber-400/50 scale-[1.02]"
+                                                        : "bg-[#101044] text-white border-[#101044] shadow-md shadow-[#101044]/20 scale-[1.02]"
                                                 : isOngoing
-                                                    ? "bg-amber-50/60 text-amber-900 border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 shadow-xs"
-                                                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 hover:shadow-sm"
+                                                    ? "bg-amber-50/70 text-amber-900 border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 shadow-2xs"
+                                                    : "bg-white text-slate-700 border-slate-200/90 hover:border-indigo-400 hover:bg-indigo-50/40 hover:text-indigo-950 shadow-2xs hover:shadow-xs active:scale-95"
                                             }
                                         `}
                                     >
                                         <span className={`text-xs sm:text-sm font-bold flex items-center gap-1.5 ${isPast || isBooked || isLockedByOther || isBreak ? 'opacity-60' : ''}`}>
-                                            {isAnyLocked && !isPendingPayment && <i className="fas fa-lock text-[10px] opacity-70" />}
-                                            {isBreak && <i className="fas fa-ban text-[10px] text-rose-500/80" />}
-                                            {isOngoing && isAvailable && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
+                                            {isAnyLocked && !isPendingPayment && <Lock className="size-3 opacity-70" />}
+                                            {isBreak && <Ban className="size-3 text-rose-500/80" />}
+                                            {isOngoing && isAvailable && <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />}
                                             {slotTime}
                                         </span>
 
                                         {patientLocalTime && !isPast && !isBooked && !isBreak && (
-                                            <span className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 mt-0.5 tracking-tight">
+                                            <span className={`text-[10px] font-semibold mt-0.5 tracking-tight ${isSelected ? 'text-indigo-200' : 'text-indigo-600'}`}>
                                                 {patientLocalTime}
                                             </span>
                                         )}
 
                                         {isOngoing && isAvailable && (
-                                            <span className="text-[8.5px] font-extrabold uppercase tracking-tight text-amber-700 bg-amber-100/90 border border-amber-300/80 px-1.5 py-0.5 rounded-md mt-0.5">
+                                            <span className={`text-[8.5px] font-extrabold uppercase tracking-tight px-1.5 py-0.5 rounded-md mt-1 ${isSelected ? 'bg-amber-500 text-white' : 'text-amber-700 bg-amber-100/90 border border-amber-300/80'}`}>
                                                 Live • {remainingMinutes}m
                                             </span>
                                         )}
@@ -277,7 +278,7 @@ export default function SlotPicker({
                                             <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-700 mt-0.5">Resume Pay</span>
                                         )}
                                         {isBooked && (
-                                            <span className="text-[9px] font-black tracking-wider uppercase mt-0.5 text-slate-400">Booked</span>
+                                            <span className="text-[9px] font-bold tracking-wider uppercase mt-0.5 text-slate-400">Booked</span>
                                         )}
                                         {isBreak && (
                                             <span className="text-[8px] sm:text-[8.5px] font-extrabold tracking-wider uppercase mt-0.5 text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
@@ -297,11 +298,13 @@ export default function SlotPicker({
                 const selectedSlotObj = allSlots.find(s => s.time === selectedTime);
                 if (selectedSlotObj && selectedSlotObj.isOngoing) {
                     return (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 animate-fadeIn">
-                            <span className="text-amber-600 text-sm mt-0.5 font-bold">⚡</span>
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs flex items-start gap-3 animate-fade-in shadow-2xs">
+                            <span className="size-8 rounded-xl bg-amber-100 flex items-center justify-center shrink-0 text-amber-600">
+                                <Zap className="size-4" />
+                            </span>
                             <div>
-                                <p className="font-bold">Ongoing Consultation Notice</p>
-                                <p className="text-amber-800 text-[11px] mt-0.5">
+                                <p className="font-bold text-slate-900">Ongoing Consultation Notice</p>
+                                <p className="text-amber-800 text-[11px] sm:text-xs mt-0.5 leading-relaxed">
                                     This time slot is currently in progress. Upon completing payment and joining, you will have approximately <strong>{selectedSlotObj.remainingMinutes} minutes</strong> of consultation remaining.
                                 </p>
                             </div>

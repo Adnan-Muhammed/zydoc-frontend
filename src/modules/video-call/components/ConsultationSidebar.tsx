@@ -101,7 +101,7 @@ export default function ConsultationSidebar({
     };
   }, [appointmentId, dispatch, isDoctor, normalizedRole]);
 
-  // Fallback active tab if non-doctor somehow attempts to open doctor-only tabs
+  // Fallback active tab if non-doctor attempts to open doctor-only tabs
   useEffect(() => {
     if (!isDoctor && (activeTab === 'patient-info' || activeTab === 'notes')) {
       setActiveTab('chat');
@@ -268,19 +268,19 @@ export default function ConsultationSidebar({
       )}
 
       <aside
-        className={`fixed lg:relative top-0 right-0 w-[320px] sm:w-[370px] shrink-0 h-full bg-[#0a0f1d] border-l border-slate-800 flex flex-col z-50 text-slate-100 shadow-2xl transition-transform duration-300 ${
+        className={`fixed lg:relative top-0 right-0 w-[330px] sm:w-[380px] shrink-0 h-full bg-[#080c18] border-l border-slate-800/90 flex flex-col z-50 text-slate-100 shadow-2xl transition-transform duration-300 ${
           isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         }`}
       >
         {/* ── Top Header ──────────────────────────────────────────────────────── */}
-        <div className="p-3 px-4 border-b border-slate-800 bg-[#0f172a]/90 flex items-center justify-between shrink-0">
+        <div className="p-3 px-4 border-b border-slate-800/90 bg-slate-900/90 backdrop-blur-md flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="relative flex h-2.5 w-2.5 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <div className="min-w-0">
-              <h3 className="font-semibold text-xs sm:text-sm text-slate-100 tracking-wide flex items-center gap-1.5 truncate">
+              <h3 className="font-bold text-xs sm:text-sm text-slate-100 tracking-wide flex items-center gap-1.5 truncate">
                 <span>Consultation Hub</span>
               </h3>
               <p className="text-[10px] text-slate-400 truncate">
@@ -291,10 +291,10 @@ export default function ConsultationSidebar({
 
           <div className="flex items-center gap-2 shrink-0">
             <span
-              className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+              className={`text-[9px] uppercase font-extrabold px-2.5 py-0.5 rounded-full border tracking-wider ${
                 isDoctor
-                  ? 'bg-indigo-950 text-indigo-300 border-indigo-700/60'
-                  : 'bg-emerald-950 text-emerald-300 border-emerald-700/60'
+                  ? 'bg-indigo-950/90 text-indigo-300 border-indigo-700/60 shadow-xs'
+                  : 'bg-emerald-950/90 text-emerald-300 border-emerald-700/60 shadow-xs'
               }`}
             >
               {isDoctor ? 'Doctor' : 'Patient'}
@@ -302,8 +302,9 @@ export default function ConsultationSidebar({
 
             {onToggle && (
               <button
+                type="button"
                 onClick={onToggle}
-                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                 title="Close panel"
               >
                 <i className="fas fa-times text-xs"></i>
@@ -316,7 +317,7 @@ export default function ConsultationSidebar({
         {/* Doctor: 5 Tabs [Patient Info, Notes, Rx, Chat, Files] */}
         {/* Patient: 3 Tabs [Chat, Rx, Files] */}
         <div
-          className={`grid bg-[#060a12] p-1 gap-1 border-b border-slate-800 text-xs font-medium shrink-0 ${
+          className={`grid bg-[#050811] p-1.5 gap-1 border-b border-slate-800/90 text-xs font-semibold shrink-0 ${
             isDoctor ? 'grid-cols-5' : 'grid-cols-3'
           }`}
         >
@@ -325,13 +326,13 @@ export default function ConsultationSidebar({
             <button
               type="button"
               onClick={() => setActiveTab('patient-info')}
-              className={`py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-[10px] ${
+              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-[10px] cursor-pointer ${
                 activeTab === 'patient-info'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
               }`}
             >
-              <i className="fas fa-id-card text-[11px]"></i>
+              <i className="fas fa-id-card text-[12px]"></i>
               <span className="truncate">Patient</span>
             </button>
           )}
@@ -341,13 +342,13 @@ export default function ConsultationSidebar({
             <button
               type="button"
               onClick={() => setActiveTab('notes')}
-              className={`py-1.5 px-0.5 rounded-lg flex flex-col items-center justify-center gap-0.5 transition-all text-[10px] ${
+              className={`py-2 px-1 rounded-xl flex flex-col items-center justify-center gap-1 transition-all text-[10px] cursor-pointer ${
                 activeTab === 'notes'
-                  ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
               }`}
             >
-              <i className="fas fa-file-pen text-[11px]"></i>
+              <i className="fas fa-file-pen text-[12px]"></i>
               <span className="truncate">Notes</span>
             </button>
           )}
@@ -356,18 +357,20 @@ export default function ConsultationSidebar({
           <button
             type="button"
             onClick={() => setActiveTab('prescriptions')}
-            className={`py-1.5 px-0.5 rounded-lg flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] ${
+            className={`py-2 px-1 rounded-xl flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] cursor-pointer relative ${
               activeTab === 'prescriptions'
-                ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
             }`}
           >
-            <i className="fas fa-prescription text-[11px]"></i>
+            <i className="fas fa-prescription text-[12px]"></i>
             <span className="truncate">Rx</span>
             {prescriptions.length > 0 && (
               <span
-                className={`text-[9px] px-1 rounded-full font-bold leading-tight ${
-                  activeTab === 'prescriptions' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
+                className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold leading-tight ${
+                  activeTab === 'prescriptions'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-indigo-950 text-indigo-300 border border-indigo-700/50'
                 }`}
               >
                 {prescriptions.length}
@@ -379,18 +382,20 @@ export default function ConsultationSidebar({
           <button
             type="button"
             onClick={() => setActiveTab('chat')}
-            className={`py-1.5 px-0.5 rounded-lg flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] ${
+            className={`py-2 px-1 rounded-xl flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] cursor-pointer relative ${
               activeTab === 'chat'
-                ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
             }`}
           >
-            <i className="fas fa-comments text-[11px]"></i>
+            <i className="fas fa-comments text-[12px]"></i>
             <span className="truncate">Chat</span>
             {userMessageCount > 0 && (
               <span
-                className={`text-[9px] px-1 rounded-full font-bold leading-tight ${
-                  activeTab === 'chat' ? 'bg-white/20 text-white' : 'bg-indigo-950 text-indigo-300'
+                className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold leading-tight ${
+                  activeTab === 'chat'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-indigo-950 text-indigo-300 border border-indigo-700/50'
                 }`}
               >
                 {userMessageCount}
@@ -402,18 +407,20 @@ export default function ConsultationSidebar({
           <button
             type="button"
             onClick={() => setActiveTab('files')}
-            className={`py-1.5 px-0.5 rounded-lg flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] ${
+            className={`py-2 px-1 rounded-xl flex ${isDoctor ? 'flex-col' : 'flex-row'} items-center justify-center gap-1 transition-all text-[10px] cursor-pointer relative ${
               activeTab === 'files'
-                ? 'bg-indigo-600 text-white font-semibold shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 text-white font-bold shadow-md shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
             }`}
           >
-            <i className="fas fa-folder-open text-[11px]"></i>
+            <i className="fas fa-folder-open text-[12px]"></i>
             <span className="truncate">Files</span>
             {files.length > 0 && (
               <span
-                className={`text-[9px] px-1 rounded-full font-bold leading-tight ${
-                  activeTab === 'files' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
+                className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold leading-tight ${
+                  activeTab === 'files'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-indigo-950 text-indigo-300 border border-indigo-700/50'
                 }`}
               >
                 {files.length}

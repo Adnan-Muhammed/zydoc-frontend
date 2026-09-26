@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
+import { SYSTEMS_LIST, getSystemConfigById } from '@/constants/systemsOfMedicine';
 
 export default function BasicInfoSection({ initialData }: { initialData: any }) {
     const extractData = (data: any) => ({
         firstName: data?.firstName || data?.user?.firstName || '',
         lastName: data?.lastName || data?.user?.lastName || '',
         phone: data?.phone || data?.user?.phone || '',
+        systemOfMedicine: data?.systemOfMedicine || data?.user?.systemOfMedicine || 'Modern Medicine',
         specialty: data?.specialty || data?.user?.specialty || '',
         licenseNumber: data?.licenseNumber || data?.user?.licenseNumber || '',
         yearsOfExperience: data?.yearsOfExperience || data?.user?.yearsOfExperience || '',
@@ -74,18 +76,51 @@ export default function BasicInfoSection({ initialData }: { initialData: any }) 
                         className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     />
                 </div>
+                <div className="sm:col-span-2 space-y-1.5 pt-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">System of Medicine</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        {SYSTEMS_LIST.map((sys) => {
+                            const isSelected = (data.systemOfMedicine || 'Modern Medicine') === sys.id;
+                            return (
+                                <button
+                                    type="button"
+                                    key={sys.id}
+                                    onClick={() => setData({ ...data, systemOfMedicine: sys.id })}
+                                    className={`px-3 py-2 rounded-xl border text-xs font-semibold text-center transition-all ${
+                                        isSelected
+                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-xs'
+                                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {sys.id}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
                 <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Specialty</label>
                     <input
-                        type="text" value={data.specialty}
+                        type="text" 
+                        value={data.specialty}
+                        list="specialties-list"
+                        placeholder="e.g. Cardiology"
                         onChange={e => setData({ ...data, specialty: e.target.value })}
                         className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     />
+                    <datalist id="specialties-list">
+                        {getSystemConfigById(data.systemOfMedicine).specialties.map(spec => (
+                            <option key={spec} value={spec} />
+                        ))}
+                    </datalist>
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">License Number</label>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {getSystemConfigById(data.systemOfMedicine).licenseLabel}
+                    </label>
                     <input
                         type="text" value={data.licenseNumber}
+                        placeholder="Registration Number"
                         onChange={e => setData({ ...data, licenseNumber: e.target.value })}
                         className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     />

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
+import { deduceSystemOfMedicine, extractPrimaryQualifications, SYSTEMS_LIST } from '@/constants/systemsOfMedicine';
 
 export default function QualificationsSection({ initialData }: { initialData: any[] }) {
     const [list, setList] = useState(initialData || []);
@@ -63,13 +64,31 @@ export default function QualificationsSection({ initialData }: { initialData: an
         }
     };
 
+    const recognizedSystem = deduceSystemOfMedicine(list);
+    const primaryDegree = extractPrimaryQualifications(list);
+
     return (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-50 pb-2">
-                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                    <i className="fas fa-graduation-cap text-indigo-500 text-xs" /> Education Framework
-                </h3>
-                <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-50 pb-3 gap-3">
+                <div>
+                    <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <i className="fas fa-graduation-cap text-indigo-500 text-xs" /> Education Framework
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="text-[11px] font-semibold text-slate-500">
+                            Recognized System:
+                        </span>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/70">
+                            {recognizedSystem}
+                        </span>
+                        {primaryDegree && (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                                Primary: {primaryDegree}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 self-start sm:self-center">
                     <button 
                         type="button" 
                         onClick={handleAddItem} 
@@ -103,12 +122,18 @@ export default function QualificationsSection({ initialData }: { initialData: an
                             <input
                                 type="text" 
                                 value={q.degree} 
+                                list={`degree-presets-${q.id}`}
                                 onChange={e => handleUpdateItem(q.id, 'degree', e.target.value)} 
-                                placeholder="e.g. DM Neurology" 
+                                placeholder="e.g. MBBS, MD, BDS, BHMS" 
                                 className={`w-full text-xs px-3 py-2 border border-slate-200 rounded-xl text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white transition-all ${(q.certificateStatus === 'approved' || q.certificateStatus === 'rejected') ? 'opacity-60 cursor-not-allowed bg-slate-50' : ''}`} 
                                 disabled={q.certificateStatus === 'approved' || q.certificateStatus === 'rejected'}
                                 required
                             />
+                            <datalist id={`degree-presets-${q.id}`}>
+                                {SYSTEMS_LIST.flatMap(s => s.degreePresets).map(deg => (
+                                    <option key={deg} value={deg} />
+                                ))}
+                            </datalist>
                         </div>
 
                         {/* Institution Input */}

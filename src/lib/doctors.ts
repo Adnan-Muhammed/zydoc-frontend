@@ -1,4 +1,5 @@
 // src/lib/doctors.ts
+import { deduceSystemOfMedicine, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
 
 export async function getDoctors(searchParams?: any) {
   const params = new URLSearchParams();
@@ -64,11 +65,17 @@ export const getDoctorsList = async (searchParams?: any) => {
             }
         }
 
+        const qualifications = doc.qualifications || [];
+        const primaryDegree = extractPrimaryQualifications(qualifications);
+        const systemOfMedicine = doc.systemOfMedicine || deduceSystemOfMedicine(qualifications);
+
         return {
             id: String(doc.id || doc._id),
             name: doc.name || `${doc.firstName || ""} ${doc.lastName || ""}`.trim() || "Doctor",
             specialty: doc.specialty || "General Practitioner",
-            systemOfMedicine: doc.systemOfMedicine || "Modern Medicine",
+            systemOfMedicine: systemOfMedicine,
+            qualifications: qualifications,
+            primaryDegree: primaryDegree,
             experience: `${doc.yearsOfExperience || 0} years experience`,
             location: location,
             type: typeStr,

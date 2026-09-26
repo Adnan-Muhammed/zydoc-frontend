@@ -71,21 +71,21 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
         badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
       };
 
-    case 'cancelled-by-doctor':
+    case 'cancelled_by_doctor':
       if (role === 'patient') {
         return {
-          label: 'Doctor No-Show (Refunded to Wallet)',
+          label: 'Cancelled by Doctor (Refunded to Wallet)',
           badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
         };
       }
       if (role === 'doctor') {
         return {
-          label: 'Missed Consultation',
-          badgeClass: 'bg-red-50 text-red-700 border border-red-200',
+          label: 'Cancelled by Doctor',
+          badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
         };
       }
       return {
-        label: 'Doctor No-Show',
+        label: 'Cancelled by Doctor',
         badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
       };
 
@@ -227,7 +227,8 @@ export function isAppointmentUpcomingOrActive(app: any): boolean {
     'completed',
     'no-show',
     'cancelled',
-    'cancelled-by-doctor',
+    'cancelled_by_doctor',
+    'doctor_missed',
     'disputed',
     'refunded',
   ];

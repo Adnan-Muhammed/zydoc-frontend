@@ -1,118 +1,91 @@
-// // src/app/find-doctor/page.tsx
-// 'use client';
-// import React, { useState } from 'react';
-// import Link from 'next/link';
-// import './finddoctor.css';
-// import '../landing.css'; // Reuse header/footer styles
-// import Header from '@/components/layout/Header';
-
-
-
-
 // src/app/find-doctor/page.tsx
-// ✅ NO 'use client' — This is a Server Component for SEO
+// Server Component for SEO & initial HTML hydration
 
-
-import axiosInstance from "@/api/axiosInstance";
-
-
-import { Metadata } from 'next';
+import React from 'react';
+import Link from 'next/link';
+import { Metadata } from 'next';  
 import DoctorFilters from '@/components/find-doctor/DoctorFilters';
 import DoctorList from '@/components/find-doctor/DoctorList';
 import { cookies } from 'next/headers';
 import './finddoctor.css';
-import { getDoctors, getDoctorsList } from "@/lib/doctors";
-// import '../../(public)/landing.css';
-
+import { getDoctorsList } from '@/lib/doctors';
+import { ChevronRight } from 'lucide-react';
+ 
 export const metadata: Metadata = {
-    title: "Find a Doctor Near You | Zydoc",
-    description: "Search and book appointments with 1000+ verified doctors. Filter by specialty, location, experience, and consultation fee. Online & in-person available.",
-    keywords: ["find doctor", "book doctor appointment", "online consultation", "specialist near me"],
-    openGraph: {
-        title: "Find a Doctor | Zydoc",
-        description: "Browse and book with 1000+ verified medical professionals.",
-        type: "website",
-    },
+  title: 'Find a Doctor Near You | Zydoc Healthcare',
+  description: 
+    'Search and book appointments with 1000+ verified doctors. Filter by specialty, system of medicine, experience, and fee. Online video consultation & in-person clinic visits available.',
+  keywords: [
+    'find doctor',
+    'book doctor appointment',
+    'online doctor consultation',
+    'telemedicine',
+    'specialist clinic visit',
+  ],
+  openGraph: {
+    title: 'Find a Doctor | Zydoc Healthcare',
+    description: 'Browse and book verified medical professionals across modern medicine and holistic care.',
+    type: 'website',
+  },
 };
 
-
-
-
-
-// const getDoctors = async () => {
-//   const response = await axiosInstance.get("/doctors");
-//   console.log(response.data)
-
-//   return response.data;
-// };
-
-// Extracted to src/lib/doctors.ts
-
 async function getUser(accessToken: string) {
-    try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
-            headers: { Cookie: `accessToken=${accessToken}` },
-            cache: 'no-store',
-        });
-        if (!res.ok) return null;
-        const data = await res.json();
-        return data.user ?? null;
-    } catch {
-        return null;
-    }
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+      headers: { Cookie: `accessToken=${accessToken}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.user ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export default async function FindDoctorPage({
-    searchParams
+  searchParams,
 }: {
-    searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: { [key: string]: string | string[] | undefined };
 }) {
-    const cookieStore = cookies();
-    const accessToken = cookieStore.get('accessToken')?.value;
+  const cookieStore = cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
 
-    // Fetch doctors based on URL search params (limit is handled by backend default or overridden by searchParams)
-    // We pass searchParams directly so backend handles specialty, minRating, page, limit, etc.
-    const doctorsDataPromise = getDoctorsList(searchParams);
-    const userPromise = accessToken ? getUser(accessToken) : Promise.resolve(null);                             
+  const doctorsDataPromise = getDoctorsList(searchParams);
+  const userPromise = accessToken ? getUser(accessToken) : Promise.resolve(null);
 
-    const [doctorsData, user] = await Promise.all([doctorsDataPromise, userPromise]);
+  const [doctorsData, user] = await Promise.all([doctorsDataPromise, userPromise]);
 
-    
+  return (
+    <div className="find-doctor-page-root">
+      {/* ── Compact Utility Header Bar ── */}
+      <header className="find-doctor-top-bar">
+        <div className="find-doctor-top-bar-inner">
+          <div>
+            <nav aria-label="Breadcrumb" className="compact-breadcrumb">
+              <Link href="/" className="hover:text-[#181952] transition">
+                Home
+              </Link>
+              <ChevronRight className="size-3 text-slate-300" />
+              <span className="text-slate-600 font-semibold">Find Doctors</span>
+            </nav>
+            <h1 className="compact-page-title">Find Doctors &amp; Specialists</h1>
+          </div>
 
-
-
-    return (
-
-
-        <div className="w-full max-w-full overflow-x-hidden">
-            {/* <Header user={user} /> */}
-
-            {/* SEO-friendly static page header — rendered in HTML, crawlable */}
-            <section className="page-header" style={{ marginTop: '70px' }}>
-                <h1>Find Your Doctor</h1>
-                <p>Search and book appointments with verified medical professionals</p>
-            </section>
-
-            {/* Static search bar shell — interactivity handled in DoctorFilters client component */}
-            <div className="search-container-section">
-                <div className="search-container">
-                    <div className="search-box">
-                        <DoctorFilters />
-                    </div>
-                </div>
-            </div>
-
-            {/* Main layout: sidebar + doctor grid */}
-            <div className="main-content">
-                {/* 
-          Doctor list is pre-rendered on the server with real data.
-          DoctorList is a Client Component only for sort/filter interactivity.
-          All doctor cards are in the initial HTML for SEO.
-        */}
-                <DoctorList doctors={doctorsData.doctors} pagination={doctorsData.pagination} basePath="/find-doctor" />
-            </div>
-
-
+          <div className="compact-search-wrapper">
+            <DoctorFilters />
+          </div>
         </div>
-    );
-} 
+      </header>
+
+      {/* ── Main Layout: Sidebar Filters + Doctor Cards Grid ── */}
+      <main className="main-content-wrapper">
+        <DoctorList
+          doctors={doctorsData.doctors}
+          pagination={doctorsData.pagination}
+          basePath="/find-doctor"
+        />
+      </main>
+    </div>
+  );
+}

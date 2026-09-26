@@ -4,6 +4,26 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+/**
+ * Rewinds any sentinel pushState entries added by usePreventCallExit
+ * before a programmatic navigation so that router.replace replaces
+ * only the consultation page entry and the Back button won't land on "/".
+ *
+ * @param count - number of sentinel entries to rewind (same value as sentinelCountRef)
+ * @returns a Promise that resolves after the history.go() popstate fires
+ */
+export function rewindHistorySentinels(count: number): Promise<void> {
+  if (count <= 0 || typeof window === "undefined") return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const handlePop = () => {
+      window.removeEventListener("popstate", handlePop);
+      resolve();
+    };
+    window.addEventListener("popstate", handlePop);
+    window.history.go(-count);
+  });
+}
+
 export interface UsePreventCallExitOptions {
   /** Whether the guard is currently active (call is live/connected and has not ended) */
   isActive: boolean;
@@ -15,6 +35,10 @@ export interface UsePreventCallExitOptions {
   defaultRedirectUrl: string;
   /** Appointment ObjectId to tag session exit flags */
   appointmentId: string;
+  /** Optional guard condition: return false to disallow exiting (e.g. mandatory 1-minute wait) */
+  canExit?: () => boolean;
+  /** Callback fired when an exit attempt is blocked by canExit */
+  onExitBlocked?: () => void;
 }
 
 export interface UsePreventCallExitReturn {
@@ -26,6 +50,12 @@ export interface UsePreventCallExitReturn {
   cancelExit: () => void;
   /** User confirmed exit — cleans up connections and replaces history with target URL */
   confirmExit: () => void;
+  /**
+   * Number of sentinel pushState entries currently in the stack.
+   * Pass this to rewindHistorySentinels() before any programmatic router.replace
+   * that happens outside of confirmExit (e.g. from useWebRTC call_ended / endCall).
+   */
+  sentinelCount: number;
 }
 
 export function usePreventCallExit({
@@ -34,14 +64,20 @@ export function usePreventCallExit({
   onConfirmExit,
   defaultRedirectUrl,
   appointmentId,
+  canExit,
+  onExitBlocked,
 }: UsePreventCallExitOptions): UsePreventCallExitReturn {
   const router = useRouter();
 
   const [isExitModalOpen, setIsExitModalOpen] = useState(false);
+  const [sentinelCount, setSentinelCount] = useState(0);
+  const sentinelCountRef = useRef(0);
   const pendingUrlRef = useRef<string | null>(null);
   const isBypassingGuardRef = useRef(false);
   const onLeaveCallRef = useRef(onLeaveCall);
   const onConfirmExitRef = useRef(onConfirmExit);
+  const canExitRef = useRef(canExit);
+  const onExitBlockedRef = useRef(onExitBlocked);
 
   useEffect(() => {
     onLeaveCallRef.current = onLeaveCall;
@@ -51,7 +87,15 @@ export function usePreventCallExit({
     onConfirmExitRef.current = onConfirmExit;
   }, [onConfirmExit]);
 
-  // ── 1. Browser Tab Close / Page Refresh Prevention (beforeunload) ────────
+  useEffect(() => {
+    canExitRef.current = canExit;
+  }, [canExit]);
+
+  useEffect(() => {
+    onExitBlockedRef.current = onExitBlocked;
+  }, [onExitBlocked]);
+
+  // ── 1. Browser Tab Close / Page Refresh & Pull-to-Refresh Prevention (Rule 5) ──
   useEffect(() => {
     if (!isActive) return;
 
@@ -62,6 +106,42 @@ export function usePreventCallExit({
       // Standard confirmation message for modern browsers
       e.returnValue = "Are you sure you want to leave? Your call will be disconnected.";
       return e.returnValue;
+    };
+
+    // Block keyboard reload shortcuts (F5, Ctrl+R, Cmd+R, Ctrl+Shift+R, Cmd+Shift+R)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isBypassingGuardRef.current) return;
+      const isF5 = e.key === "F5";
+      const isReload = (e.ctrlKey || e.metaKey) && (e.key === "r" || e.key === "R");
+      if (isF5 || isReload) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("[usePreventCallExit] Blocked browser reload attempt during active call (Rule 5)");
+      }
+    };
+
+    // Lock pull-to-refresh on mobile browsers via overscroll-behavior and touchmove interception
+    const originalBodyOverscroll = document.body.style.overscrollBehaviorY;
+    const originalHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
+    document.body.style.overscrollBehaviorY = "contain";
+    document.documentElement.style.overscrollBehaviorY = "contain";
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches && e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches && e.touches.length === 1) {
+        const touchY = e.touches[0].clientY;
+        const diff = touchY - touchStartY;
+        // If at top of scroll and pulling downward, cancel pull-to-refresh gesture
+        if (window.scrollY <= 0 && diff > 0 && e.cancelable) {
+          e.preventDefault();
+        }
+      }
     };
 
     // If page is actually being closed/unloaded (e.g. user confirmed native browser dialog),
@@ -75,11 +155,19 @@ export function usePreventCallExit({
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("pagehide", handlePageHide);
+      document.body.style.overscrollBehaviorY = originalBodyOverscroll;
+      document.documentElement.style.overscrollBehaviorY = originalHtmlOverscroll;
     };
   }, [isActive]);
 
@@ -87,14 +175,24 @@ export function usePreventCallExit({
   useEffect(() => {
     if (!isActive) return;
 
-    // Push sentinel state so browser has an entry to pop before leaving page
+    // Push one sentinel state so browser has an entry to pop before leaving page.
+    // We track the count so we can rewind them before programmatic navigation.
     window.history.pushState({ inCallGuard: true }, "", window.location.href);
+    sentinelCountRef.current += 1;
+    setSentinelCount((c) => c + 1);
 
-    const handlePopState = () => {
+    const handlePopState = (e: PopStateEvent) => {
       if (isBypassingGuardRef.current) return;
 
-      // Restore current history state so the URL does not change and user stays in room
+      // Restore the sentinel so the user stays on the call page.
       window.history.pushState({ inCallGuard: true }, "", window.location.href);
+      sentinelCountRef.current += 1;
+      setSentinelCount((c) => c + 1);
+
+      if (canExitRef.current && !canExitRef.current()) {
+        onExitBlockedRef.current?.();
+        return;
+      }
 
       pendingUrlRef.current = null; // Exit via back button redirects to default page
       setIsExitModalOpen(true);
@@ -104,6 +202,9 @@ export function usePreventCallExit({
 
     return () => {
       window.removeEventListener("popstate", handlePopState);
+      // Reset count on deactivation so stale sentinels aren't tracked
+      sentinelCountRef.current = 0;
+      setSentinelCount(0);
     };
   }, [isActive]);
 
@@ -150,6 +251,11 @@ export function usePreventCallExit({
       e.preventDefault();
       e.stopPropagation();
 
+      if (canExitRef.current && !canExitRef.current()) {
+        onExitBlockedRef.current?.();
+        return;
+      }
+
       pendingUrlRef.current = href;
       setIsExitModalOpen(true);
     };
@@ -164,6 +270,10 @@ export function usePreventCallExit({
   // ── 4. Actions: Request, Cancel, and Confirm Exit ───────────────────────
 
   const requestExit = useCallback((targetUrl?: string) => {
+    if (canExitRef.current && !canExitRef.current()) {
+      onExitBlockedRef.current?.();
+      return;
+    }
     pendingUrlRef.current = targetUrl || null;
     setIsExitModalOpen(true);
   }, []);
@@ -182,19 +292,29 @@ export function usePreventCallExit({
       sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
 
-    // Properly disconnect/clean up local media tracks and socket/WebRTC connections
-    try {
-      if (onConfirmExitRef.current) {
-        onConfirmExitRef.current();
-      } else {
-        onLeaveCallRef.current?.();
-        const destination = pendingUrlRef.current || defaultRedirectUrl;
+    const destination = pendingUrlRef.current || defaultRedirectUrl;
+    const currentSentinelCount = sentinelCountRef.current;
+
+    // Rewind sentinel entries first, then navigate — prevents Back button from
+    // landing on ghost states that resolve to "/".
+    const doNavigate = () => {
+      try {
+        if (onConfirmExitRef.current) {
+          onConfirmExitRef.current();
+        } else {
+          onLeaveCallRef.current?.();
+          router.replace(destination);
+        }
+      } catch (err) {
+        console.warn("[usePreventCallExit] Error during exit cleanup:", err);
         router.replace(destination);
       }
-    } catch (err) {
-      console.warn("[usePreventCallExit] Error during exit cleanup:", err);
-      const destination = pendingUrlRef.current || defaultRedirectUrl;
-      router.replace(destination);
+    };
+
+    if (currentSentinelCount > 0) {
+      rewindHistorySentinels(currentSentinelCount).then(doNavigate);
+    } else {
+      doNavigate();
     }
   }, [appointmentId, defaultRedirectUrl, router]);
 
@@ -203,5 +323,6 @@ export function usePreventCallExit({
     requestExit,
     cancelExit,
     confirmExit,
+    sentinelCount,
   };
 }

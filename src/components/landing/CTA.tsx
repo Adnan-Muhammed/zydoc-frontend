@@ -1,33 +1,30 @@
-// src/app/(public)/components/CTA.tsx
+'use client'
 
-import React from 'react';
-import Link from 'next/link';
+import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
 
-interface Props {
-    user?: {
-        role?: string;
-    } | null;
-}
-
-export default function CTA({ user }: Props) {
-    const dashboardLink = user?.role ? `/${user.role}/dashboard` : '/';
-
-    return (
-        <section className="cta">
-            <div className="cta-content">
-                <h2>Ready to Take Control of Your Health?</h2>
-                <p>Join 50,000+ patients using Zydoc.</p>
-                <div className="cta-buttons">
-                    {user ? (
-                        <Link href={dashboardLink} className="btn-cta">Go to Dashboard</Link>
-                    ) : (
-                        <Link href="/signup" className="btn-cta">Book Your First Appointment</Link>
-                    )}
-                    <Link href="/find-doctor" className="btn-cta" >
-                        Find Doctors
-                    </Link>
-                </div>
-            </div>
-        </section>
-    );
+export default function CTA() {
+  return (
+    <section className="mx-auto max-w-6xl px-5 py-12 sm:px-8">
+      <div className="relative overflow-hidden rounded-3xl bg-[#181852] px-7 py-10 text-white sm:px-12">
+        <div className="absolute right-0 top-0 size-72 rounded-full bg-[#4a4ba5]/40 blur-[80px]" />
+        <div className="relative max-w-lg">
+          <h2 className="text-3xl font-bold leading-tight sm:text-4xl">
+            Your health journey
+            <br />
+            starts here.
+          </h2>
+          <p className="mt-4 text-sm leading-5 text-[#cbcbeb]">
+            Take the first step towards better health. Book your video consultation or clinic appointment today.
+          </p>
+          <Link
+            href="/find-doctor"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-bold text-[#181852] transition hover:bg-[#eef2fc]"
+          >
+            Book an Appointment <ArrowRight className="size-4" />
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
 }

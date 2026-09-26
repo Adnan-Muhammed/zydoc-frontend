@@ -7,7 +7,7 @@ import DoctorDashboardClient from './doctor-dashboardClient';
 export const metadata = {
   title: 'Complete Professional Medical Profile',
   description: 'Configure practice parameters, medical licensing, clinical specialties, and scheduling parameters.',
-}; 
+};  
 
 export default function DoctorDashboardPage() {
   return (

@@ -13,7 +13,7 @@ import { getAvailableSlots, toggleDoctorSlotOverride, manualBookDoctorSlot } fro
 const MONTH_NAMES = [
     "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December",
-];
+]; 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const DAY_NAMES_JS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
@@ -728,7 +728,7 @@ export default function ScheduleClient() {
             return (
                 (appDateStr === dateString || appUTCStr === dateString) &&
                 app.status !== 'cancelled' &&
-                app.status !== 'cancelled-by-doctor'
+                app.status !== 'cancelled_by_doctor'
             );
         });
     }, [appointments, selectedDate, dateString]);
@@ -876,39 +876,39 @@ export default function ScheduleClient() {
     const lockedCount = allSlots.filter(s => s.status === "locked" || s.status === "Locked" || s.isLocked).length;
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-4 pb-12 overflow-x-hidden min-w-0">
+        <div className="doc-page flex flex-col gap-4 sm:gap-6 w-full max-w-7xl mx-auto overflow-x-hidden min-w-0">
             
             {/* ─── Top Header & Summary (Flexbox Row/Col) ─── */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-indigo-700 via-indigo-800 to-indigo-900 rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-white shadow-xl shadow-indigo-900/10">
-                <div className="flex flex-col gap-1">
-                    <div className="inline-flex items-center gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] sm:text-xs font-semibold text-indigo-100 border border-white/10 w-fit">
-                        <i className="fas fa-calendar-check text-indigo-300" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-[#101044] via-[#16165a] to-[#1c1c70] rounded-2xl sm:rounded-3xl p-5 sm:p-7 text-white shadow-xl shadow-[#101044]/15 border border-slate-800/20">
+                <div className="flex flex-col gap-1.5">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] sm:text-xs font-semibold text-emerald-300 border border-white/10 w-fit">
+                        <i className="fas fa-calendar-check text-emerald-400" />
                         <span>Doctor Schedule & Availability View</span>
                     </div>
                     <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight">
                         My Schedule
                     </h1>
-                    <p className="text-indigo-200 text-xs sm:text-sm max-w-xl">
+                    <p className="text-slate-300 text-xs sm:text-sm max-w-xl">
                         View live patient bookings, session shifts, and slot statuses across your 14-day rolling window.
                     </p>
                 </div>
                 
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-                    <div className="flex-1 sm:flex-initial bg-white/10 backdrop-blur-md rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 border border-white/10 flex items-center gap-2.5 sm:gap-3">
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/20 flex items-center justify-center font-bold text-sm shrink-0">
-                            <i className="fas fa-stopwatch text-indigo-200 text-xs sm:text-sm" />
+                    <div className="flex-1 sm:flex-initial bg-white/10 backdrop-blur-md rounded-xl sm:rounded-2xl px-3.5 sm:px-4 py-2 sm:py-2.5 border border-white/10 flex items-center gap-2.5 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/15 flex items-center justify-center font-bold text-sm shrink-0">
+                            <i className="fas fa-stopwatch text-emerald-300 text-xs sm:text-sm" />
                         </div>
                         <div>
-                            <p className="text-[9px] sm:text-[10px] uppercase font-bold text-indigo-200 tracking-wider">Slot Duration</p>
+                            <p className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-300 tracking-wider">Slot Duration</p>
                             <p className="text-xs sm:text-sm font-extrabold whitespace-nowrap">{slotDuration} mins / session</p>
                         </div>
                     </div>
 
                     <Link
                         href="/doctor/profile/edit2?section=schedule"
-                        className="flex-1 sm:flex-initial justify-center px-3 sm:px-4 py-2 sm:py-2.5 bg-white text-indigo-800 hover:bg-indigo-50 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap text-center"
+                        className="flex-1 sm:flex-initial justify-center px-4 py-2.5 bg-white text-[#101044] hover:bg-slate-100 font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 whitespace-nowrap text-center"
                     >
-                        <i className="fas fa-sliders text-indigo-600 text-xs" />
+                        <i className="fas fa-sliders text-[#101044] text-xs" />
                         <span>Edit Hours</span>
                     </Link>
                 </div>
@@ -2471,3 +2471,4 @@ export default function ScheduleClient() {
     );
 }
 
+ 

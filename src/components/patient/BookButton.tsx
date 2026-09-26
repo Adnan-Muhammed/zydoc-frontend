@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/redux/store';
 
+import { CalendarCheck } from 'lucide-react';
+
 interface BookButtonProps {
     doctorId: string;
     /** Visual variant — 'hero' for the top-right button, 'card' for the inline full-width button */
@@ -39,10 +41,10 @@ export default function BookButton({ doctorId, variant = 'hero' }: BookButtonPro
             <button
                 type="button"
                 onClick={handleClick}
-                className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all active:scale-95"
+                className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#181852] hover:bg-[#252575] text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95"
             >
-                <i className="fas fa-calendar-check text-xs" />
-                Book Now
+                <CalendarCheck className="size-4" />
+                <span>Book Appointment</span>
             </button>
         );
     }
@@ -51,10 +53,10 @@ export default function BookButton({ doctorId, variant = 'hero' }: BookButtonPro
         <button
             type="button"
             onClick={handleClick}
-            className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md transition-all active:scale-95 shrink-0"
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#181852] hover:bg-[#252575] text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-95 shrink-0"
         >
-            <i className="fas fa-calendar-check text-xs" />
-            Book Appointment
+            <CalendarCheck className="size-4" />
+            <span>Book Appointment</span>
         </button>
     );
 }

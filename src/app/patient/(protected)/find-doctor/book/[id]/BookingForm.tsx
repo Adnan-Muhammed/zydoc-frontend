@@ -8,9 +8,31 @@ import { AppDispatch, RootState } from "@/redux/store";
 import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redux/features/appointment/appointmentThunk";
 import { fetchWalletDetails } from "@/redux/features/wallet/walletThunk";
 import SlotPicker, { Slot } from "@/components/patient/SlotPicker";
+import {
+  Video,
+  Building2,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Clock, 
+  Users,
+  UserPlus,
+  UserCheck,
+  FileText,
+  Lock,
+  ShieldCheck,
+  X,
+  Wallet,
+  CreditCard,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Check,
+  CalendarCheck,
+} from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════ 
-   Constants  
+   Constants   
 ═══════════════════════════════════════════════════════════════════ */
 const MONTH_NAMES = [
     "January","February","March","April","May","June",
@@ -473,45 +495,66 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         }
     };
 
-    const buildCalendarDays = (): (Date | null)[] => {
-        const firstOfMonth = new Date(calendarYear, calendarMonth, 1);
-        const startDow = (firstOfMonth.getDay() + 6) % 7; // Mon=0
-        const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-        const cells: (Date | null)[] = [];
-        for (let i = 0; i < startDow; i++) cells.push(null);
-        for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(calendarYear, calendarMonth, d));
-        while (cells.length % 7 !== 0) cells.push(null);
-        return cells;
+    const isPastDate = (d: Date) => {
+        const cmp = new Date(d);
+        cmp.setHours(0, 0, 0, 0);
+        return cmp < today;
     };
 
-    const isSameDay = (a: Date, b: Date) =>
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate();
+    const isBeyond14Days = (d: Date) => {
+        const cmp = new Date(d);
+        cmp.setHours(0, 0, 0, 0);
+        return cmp > maxBookingDate;
+    };
 
-    const isPastDate = (d: Date) => d < today;
-    const isBeyond14Days = (d: Date) => d > maxBookingDate;
     const isDrWorking = (d: Date) => isDoctorAvailableOn(d, rawWH, type);
 
-    const calendarDays = buildCalendarDays();
-    const availableCount = allSlots.filter(s => s.status === "available" && !s.isBreak).length;
+    const isSameDay = (d1: Date, d2: Date) =>
+        d1.getFullYear() === d2.getFullYear() &&
+        d1.getMonth() === d2.getMonth() &&
+        d1.getDate() === d2.getDate();
+
+    const firstDayOfMonth = new Date(calendarYear, calendarMonth, 1);
+    const startingDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+
+    const calendarDays: (Date | null)[] = [];
+    for (let i = 0; i < startingDayIndex; i++) {
+        calendarDays.push(null);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        calendarDays.push(new Date(calendarYear, calendarMonth, d));
+    }
+
+    const availableCount = allSlots.filter(s => s.status === 'available' && !s.isBreak).length;
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-8">
             {error && (
-                <div className="p-3.5 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100 flex items-center gap-2">
-                    <i className="fas fa-exclamation-circle" />
-                    <span>{error}</span>
+                <div className="p-4 bg-rose-50 text-rose-700 rounded-2xl text-xs sm:text-sm border border-rose-200/90 flex items-center gap-2.5 animate-fade-in shadow-2xs">
+                    <AlertCircle className="size-4 text-rose-600 shrink-0" />
+                    <span className="font-semibold">{error}</span>
                 </div>
             )}
 
-            {/* ─── Consultation Method ─── */}
-            <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">Consultation Method</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* ─── 1. Consultation Method ─── */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <label className="text-xs sm:text-sm font-extrabold text-[#101044] flex items-center gap-2">
+                        <span className="size-6 rounded-lg bg-[#101044]/5 text-[#101044] flex items-center justify-center shrink-0">
+                            <Video className="size-3.5" />
+                        </span>
+                        Consultation Method
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium">Step 1 of 3</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {isOnlineEnabled && (
-                        <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                            ${type === "online" ? "bg-indigo-50/60 border-indigo-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                        <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 sm:p-5 transition-all
+                            ${type === "online" 
+                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-indigo-50/20 border-[#101044] shadow-md shadow-[#101044]/5" 
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/40 shadow-2xs"}`}>
                             <input 
                                 type="radio" 
                                 name="consultationType" 
@@ -520,33 +563,39 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 checked={type === "online"} 
                                 onChange={() => setType("online")} 
                             />
-                            <div className="flex w-full items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                        ${type === "online" ? "bg-indigo-100" : "bg-slate-100"}`}>
-                                        <i className={`fas fa-video text-sm ${type === "online" ? "text-indigo-600" : "text-slate-500"}`} />
+                            <div className="flex w-full items-center justify-between gap-3">
+                                <div className="flex items-center gap-3.5">
+                                    <span className={`size-11 rounded-xl flex items-center justify-center shrink-0 transition-colors
+                                        ${type === "online" ? "bg-[#101044] text-white shadow-xs" : "bg-slate-100 text-slate-600"}`}>
+                                        <Video className="size-5" />
                                     </span>
-                                    <div className="text-sm">
-                                        <p className={`font-bold ${type === "online" ? "text-indigo-900" : "text-slate-900"}`}>
+                                    <div className="min-w-0">
+                                        <p className={`text-sm font-bold ${type === "online" ? "text-[#101044]" : "text-slate-800"}`}>
                                             Telehealth Video Call
                                         </p>
-                                        <p className={`text-xs mt-0.5 ${type === "online" ? "text-indigo-600" : "text-slate-400"}`}>
-                                            Online Virtual Visit
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            Online Virtual Consultation
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`text-base font-bold ${type === "online" ? "text-indigo-600" : "text-slate-600"}`}>
-                                    ₹{onlineFee}
+                                <div className="text-right shrink-0">
+                                    <span className="text-base sm:text-lg font-extrabold text-[#101044]">
+                                        ₹{onlineFee}
+                                    </span>
                                 </div>
                             </div>
                             {type === "online" && (
-                                <div className="absolute -inset-px rounded-xl border-2 border-indigo-500 pointer-events-none" />
+                                <span className="absolute top-2.5 right-2.5 size-5 rounded-full bg-[#101044] text-white flex items-center justify-center shadow-xs">
+                                    <Check className="size-3 stroke-[3]" />
+                                </span>
                             )}
                         </label>
                     )}
                     {isOfflineEnabled && (
-                        <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                            ${type === "offline" ? "bg-emerald-50/60 border-emerald-300" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                        <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 sm:p-5 transition-all
+                            ${type === "offline" 
+                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-emerald-50/20 border-[#101044] shadow-md shadow-[#101044]/5" 
+                                : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/40 shadow-2xs"}`}>
                             <input 
                                 type="radio" 
                                 name="consultationType" 
@@ -555,84 +604,91 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 checked={type === "offline"} 
                                 onChange={() => setType("offline")} 
                             />
-                            <div className="flex w-full items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                        ${type === "offline" ? "bg-emerald-100" : "bg-slate-100"}`}>
-                                        <i className={`fas fa-hospital text-sm ${type === "offline" ? "text-emerald-600" : "text-slate-500"}`} />
+                            <div className="flex w-full items-center justify-between gap-3">
+                                <div className="flex items-center gap-3.5">
+                                    <span className={`size-11 rounded-xl flex items-center justify-center shrink-0 transition-colors
+                                        ${type === "offline" ? "bg-[#101044] text-white shadow-xs" : "bg-slate-100 text-slate-600"}`}>
+                                        <Building2 className="size-5" />
                                     </span>
-                                    <div className="text-sm">
-                                        <p className={`font-bold ${type === "offline" ? "text-emerald-900" : "text-slate-900"}`}>
+                                    <div className="min-w-0">
+                                        <p className={`text-sm font-bold ${type === "offline" ? "text-[#101044]" : "text-slate-800"}`}>
                                             In-Person Clinic Visit
                                         </p>
-                                        <p className={`text-xs mt-0.5 ${type === "offline" ? "text-emerald-600" : "text-slate-400"}`}>
+                                        <p className="text-xs text-slate-500 mt-0.5">
                                             Physical Consultation
                                         </p>
                                     </div>
                                 </div>
-                                <div className={`text-base font-bold ${type === "offline" ? "text-emerald-600" : "text-slate-600"}`}>
-                                    ₹{offlineFee}
+                                <div className="text-right shrink-0">
+                                    <span className="text-base sm:text-lg font-extrabold text-[#101044]">
+                                        ₹{offlineFee}
+                                    </span>
                                 </div>
                             </div>
                             {type === "offline" && (
-                                <div className="absolute -inset-px rounded-xl border-2 border-emerald-500 pointer-events-none" />
+                                <span className="absolute top-2.5 right-2.5 size-5 rounded-full bg-[#101044] text-white flex items-center justify-center shadow-xs">
+                                    <Check className="size-3 stroke-[3]" />
+                                </span>
                             )}
                         </label>
                     )}
                 </div>
             </div>
 
-            {/* ─── Date + Time card ─── */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-
+            {/* ─── 2. Date + Time Card ─── */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
                 {/* ── Calendar (14-Day Rolling Window) ── */}
-                <div className="p-5 border-b border-slate-100">
-                    <div className="flex items-center justify-between mb-4">
+                <div className="p-5 sm:p-6 border-b border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                         <div>
-                            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                    <i className="fas fa-calendar-alt text-indigo-600 text-xs" />
+                            <h2 className="text-sm sm:text-base font-extrabold text-[#101044] flex items-center gap-2">
+                                <span className="size-7 rounded-lg bg-[#101044]/5 text-[#101044] flex items-center justify-center shrink-0">
+                                    <Calendar className="size-4" />
                                 </span>
-                                Select Date
+                                Select Consultation Date
                             </h2>
-                            <p className="text-[11px] text-slate-400 mt-0.5">Booking available up to 14 days in advance</p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                                Booking available up to 14 days in advance
+                            </p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-slate-700">
+                        <div className="flex items-center gap-2.5 self-start sm:self-auto bg-slate-50 px-3.5 py-1.5 rounded-xl border border-slate-200/80">
+                            <span className="text-xs sm:text-sm font-bold text-[#101044]">
                                 {MONTH_NAMES[calendarMonth]} {calendarYear}
                             </span>
-                            <div className="flex gap-1">
+                            <div className="flex items-center gap-1">
                                 <button 
                                     type="button" 
                                     onClick={goToPrevMonth}
                                     disabled={!canGoPrevMonth}
-                                    className={`w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 transition-colors ${!canGoPrevMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600'}`}
+                                    title="Previous Month"
+                                    className={`size-7 flex items-center justify-center rounded-lg border text-slate-600 transition-colors ${!canGoPrevMonth ? 'opacity-25 cursor-not-allowed border-transparent' : 'border-slate-200 bg-white hover:border-[#101044] hover:text-[#101044] shadow-2xs'}`}
                                 >
-                                    <i className="fas fa-chevron-left text-[10px]" />
+                                    <ChevronLeft className="size-3.5" />
                                 </button>
                                 <button 
                                     type="button" 
                                     onClick={goToNextMonth}
                                     disabled={!canGoNextMonth}
-                                    className={`w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 transition-colors ${!canGoNextMonth ? 'opacity-30 cursor-not-allowed border-slate-100' : 'border-slate-200 hover:border-indigo-400 hover:text-indigo-600'}`}
+                                    title="Next Month"
+                                    className={`size-7 flex items-center justify-center rounded-lg border text-slate-600 transition-colors ${!canGoNextMonth ? 'opacity-25 cursor-not-allowed border-transparent' : 'border-slate-200 bg-white hover:border-[#101044] hover:text-[#101044] shadow-2xs'}`}
                                 >
-                                    <i className="fas fa-chevron-right text-[10px]" />
+                                    <ChevronRight className="size-3.5" />
                                 </button>
                             </div>
                         </div>
                     </div>
 
                     {/* Day-of-week headers */}
-                    <div className="grid grid-cols-7 mb-1">
+                    <div className="grid grid-cols-7 mb-2">
                         {DAY_LABELS.map(d => (
-                            <div key={d} className="text-center text-[11px] font-semibold text-slate-400 py-1.5">{d}</div>
+                            <div key={d} className="text-center text-[11px] font-bold uppercase tracking-wider text-slate-400 py-1">{d}</div>
                         ))}
                     </div>
 
                     {/* Date cells */}
-                    <div className="grid grid-cols-7 gap-y-1">
+                    <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                         {calendarDays.map((day, idx) => {
-                            if (!day) return <div key={`e-${idx}`} />;
+                            if (!day) return <div key={`e-${idx}`} className="h-12" />;
 
                             const past = isPastDate(day);
                             const outOfWindow = isBeyond14Days(day);
@@ -653,26 +709,26 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     }}
                                     title={outOfWindow ? "Outside 14-day booking window" : drOff ? "Doctor not scheduled" : past ? "Past date" : "Select date"}
                                     className={`
-                                        mx-auto flex flex-col items-center justify-center w-11 h-12 rounded-xl
-                                        transition-all duration-150
+                                        mx-auto flex flex-col items-center justify-center w-full max-w-[48px] h-12 sm:h-13 rounded-xl
+                                        transition-all duration-150 select-none active:scale-95
                                         ${past || outOfWindow
-                                            ? "text-slate-300 cursor-not-allowed opacity-50"
+                                            ? "text-slate-300 cursor-not-allowed opacity-35"
                                             : drOff
-                                                ? "bg-slate-50 text-slate-300 cursor-not-allowed border border-dashed border-slate-200"
+                                                ? "bg-slate-50/70 text-slate-300 cursor-not-allowed border border-dashed border-slate-200"
                                                 : selected
-                                                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200 font-bold"
+                                                    ? "bg-[#101044] text-white shadow-md shadow-[#101044]/25 font-bold scale-[1.04] ring-2 ring-[#101044]/15"
                                                     : isToday
-                                                        ? "border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-bold"
-                                                        : "text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-100"
+                                                        ? "border-2 border-emerald-500 bg-emerald-50/40 text-emerald-900 font-bold hover:bg-emerald-100/50"
+                                                        : "text-slate-700 hover:bg-slate-100 hover:text-[#101044] border border-slate-200/80 bg-white"
                                         }
                                     `}
                                 >
-                                    <span className="text-sm leading-none font-bold">
+                                    <span className="text-xs sm:text-sm leading-tight font-extrabold">
                                         {day.getDate()}
                                     </span>
-                                    <span className={`text-[9px] leading-none mt-0.5 font-medium
+                                    <span className={`text-[8.5px] sm:text-[9px] leading-tight mt-0.5 font-medium
                                         ${past || outOfWindow ? "text-slate-300" : drOff ? "text-slate-300" : selected ? "text-indigo-200" : "text-slate-400"}`}>
-                                        {drOff ? "Closed" : outOfWindow ? "—" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
+                                        {drOff ? "Off" : outOfWindow ? "—" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
                                     </span>
                                 </button> 
                             );
@@ -680,16 +736,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     </div>
 
                     {/* Calendar legend */}
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 pt-3 border-t border-slate-50">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-4 pt-3.5 border-t border-slate-100">
                         {[
-                            { color: "bg-indigo-600", label: "Selected" },
-                            { color: "bg-white border-2 border-indigo-300", label: "Today" },
+                            { color: "bg-[#101044]", label: "Selected" },
+                            { color: "bg-white border-2 border-emerald-500", label: "Today" },
                             { color: "bg-white border border-slate-200", label: "Available" },
-                            { color: "bg-slate-100 border border-dashed border-slate-300", label: "Closed" },
-                            { color: "bg-slate-100", label: "Out of Window" },
+                            { color: "bg-slate-100 border border-dashed border-slate-300", label: "Closed / Off" },
+                            { color: "bg-slate-100 opacity-50", label: "Out of Window" },
                         ].map(({ color, label }) => (
-                            <span key={label} className="flex items-center gap-1 text-[10px] text-slate-500">
-                                <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
+                            <span key={label} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                                <span className={`inline-block size-2.5 rounded-full ${color}`} />
                                 {label}
                             </span>
                         ))}
@@ -697,17 +753,19 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 </div>
 
                 {/* ─── Patient Consultation Type ─── */}
-                <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                <div className="p-5 sm:p-6 border-b border-slate-100 bg-slate-50/40">
                     <div className="space-y-3">
-                        <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                <i className="fas fa-users text-indigo-600 text-xs" />
+                        <label className="text-xs sm:text-sm font-extrabold text-[#101044] flex items-center gap-2">
+                            <span className="size-7 rounded-lg bg-[#101044]/5 text-[#101044] flex items-center justify-center shrink-0">
+                                <Users className="size-4" />
                             </span>
                             Visit Classification
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                                ${patientType === "NEW" ? "bg-indigo-50/60 border-indigo-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                            <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 transition-all
+                                ${patientType === "NEW" 
+                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs" 
+                                    : "bg-white border-slate-200 hover:border-slate-300"}`}>
                                 <input 
                                     type="radio" 
                                     name="patientType" 
@@ -716,29 +774,31 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     checked={patientType === "NEW"} 
                                     onChange={() => setPatientType("NEW")} 
                                 />
-                                <div className="flex w-full items-center justify-between">
+                                <div className="flex w-full items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
-                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                            ${patientType === "NEW" ? "bg-indigo-100" : "bg-slate-100"}`}>
-                                            <i className={`fas fa-user-plus text-sm ${patientType === "NEW" ? "text-indigo-600" : "text-slate-500"}`} />
+                                        <span className={`size-10 rounded-xl flex items-center justify-center shrink-0 transition-colors
+                                            ${patientType === "NEW" ? "bg-[#101044] text-white shadow-xs" : "bg-slate-100 text-slate-600"}`}>
+                                            <UserPlus className="size-5" />
                                         </span>
-                                        <div className="text-sm">
-                                            <p className={`font-bold ${patientType === "NEW" ? "text-indigo-900" : "text-slate-900"}`}>
+                                        <div>
+                                            <p className={`text-sm font-bold ${patientType === "NEW" ? "text-[#101044]" : "text-slate-800"}`}>
                                                 New Consultation
                                             </p>
-                                            <p className={`text-xs mt-0.5 ${patientType === "NEW" ? "text-indigo-600" : "text-slate-400"}`}>
-                                                First-time appointment
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                First-time appointment with doctor
                                             </p>
                                         </div>
                                     </div>
+                                    {patientType === "NEW" && (
+                                        <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
+                                    )}
                                 </div>
-                                {patientType === "NEW" && (
-                                    <div className="absolute -inset-px rounded-xl border-2 border-indigo-500 pointer-events-none" />
-                                )}
                             </label>
 
-                            <label className={`relative flex cursor-pointer rounded-xl border p-4 transition-all
-                                ${patientType === "FOLLOW_UP" ? "bg-emerald-50/60 border-emerald-300 shadow-sm" : "bg-white border-slate-200 hover:border-slate-300"}`}>
+                            <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 transition-all
+                                ${patientType === "FOLLOW_UP" 
+                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs" 
+                                    : "bg-white border-slate-200 hover:border-slate-300"}`}>
                                 <input 
                                     type="radio" 
                                     name="patientType" 
@@ -747,44 +807,45 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     checked={patientType === "FOLLOW_UP"} 
                                     onChange={() => setPatientType("FOLLOW_UP")} 
                                 />
-                                <div className="flex w-full items-center justify-between">
+                                <div className="flex w-full items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
-                                        <span className={`w-8 h-8 rounded-lg flex items-center justify-center
-                                            ${patientType === "FOLLOW_UP" ? "bg-emerald-100" : "bg-slate-100"}`}>
-                                            <i className={`fas fa-user-check text-sm ${patientType === "FOLLOW_UP" ? "text-emerald-600" : "text-slate-500"}`} />
+                                        <span className={`size-10 rounded-xl flex items-center justify-center shrink-0 transition-colors
+                                            ${patientType === "FOLLOW_UP" ? "bg-[#101044] text-white shadow-xs" : "bg-slate-100 text-slate-600"}`}>
+                                            <UserCheck className="size-5" />
                                         </span>
-                                        <div className="text-sm">
-                                            <p className={`font-bold ${patientType === "FOLLOW_UP" ? "text-emerald-900" : "text-slate-900"}`}>
+                                        <div>
+                                            <p className={`text-sm font-bold ${patientType === "FOLLOW_UP" ? "text-[#101044]" : "text-slate-800"}`}>
                                                 Follow-Up Visit
                                             </p>
-                                            <p className={`text-xs mt-0.5 ${patientType === "FOLLOW_UP" ? "text-emerald-600" : "text-slate-400"}`}>
-                                                Returning follow-up
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                Returning visit or report review
                                             </p>
                                         </div>
                                     </div>
+                                    {patientType === "FOLLOW_UP" && (
+                                        <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />
+                                    )}
                                 </div>
-                                {patientType === "FOLLOW_UP" && (
-                                    <div className="absolute -inset-px rounded-xl border-2 border-emerald-500 pointer-events-none" />
-                                )}
                             </label>
                         </div>
                     </div>
                 </div>
 
                 {/* ── Time slots (SlotPicker Component Integration) ── */}
-                <div className="p-5">
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center">
-                                <i className="fas fa-clock text-indigo-600 text-xs" />
+                <div className="p-5 sm:p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-sm sm:text-base font-extrabold text-[#101044] flex items-center gap-2">
+                            <span className="size-7 rounded-lg bg-[#101044]/5 text-[#101044] flex items-center justify-center shrink-0">
+                                <Clock className="size-4" />
                             </span>
                             Select Time Slot
-                            <span className="text-[11px] font-normal text-slate-400">
+                            <span className="text-xs font-normal text-slate-500 hidden sm:inline">
                                 — {MONTH_NAMES[selectedDate.getMonth()].slice(0,3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
                             </span>
                         </h2>
                         {availableCount > 0 && !isLoadingSlots && (
-                            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80 flex items-center gap-1.5">
+                                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 {availableCount} slot{availableCount !== 1 ? "s" : ""} available
                             </span>
                         )}
@@ -810,42 +871,78 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 </div>
             </div>
 
-            {/* ─── Notes / Reason for visit ─── */}
+            {/* ─── 3. Notes / Reason for visit ─── */}
             <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                    <i className="fas fa-notes-medical text-indigo-500 text-xs" />
-                    Symptoms & Medical Notes (Optional)
+                <label className="text-xs sm:text-sm font-extrabold text-[#101044] flex items-center gap-2">
+                    <span className="size-6 rounded-lg bg-[#101044]/5 text-[#101044] flex items-center justify-center shrink-0">
+                        <FileText className="size-3.5" />
+                    </span>
+                    Symptoms & Medical Notes <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <textarea
                     rows={3}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Briefly describe your symptoms or reason for the consultation..."
-                    className="w-full text-sm rounded-xl border border-slate-200 px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400 resize-none shadow-sm"
+                    placeholder="Briefly describe your symptoms, medical concerns, or questions for this consultation..."
+                    className="w-full text-sm rounded-2xl border border-slate-200 px-4 py-3.5 outline-none focus:ring-2 focus:ring-[#101044]/15 focus:border-[#101044] transition placeholder:text-slate-400 resize-none shadow-2xs"
                 />
+                <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                    <Lock className="size-3 text-slate-400 shrink-0" />
+                    Private & confidential — only your consulting physician will review these notes.
+                </p>
             </div>
 
-            {/* ─── Submit button ─── */}
+            {/* ─── 4. Summary & Submit Button ─── */}
             {(() => {
                 const walletDeduction = useWallet && walletBalance > 0 ? Math.min(walletBalance, fee) : 0;
                 const netPayable = Math.max(0, fee - walletDeduction);
                 const isFullWallet = useWallet && walletBalance >= fee;
 
                 return (
-                    <button
-                        type="submit"
-                        disabled={!time || isSlotLocked}
-                        className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md shadow-indigo-200 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                        <i className="fas fa-lock text-xs" />
-                        <span>
-                            {isFullWallet
-                                ? `Book & Pay ₹${fee} via Wallet`
-                                : walletDeduction > 0
-                                ? `Book & Pay ₹${netPayable} (Wallet: -₹${walletDeduction})`
-                                : `Book & Proceed to Payment (₹${fee})`}
-                        </span>
-                    </button>
+                    <div className="space-y-4 pt-2">
+                        {/* Summary Preview Card */}
+                        {time && (
+                            <div className="bg-gradient-to-r from-slate-50 via-white to-slate-50/70 border border-slate-200/90 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+                                <div className="space-y-1.5">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <CalendarCheck className="size-4 text-emerald-600" />
+                                        <span className="text-xs sm:text-sm font-extrabold text-[#101044]">
+                                            {dateString} at {time}
+                                        </span>
+                                        <span className="text-[11px] font-bold text-[#101044] bg-[#101044]/5 px-2.5 py-0.5 rounded-full border border-[#101044]/10">
+                                            {type === "online" ? "Telehealth Video" : "Clinic Visit"}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                        Slot is available and will be temporarily reserved upon proceeding.
+                                    </p>
+                                </div>
+                                <div className="text-left sm:text-right shrink-0">
+                                    <span className="text-xs text-slate-400 font-medium block">Total Consultation Fee</span>
+                                    <span className="text-xl sm:text-2xl font-extrabold text-[#101044]">
+                                        ₹{fee}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            disabled={!time || isSlotLocked}
+                            className="w-full py-4 px-6 bg-gradient-to-r from-[#101044] via-[#151554] to-[#1c1c70] hover:from-[#0c0c36] hover:to-[#16165c] text-white font-extrabold rounded-2xl shadow-lg shadow-[#101044]/15 hover:shadow-xl hover:shadow-[#101044]/20 transition-all active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 text-sm sm:text-base cursor-pointer"
+                        >
+                            <Lock className="size-4 text-emerald-400" />
+                            <span>
+                                {!time
+                                    ? "Please Select a Time Slot to Proceed"
+                                    : isFullWallet
+                                    ? `Confirm & Pay ₹${fee} with Wallet Balance`
+                                    : walletDeduction > 0
+                                    ? `Confirm & Pay ₹${netPayable} (₹${walletDeduction} Wallet Applied)`
+                                    : `Confirm Appointment & Proceed (₹${fee})`}
+                            </span>
+                        </button>
+                    </div>
                 );
             })()}
 
@@ -856,12 +953,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 const isFullWallet = useWallet && walletBalance >= fee;
 
                 return (
-                    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                        <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                                <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                                    <i className="fas fa-shield-halved text-indigo-600" />
-                                    Confirm Appointment Slot
+                    <div className="fixed inset-0 z-50 bg-[#101044]/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+                        <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 border border-slate-100">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+                                <h3 className="text-base font-extrabold text-[#101044] flex items-center gap-2">
+                                    <ShieldCheck className="size-5 text-emerald-600" />
+                                    Confirm Appointment Booking
                                 </h3>
                                 <button
                                     type="button"
@@ -872,40 +969,41 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         }
                                     }}
                                     disabled={isPaymentLoading || isLocking}
-                                    className="text-slate-400 hover:text-slate-600 p-1"
+                                    className="size-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition"
                                 >
-                                    <i className="fas fa-times" />
+                                    <X className="size-4" />
                                 </button>
                             </div>
 
                             {modalError && (
-                                <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs border border-red-100">
-                                    {modalError}
+                                <div className="p-3.5 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200 flex items-center gap-2">
+                                    <AlertCircle className="size-4 text-rose-600 shrink-0" />
+                                    <span>{modalError}</span>
                                 </div>
                             )}
 
                             {/* Wallet Option Card */}
                             {walletBalance > 0 && (
-                                <div className="rounded-xl border p-4 bg-emerald-50/80 border-emerald-200 transition-all">
-                                    <label className="flex items-center gap-3 cursor-pointer select-none">
+                                <div className="rounded-2xl border p-4 bg-gradient-to-r from-emerald-50/90 to-teal-50/50 border-emerald-200/90 transition-all shadow-2xs">
+                                    <label className="flex items-center gap-3.5 cursor-pointer select-none">
                                         <input
                                             type="checkbox"
                                             checked={useWallet}
                                             onChange={(e) => setUseWallet(e.target.checked)}
-                                            className="h-5 w-5 rounded text-emerald-600 focus:ring-emerald-500 border-emerald-300"
+                                            className="size-5 rounded text-emerald-600 focus:ring-emerald-500 border-emerald-300"
                                         />
-                                        <div className="flex-1 flex items-center justify-between">
+                                        <div className="flex-1 flex items-center justify-between gap-2">
                                             <div>
-                                                <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                                                    <i className="fas fa-wallet text-emerald-600" />
-                                                    Use Wallet Balance
+                                                <p className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                                                    <Wallet className="size-3.5 text-emerald-600" />
+                                                    Use Digital Wallet Balance
                                                 </p>
                                                 <p className="text-[11px] text-slate-500 mt-0.5">
-                                                    Available: <span className="font-semibold text-emerald-700">₹{walletBalance}</span>
+                                                    Available: <span className="font-bold text-emerald-700">₹{walletBalance}</span>
                                                 </p>
                                             </div>
                                             {useWallet && walletDeduction > 0 && (
-                                                <span className="text-xs font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md">
+                                                <span className="text-xs font-extrabold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-lg">
                                                     -₹{walletDeduction}
                                                 </span>
                                             )}
@@ -915,39 +1013,39 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             )}
 
                             {/* Summary Breakdown */}
-                            <div className="space-y-2.5 bg-slate-50 p-4 rounded-xl text-xs text-slate-600 border border-slate-100">
+                            <div className="space-y-2.5 bg-slate-50 p-4 sm:p-5 rounded-2xl text-xs text-slate-600 border border-slate-200/80">
                                 <div className="flex justify-between">
-                                    <span className="text-slate-400 font-medium">Doctor:</span>
-                                    <span className="font-bold text-slate-800">Dr. {doctor.firstName} {doctor.lastName}</span>
+                                    <span className="text-slate-400 font-medium">Physician:</span>
+                                    <span className="font-extrabold text-[#101044]">Dr. {doctor.firstName} {doctor.lastName}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-slate-400 font-medium">Date & Time:</span>
-                                    <span className="font-bold text-slate-800">{dateString} at {time}</span>
+                                    <span className="font-bold text-slate-900">{dateString} at {time}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-slate-400 font-medium">Channel:</span>
-                                    <span className="font-bold text-slate-800 capitalize">{type === "online" ? "Telehealth (Online)" : "In-Person (Offline)"}</span>
+                                    <span className="text-slate-400 font-medium">Consultation Type:</span>
+                                    <span className="font-bold text-slate-900 capitalize">{type === "online" ? "Telehealth Video Call" : "In-Person Clinic Visit"}</span>
                                 </div>
 
-                                <div className="border-t border-slate-200/60 pt-2.5 space-y-1.5">
+                                <div className="border-t border-slate-200/80 pt-2.5 space-y-1.5 mt-2">
                                     <div className="flex justify-between text-slate-600">
                                         <span>Consultation Fee:</span>
-                                        <span className="font-semibold">₹{fee}</span>
+                                        <span className="font-bold">₹{fee}</span>
                                     </div>
                                     {useWallet && walletBalance > 0 && (
-                                        <div className="flex justify-between text-emerald-600 font-medium">
+                                        <div className="flex justify-between text-emerald-700 font-semibold">
                                             <span>Wallet Applied:</span>
                                             <span>-₹{walletDeduction}</span>
                                         </div>
                                     )}
-                                    <div className="flex justify-between pt-1 border-t border-slate-200/40 text-sm font-bold text-slate-800">
-                                        <span>To Pay:</span>
-                                        <span className="text-indigo-600">₹{netPayable}</span>
+                                    <div className="flex justify-between pt-2 border-t border-slate-200/80 text-sm font-extrabold text-[#101044]">
+                                        <span>Total Payable:</span>
+                                        <span className="text-base font-black text-[#101044]">₹{netPayable}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="flex gap-3">
+                            <div className="flex gap-3 pt-1">
                                 <button
                                     type="button"
                                     disabled={isLocking || isPaymentLoading}
@@ -955,7 +1053,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         setShowConfirmModal(false);
                                         setModalError(null);
                                     }}
-                                    className="w-1/2 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition"
+                                    className="w-1/2 py-3 px-4 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
                                 >
                                     Cancel
                                 </button>
@@ -963,27 +1061,27 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     type="button"
                                     disabled={isLocking || isPaymentLoading}
                                     onClick={handleProceedToPay}
-                                    className="w-1/2 py-2.5 px-4 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-md shadow-indigo-100 flex items-center justify-center gap-1.5 transition"
+                                    className="w-1/2 py-3 px-4 rounded-xl bg-gradient-to-r from-[#101044] to-[#1c1c70] hover:from-[#0c0c36] hover:to-[#16165c] text-white text-xs font-extrabold shadow-md shadow-[#101044]/15 flex items-center justify-center gap-1.5 transition"
                                 >
                                     {isLocking || isPaymentLoading ? (
                                         <>
-                                            <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                                            <Loader2 className="size-3.5 animate-spin text-white" />
                                             <span>Processing…</span>
                                         </>
                                     ) : isFullWallet ? (
                                         <>
-                                            <i className="fas fa-wallet text-xs" />
-                                            <span>Pay ₹{fee} via Wallet</span>
+                                            <Wallet className="size-3.5 text-emerald-300" />
+                                            <span>Pay ₹{fee} with Wallet</span>
                                         </>
                                     ) : useWallet && walletBalance > 0 ? (
                                         <>
-                                            <i className="fas fa-credit-card text-xs" />
-                                            <span>Pay ₹{netPayable} via Razorpay</span>
+                                            <CreditCard className="size-3.5 text-emerald-300" />
+                                            <span>Pay ₹{netPayable}</span>
                                         </>
                                     ) : (
                                         <>
-                                            <i className="fas fa-credit-card text-xs" />
-                                            <span>Pay ₹{fee} via Razorpay</span>
+                                            <CreditCard className="size-3.5 text-emerald-300" />
+                                            <span>Pay ₹{fee}</span>
                                         </>
                                     )}
                                 </button>

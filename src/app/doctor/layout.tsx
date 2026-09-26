@@ -9,7 +9,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <FcmTokenManager />
       {/* Silently listens for video call notifications — renders nothing */}
       <VideoCallNotificationManager />
-      <main className="min-h-screen bg-slate-600">
+      <main className="min-h-screen bg-[#f8faff]">
         {children}
       </main>
     </>

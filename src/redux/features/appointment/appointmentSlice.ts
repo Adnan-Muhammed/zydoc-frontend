@@ -105,7 +105,28 @@ const appointmentSlice = createSlice({
         },
         hydrateWaitingRoom(state, action) {
             state.waitingRoomPresence = action.payload || {};
-        }
+        },
+        // Dispatched by useSocket when backend emits 'consultation_completed'.
+        // Immediately marks the appointment as completed in both the patient list
+        // and the doctor list so the rejoin button disables in real time (Rule 4).
+        markAppointmentCompleted(state, action) {
+            const { appointmentId } = action.payload;
+            if (!appointmentId) return;
+            // Patient appointments list
+            const patientIdx = state.appointments.findIndex((a: any) => a._id === appointmentId);
+            if (patientIdx !== -1) {
+                state.appointments[patientIdx].status = 'completed';
+            }
+            // Doctor appointments list
+            const doctorIdx = state.doctorAppointments.findIndex((a: any) => a._id === appointmentId);
+            if (doctorIdx !== -1) {
+                state.doctorAppointments[doctorIdx].status = 'completed';
+            }
+            // currentAppointment (used in video call room)
+            if (state.currentAppointment && state.currentAppointment._id === appointmentId) {
+                state.currentAppointment.status = 'completed';
+            }
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -309,5 +330,5 @@ const appointmentSlice = createSlice({
     },
 });
 
-export const { clearAppointmentError, resetLockState, addBooking, updateAppointmentStatus, setPatientWaiting, setPatientDisconnected, hydrateWaitingRoom } = appointmentSlice.actions;
+export const { clearAppointmentError, resetLockState, addBooking, updateAppointmentStatus, setPatientWaiting, setPatientDisconnected, hydrateWaitingRoom, markAppointmentCompleted } = appointmentSlice.actions;
 export default appointmentSlice.reducer;
