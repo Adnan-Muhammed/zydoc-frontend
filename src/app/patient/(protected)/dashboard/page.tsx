@@ -17,7 +17,7 @@ async function getUser() {
         }); 
         if (!res.ok) return null;
         const data = await res.json();
-        return data.user ?? data;
+        return data.user ?? data; 
     } catch {
         return null;
     }

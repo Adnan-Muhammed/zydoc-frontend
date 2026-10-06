@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React from 'react'; 
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
 import DoctorFilters from '@/components/find-doctor/DoctorFilters';

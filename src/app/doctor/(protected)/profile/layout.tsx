@@ -18,7 +18,7 @@ export default async function ProfileLayout({
         Authorization: `Bearer ${accessToken}`,
       },
       cache: 'no-store',
-    });
+    }); 
 
     if (!res.ok) {
         redirect('/login');

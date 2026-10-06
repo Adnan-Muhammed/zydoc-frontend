@@ -4,7 +4,7 @@ import Navbar from "@/components/landing/Navbar";
 import Footer from "@/components/landing/Footer";
 import "@/app/(public)/landing.css";
 
-async function getUser(cookieHeader: string) {
+async function getUser(cookieHeader: string) { 
     try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
             method: 'GET',
@@ -46,4 +46,4 @@ export default async function PublicLayout({
             <Footer />
         </div>
     );
-}
+}

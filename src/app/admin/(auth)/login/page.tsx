@@ -4,7 +4,7 @@
 import type { Metadata } from "next";
 import { Shield, Users, CalendarCheck, Lock } from "lucide-react";
 import AdminLoginForm from "@/components/forms/AdminLoginForm";
-
+ 
 
 // In your /admin/login/page.tsx
 export const dynamic = 'force-dynamic';
@@ -17,12 +17,10 @@ export const metadata: Metadata = {
 const features = [
     { icon: Users, label: "Role-based administrator authentication" },
     { icon: CalendarCheck, label: "Manage healthcare operations efficiently" },
-    { icon: Lock, label: "Advanced security monitoring & 2FA protection" },
+    { icon: Lock, label: "Advanced security monitoring & protection" },
 ];
 
 export default function AdminLoginPage() {
-
-    console.log('/src/app/admin/(auth)/login/page.tsx is loading');
 
     return (
         <main className="relative flex min-h-screen bg-[#0d1117]">

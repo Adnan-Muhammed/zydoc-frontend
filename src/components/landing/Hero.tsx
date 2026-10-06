@@ -19,7 +19,7 @@ export default function Hero() {
       <div className="relative mx-auto flex max-w-7xl flex-col px-5 pb-10 pt-10 sm:px-8 md:min-h-[680px] md:justify-center md:pb-28 md:pt-10 lg:min-h-[720px] lg:px-10 lg:pb-36">
         <div className="max-w-xl text-left">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/65 px-3 py-2 text-[11px] font-medium text-[#34345d] shadow-sm backdrop-blur-md">
-            <span className="size-2 rounded-full bg-[#36bb76]" /> Live <strong>42 Doctors</strong> Online Now
+            <span className="size-2 rounded-full bg-[#36bb76] animate-pulse" /> Verified Specialists <strong>Available Today</strong>
           </div>
           <h1 className="text-[clamp(2.7rem,5vw,4.6rem)] font-bold leading-[0.98] tracking-[-0.06em] text-[#101044]">
             Quality healthcare
@@ -55,8 +55,8 @@ export default function Hero() {
             className="h-[360px] w-full object-cover object-right"
           />
           <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center gap-2 rounded-full border border-white/70 bg-white/85 px-3 py-3 text-xs font-semibold text-[#17174e] shadow-lg backdrop-blur-sm">
-            <span className="text-amber-500">★</span> 4.9/5{' '}
-            <span className="font-normal text-[#686880]">Verified Patient Reviews (12,000+)</span>
+            <span className="text-amber-500">★</span> 5.0{' '}
+            <span className="font-normal text-[#686880]">Rated Excellent by Verified Patients</span>
           </div>
         </div>
       </div>

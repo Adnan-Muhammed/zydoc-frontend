@@ -89,7 +89,7 @@ export default function FilesTab({
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
       const targetUrl = file.url.startsWith('http') ? file.url : `${baseUrl}${file.url.startsWith('/') ? '' : '/'}${file.url}`;
       window.open(targetUrl, '_blank');
-    } else {
+    } else {  
       alert(`Preparing ${file.name} for download.`);
     }
   };

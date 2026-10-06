@@ -86,18 +86,22 @@ const authSlice = createSlice({
             .addCase(logoutUser.fulfilled, () => initialState)
             // Global loading/error handling via matchers
             .addMatcher(
-                (action: { type: string }) => action.type.endsWith('/pending'),
+                (action: { type: string }) => action.type.startsWith('auth/') && action.type.endsWith('/pending'),
                 (state: AuthState) => { state.isLoading = true; state.error = null; }
             )
             .addMatcher(
-                (action: { type: string }) => action.type.endsWith('/fulfilled'),
+                (action: { type: string }) => action.type.startsWith('auth/') && action.type.endsWith('/fulfilled'),
                 (state: AuthState) => { state.isLoading = false; }
             )
             .addMatcher(
-                (action: { type: string; payload?: unknown }) => action.type.endsWith('/rejected'),
-                (state: AuthState, action: { payload?: unknown }) => {
+                (action: { type: string; payload?: any }) => action.type.startsWith('auth/') && action.type.endsWith('/rejected'),
+                (state: AuthState, action: { type: string; payload?: any }) => {
                     state.isLoading = false;
-                    state.error = action.payload as string;
+                    
+                    // Don't set error on checkAuth rejection to avoid showing "No token" on login page
+                    if (action.type !== 'auth/checkAuth/rejected') {
+                        state.error = typeof action.payload === 'string' ? action.payload : action.payload?.message || "Authentication failed";
+                    }
                 }
             );
     },

@@ -299,17 +299,29 @@
    ========================================================================== */
 .system-pills-container {
   width: 100%;
-  margin-bottom: 1.5rem;
-  overflow: hidden;
+  margin-bottom: 1.25rem;
+  position: relative;
+}
+
+.system-pills-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0.5rem;
+  width: 32px;
+  background: linear-gradient(90deg, transparent, rgba(248, 250, 255, 0.95));
+  pointer-events: none;
 }
 
 .system-pills-scroll {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.55rem;
   overflow-x: auto;
-  padding-bottom: 0.5rem;
+  padding: 0.15rem 0.25rem 0.5rem;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .system-pills-scroll::-webkit-scrollbar {
@@ -320,7 +332,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1.1rem;
+  padding: 0.55rem 1.05rem;
+  min-height: 40px;
   border-radius: var(--radius-pill);
   background: #ffffff;
   border: 1px solid #e2e8f0;
@@ -329,21 +342,26 @@
   color: #475569;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(29, 40, 93, 0.03);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 5px rgba(29, 40, 93, 0.03);
 }
 
 .system-pill-btn:hover {
   background: #f1f5f9;
   color: var(--primary-navy);
   border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.system-pill-btn:active {
+  transform: scale(0.97);
 }
 
 .system-pill-btn.active {
   background: var(--primary-navy);
   color: #ffffff;
   border-color: var(--primary-navy);
-  box-shadow: 0 4px 14px rgba(24, 25, 82, 0.25);
+  box-shadow: 0 4px 14px rgba(24, 25, 82, 0.22);
 }
 
 .system-pill-btn .pill-icon {
@@ -363,10 +381,32 @@
   background: #ffffff;
   border-radius: var(--radius-card);
   border: 1px solid var(--border-subtle);
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: var(--shadow-soft);
   position: sticky;
-  top: 90px;
+  top: 85px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+
+.filters-sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.filters-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filters-sidebar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 9999px;
+}
+
+.filters-sidebar::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
 }
 
 .filter-group-modern {
@@ -597,9 +637,10 @@
   .filters-drawer-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.6);
+    background: rgba(15, 23, 42, 0.65);
     backdrop-filter: blur(4px);
-    z-index: 60;
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 290 !important;
   }
 
   .filters-drawer {
@@ -610,14 +651,14 @@
     max-height: 88vh;
     background: #ffffff;
     border-radius: 24px 24px 0 0;
-    padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    padding: 1rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    z-index: 70;
+    z-index: 300 !important;
     transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
   }
 
   .mobile-drawer-drag-pill {
@@ -1273,7 +1314,7 @@
     box-shadow: -12px 0 45px rgba(16, 16, 68, 0.2) !important;
     transform: translateX(100%) !important;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    z-index: 100 !important;
+    z-index: 300 !important;
     display: flex !important;
     flex-direction: column !important;
     background: #ffffff !important;
@@ -1288,9 +1329,10 @@
     display: block !important;
     position: fixed !important;
     inset: 0 !important;
-    background: rgba(16, 16, 68, 0.45) !important;
+    background: rgba(16, 16, 68, 0.5) !important;
     backdrop-filter: blur(4px) !important;
-    z-index: 95 !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: 290 !important;
   }
 
   .dashboard-drawer .drawer-header,

@@ -402,7 +402,7 @@ printTree(rootDir);
     ├── appointmentStatus.ts
     ├── generatePrescriptionPdf.ts
     ├── scheduleValidator.ts
-    └── timeFormat.ts  
+    └── timeFormat.ts  ece
 
 
  `

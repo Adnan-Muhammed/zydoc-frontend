@@ -62,6 +62,7 @@ export const DOCTORS = {
     UPDATE_FCM_TOKEN: '/doctor/fcm-token',  // mounted at /api/doctor/ in server.js
     EARNINGS: '/doctor/earnings',
     BANK_DETAILS: '/doctor/bank-details',
+    DASHBOARD_STATS: '/doctor/dashboard-stats',
 } as const;
 
 export const APPOINTMENTS = {

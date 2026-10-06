@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { loginUser } from "@/redux/auth/authThunk";
+import { loginUser, loginWithGoogleUser } from "@/redux/auth/authThunk";
+import { clearAuthError } from "@/redux/auth/authSlice";
 import { Mail, Lock, LogIn, Eye, EyeOff, AlertTriangle } from "lucide-react";
  
 export default function AdminLoginForm() {
@@ -13,7 +14,12 @@ export default function AdminLoginForm() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [rememberDevice, setRememberDevice] = useState(false);
+
+    useEffect(() => {
+        // Clear any leftover auth errors only when the login page initially loads
+        dispatch(clearAuthError());
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (isAuthenticated) window.location.href = "/admin/dashboard";
@@ -21,11 +27,11 @@ export default function AdminLoginForm() {
 
     const onLogin = (e: React.FormEvent) => {
         e.preventDefault();
-        dispatch(loginUser({ credentials: { email, password, rememberDevice }, isAdmin: true }));
+        dispatch(loginUser({ credentials: { email, password }, isAdmin: true }));
     };
 
     const handleGoogleSignIn = () => {
-        window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/auth/google`;
+        dispatch(loginWithGoogleUser({ role: 'admin', isAdmin: true }));
     };
 
     return (
@@ -75,24 +81,17 @@ export default function AdminLoginForm() {
                 </button>
             </div>
 
-            <div className="flex items-center justify-between px-1">
-                <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer select-none">
-                    <input
-                        type="checkbox"
-                        checked={rememberDevice}
-                        onChange={(e) => setRememberDevice(e.target.checked)}
-                        className="h-4 w-4 rounded bg-slate-800 border-slate-700 accent-blue-600"
-                    />
-                    Keep me signed in
-                </label>
-            </div>
 
             <button
                 type="submit"
                 disabled={isLoading}
-                className="flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-500 transition shadow-lg shadow-blue-600/20 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-500 transition shadow-lg shadow-blue-600/20 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-                {isLoading ? "Authenticating..." : <><LogIn size={18} /> Sign In to Admin</>}
+                {isLoading ? (
+                    "Authenticating..."
+                ) : (
+                    <><LogIn size={18} /> Sign In to Admin</>
+                )}
             </button>
 
             <div className="flex items-center gap-3">

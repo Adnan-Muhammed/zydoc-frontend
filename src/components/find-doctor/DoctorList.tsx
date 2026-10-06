@@ -92,6 +92,7 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
   const isDashboardMode = isDashboard ?? basePath.startsWith('/patient');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [specialtySearchQuery, setSpecialtySearchQuery] = useState('');
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -144,16 +145,19 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileFiltersOpen]);
 
-  // Dynamically compute displayed specialties based on selected system of medicine
+  // Dynamically compute displayed specialties based on selected system of medicine and search query
   const displayedSpecialties = useMemo(() => {
-    if (!selectedSystem || selectedSystem === 'all') {
-      return POPULAR_SPECIALTIES;
+    let list = POPULAR_SPECIALTIES;
+    if (selectedSystem && selectedSystem !== 'all') {
+      const config = getSystemConfigById(selectedSystem);
+      if (config?.specialties && config.specialties.length > 0) {
+        list = config.specialties;
+      }
     }
-    const config = getSystemConfigById(selectedSystem);
-    return config?.specialties && config.specialties.length > 0
-      ? config.specialties
-      : POPULAR_SPECIALTIES;
-  }, [selectedSystem]);
+    if (!specialtySearchQuery.trim()) return list;
+    const query = specialtySearchQuery.toLowerCase().trim();
+    return list.filter((s) => s.toLowerCase().includes(query));
+  }, [selectedSystem, specialtySearchQuery]);
 
   // Helper to update URL params
   const updateFilter = (key: string, value: string) => {
@@ -203,6 +207,7 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
     params.delete('sortBy');
     params.delete('systemOfMedicine');
     params.set('page', '1');
+    setSpecialtySearchQuery('');
     router.push(`${pathname}?${params.toString()}`);
   };
 
@@ -247,29 +252,57 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
             </span>
           )}
         </div>
-        <div className="filter-chips-list max-h-56 overflow-y-auto pr-1">
-          <button
-            type="button"
-            onClick={() => updateFilter('specialty', 'all')}
-            className={`specialty-list-item ${!selectedSpecialty ? 'selected' : ''}`}
-          >
-            <span>All Specializations</span>
-            {!selectedSpecialty && <CheckCircle2 className="size-3.5 text-indigo-600 shrink-0" />}
-          </button>
-          {displayedSpecialties.map((specialty) => {
-            const isSelected = selectedSpecialty === specialty;
-            return (
-              <button
-                key={specialty}
-                type="button"
-                onClick={() => updateFilter('specialty', specialty)}
-                className={`specialty-list-item ${isSelected ? 'selected' : ''}`}
-              >
-                <span className="truncate">{specialty}</span>
-                {isSelected && <CheckCircle2 className="size-3.5 text-indigo-600 shrink-0" />}
-              </button>
-            );
-          })}
+        <div className="relative mb-2">
+          <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search specialties..."
+            value={specialtySearchQuery}
+            onChange={(e) => setSpecialtySearchQuery(e.target.value)}
+            className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white transition"
+          />
+          {specialtySearchQuery && (
+            <button
+              type="button"
+              onClick={() => setSpecialtySearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+              aria-label="Clear specialty search"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+        <div className="filter-chips-list max-h-52 overflow-y-auto pr-1">
+          {!specialtySearchQuery && (
+            <button
+              type="button"
+              onClick={() => updateFilter('specialty', 'all')}
+              className={`specialty-list-item ${!selectedSpecialty ? 'selected' : ''}`}
+            >
+              <span>All Specializations</span>
+              {!selectedSpecialty && <CheckCircle2 className="size-3.5 text-indigo-600 shrink-0" />}
+            </button>
+          )}
+          {displayedSpecialties.length === 0 ? (
+            <div className="text-center py-3 text-xs text-slate-400">
+              No matching specialties
+            </div>
+          ) : (
+            displayedSpecialties.map((specialty) => {
+              const isSelected = selectedSpecialty === specialty;
+              return (
+                <button
+                  key={specialty}
+                  type="button"
+                  onClick={() => updateFilter('specialty', specialty)}
+                  className={`specialty-list-item ${isSelected ? 'selected' : ''}`}
+                >
+                  <span className="truncate">{specialty}</span>
+                  {isSelected && <CheckCircle2 className="size-3.5 text-indigo-600 shrink-0" />}
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -558,7 +591,7 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
                         <button
                           type="button"
                           onClick={() => router.push(`${basePath}/${doc.id}`)}
-                          className="hover:text-indigo-600 transition text-left pr-8 sm:pr-0 inline-flex flex-wrap items-baseline gap-1.5"
+                          className="hover:text-indigo-600 transition text-left pr-9 inline-flex flex-wrap items-baseline gap-1.5"
                         >
                           <span className="font-extrabold">{displayName}</span>
                           {primaryDegree && (

@@ -23,7 +23,7 @@ export default async function PatientConsultationLayout({
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
       headers: {
         Cookie: `accessToken=${accessToken}`,
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${accessToken}`, 
       },
       cache: 'no-store',
     });

@@ -23,7 +23,7 @@ export default async function AdminProtectedLayout({
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
       headers: { Cookie: cookieHeader },
-      cache: 'no-store',
+      cache: 'no-store', 
     });
 
     if (!res.ok) {

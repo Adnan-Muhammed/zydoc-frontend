@@ -9,7 +9,7 @@ import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redu
 import { fetchWalletDetails } from "@/redux/features/wallet/walletThunk";
 import SlotPicker, { Slot } from "@/components/patient/SlotPicker";
 import {
-  Video,
+  Video, 
   Building2,
   Calendar,
   ChevronLeft,
@@ -137,12 +137,10 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const [type, setType] = useState<"online" | "offline">(isOnlineEnabled ? "online" : "offline");
     const [patientType, setPatientType] = useState<"NEW" | "FOLLOW_UP" | "">("NEW");
     
-    const [selectedDate, setSelectedDate] = useState<Date>(() => {
-        return findNextWorkingDate(rawWH, isOnlineEnabled ? "online" : "offline", today, maxBookingDate);
-    });
+    const [selectedDate, setSelectedDate] = useState<Date>(today);
     
-    const [calendarYear, setCalendarYear] = useState(() => selectedDate.getFullYear());
-    const [calendarMonth, setCalendarMonth] = useState(() => selectedDate.getMonth());
+    const [calendarYear, setCalendarYear] = useState(() => today.getFullYear());
+    const [calendarMonth, setCalendarMonth] = useState(() => today.getMonth());
 
     const [time, setTime] = useState("");
     const [notes, setNotes] = useState("");
@@ -350,7 +348,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                amount: orderAmount,
+                amount: orderAmount, 
                 currency: orderCurrency,
                 name: "Zydoc Healthcare",
                 description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),

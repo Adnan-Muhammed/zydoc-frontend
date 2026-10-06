@@ -3,8 +3,29 @@
 // src/redux/features/doctor/doctorSlice.ts
 
 import { createSlice } from '@reduxjs/toolkit';
-import { updateDoctorProfile, fetchDoctorProfile, fetchDoctorEarnings, updateBankDetails } from './doctorThunk';
+import { updateDoctorProfile, fetchDoctorProfile, fetchDoctorEarnings, updateBankDetails, fetchDoctorDashboardStats } from './doctorThunk';
 import { BankDetails, DoctorEarningsSummary, Pagination, Transaction } from '@/types';
+
+export interface DoctorDashboardStats {
+    totalPatients: number;
+    totalAppointments: number;
+    completedAppointments: number;
+    upcomingAppointments: number;
+    cancelledAppointments: number;
+    totalEarnings: number;
+    settledEarnings: number;
+    pendingEarnings: number;
+    rating: number;
+    totalReviews: number;
+    starCounts: Record<string, number>;
+    breakdownPercentages: Record<string, number>;
+    satisfactionRate: number;
+    qualityScore: number;
+    consultationSettings: {
+        online: { enabled: boolean; fee: number };
+        offline: { enabled: boolean; fee: number; clinicName?: string; clinicAddress?: string };
+    };
+}
 
 interface DoctorState {
     profile: any | null;
@@ -12,8 +33,10 @@ interface DoctorState {
     earningsSummary: DoctorEarningsSummary | null;
     earningsTransactions: Transaction[];
     earningsPagination: Pagination | null;
+    dashboardStats: DoctorDashboardStats | null;
     isUpdatingProfile: boolean;
     isLoadingEarnings: boolean;
+    isLoadingStats: boolean;
     isUpdatingBankDetails: boolean;
     bankDetailsSuccess: boolean;
     error: string | null;
@@ -25,8 +48,10 @@ const initialState: DoctorState = {
     earningsSummary: null,
     earningsTransactions: [],
     earningsPagination: null,
+    dashboardStats: null,
     isUpdatingProfile: false,
     isLoadingEarnings: false,
+    isLoadingStats: false,
     isUpdatingBankDetails: false,
     bankDetailsSuccess: false,
     error: null,
@@ -105,6 +130,19 @@ const doctorSlice = createSlice({
             .addCase(updateBankDetails.rejected, (state, action) => {
                 state.isUpdatingBankDetails = false;
                 state.bankDetailsSuccess = false;
+                state.error = action.payload as string;
+            })
+
+            // Dashboard Stats
+            .addCase(fetchDoctorDashboardStats.pending, (state) => {
+                state.isLoadingStats = true;
+            })
+            .addCase(fetchDoctorDashboardStats.fulfilled, (state, action) => {
+                state.isLoadingStats = false;
+                state.dashboardStats = action.payload?.stats || action.payload || null;
+            })
+            .addCase(fetchDoctorDashboardStats.rejected, (state, action) => {
+                state.isLoadingStats = false;
                 state.error = action.payload as string;
             });
     },

@@ -14,7 +14,7 @@ export async function getDoctors(searchParams?: any) {
   const query = params.toString() ? `?${params.toString()}` : '';
   const res = await fetch(
     `${process.env.NEXT_PUBLIC_API_URL}/api/doctors${query}`,
-    {
+    { 
       cache: "no-store",
     }
   ); 
@@ -52,7 +52,7 @@ export const getDoctorsList = async (searchParams?: any) => {
         const fee = videoFee ?? physicalFee ?? 0;
         const clinicName = doc.consultationSettings?.offline?.clinicName || doc.consultationSettings?.physical?.clinicName || "";
         const clinicAddress = doc.consultationSettings?.offline?.clinicAddress || doc.consultationSettings?.physical?.clinicAddress || "";
-
+ 
         const location = clinicAddress || (hasPhysical && clinicName ? clinicName : "Online / Remote");
         let image = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
         if (doc.avatarUrl) {

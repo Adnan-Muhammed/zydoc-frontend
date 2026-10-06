@@ -21,7 +21,7 @@
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Import Firebase compat scripts from the local /public folder.
+// Import Firebase compat scripts from the local /public folder. 
 //
 // WHY LOCAL instead of CDN (https://www.gstatic.com/firebasejs/...):
 //   Microsoft Edge's Tracking Prevention blocks cross-origin requests from

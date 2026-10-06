@@ -3,7 +3,8 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import authService from './authService';
 
 const extractAuthError = (error: unknown, defaultMessage: string): any => {
-    const err = error as { response?: { data?: { message?: string, requiresVerification?: boolean, email?: string, signupToken?: string } }, message?: string };
+    const err = error as { response?: { status?: number, data?: { message?: string, requiresVerification?: boolean, email?: string, signupToken?: string } }, message?: string };
+
     if (err.response?.data?.requiresVerification) {
         return err.response.data; // Return the whole object for unverified login recovery
     }
@@ -29,9 +30,9 @@ export const loginUser = createAsyncThunk(
  
 export const loginWithGoogleUser = createAsyncThunk(
     'auth/loginWithGoogle',
-    async (role: string | undefined, { rejectWithValue }) => {
+    async (payload: { role?: string; isAdmin?: boolean } = {}, { rejectWithValue }) => {
         try {
-            return await authService.loginWithGoogle(role);
+            return await authService.loginWithGoogle(payload.role, payload.isAdmin);
         } catch (error: unknown) {
             return rejectWithValue(extractAuthError(error, 'Google Login failed'));
         }
@@ -74,8 +75,8 @@ export const resendOtp = createAsyncThunk(
     }
 );
 
-export const logoutUser = createAsyncThunk('auth/logout', async () => {
-    await authService.logout();
+export const logoutUser = createAsyncThunk('auth/logout', async (isAdmin?: boolean) => {
+    await authService.logout(isAdmin);
 });
 
 export const checkAuth = createAsyncThunk('auth/checkAuth', async () => {

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
         if (!backendUrl) {
             return NextResponse.json({ success: false, message: 'Backend URL not configured' }, { status: 500 });
         }
-
+ 
         // Server-to-server call — no CORS, no preflight, no cookie domain issues
         const isAdmin = body.isAdmin;
         // Don't forward isAdmin to the backend login if it expects strict schema, but it shouldn't hurt

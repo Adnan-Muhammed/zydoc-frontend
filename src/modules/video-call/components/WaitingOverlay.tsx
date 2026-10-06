@@ -106,12 +106,20 @@ export default function WaitingOverlay({
               </p>
             </>
           ) : (
-            <p className="flex items-start gap-2">
-              <i className="fas fa-info-circle text-indigo-400 text-sm mt-0.5 shrink-0"></i>
-              <span>
-                The consultation window is open. Please stay here until the patient joins. The call will connect automatically.
-              </span>
-            </p>
+            <>
+              <p className="flex items-start gap-2">
+                <i className="fas fa-info-circle text-indigo-400 text-sm mt-0.5 shrink-0"></i>
+                <span>
+                  The consultation window is open. Please stay here until the patient joins. The call will connect automatically.
+                </span>
+              </p>
+              <p className="flex items-start gap-2 text-indigo-200/90 font-medium">
+                <i className="fas fa-user-clock text-amber-400 text-sm mt-0.5 shrink-0"></i>
+                <span>
+                  If the patient does not show up during the window, you can click <strong className="text-white font-semibold">&quot;End Call / Leave&quot;</strong> below to conclude this consultation as a patient no-show.
+                </span>
+              </p>
+            </>
           )}
         </div>
 
@@ -140,7 +148,7 @@ export default function WaitingOverlay({
               <span className="leading-snug">
                 Mandatory waiting period fulfilled. Doctor has been alerted and can join any moment.
               </span>
-            </div>
+            </div> 
           ))}
 
         {/* Doctor Absence Warning Notice */}

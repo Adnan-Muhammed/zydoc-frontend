@@ -91,7 +91,7 @@ export default function DoctorDetailDrawer({
   const targetId = doctor.userId || (profile as any)._id || (profile as any).id || '';
 
   const getFullDocUrl = (url?: string) => {
-    if (!url) return '';
+    if (!url) return ''; 
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
     const base = process.env.NEXT_PUBLIC_API_URL || '';
     return `${base}${url.startsWith('/') ? '' : '/'}${url}`;

@@ -56,3 +56,15 @@ export const updateBankDetails = createAsyncThunk(
         }
     }
 );
+
+export const fetchDoctorDashboardStats = createAsyncThunk(
+    'doctor/fetchDashboardStats',
+    async (_, { rejectWithValue }) => {
+        try {
+            return await doctorService.fetchDashboardStats();
+        } catch (error: any) {
+            const message = error.response?.data?.message || 'Failed to fetch dashboard stats';
+            return rejectWithValue(message);
+        }
+    }
+);

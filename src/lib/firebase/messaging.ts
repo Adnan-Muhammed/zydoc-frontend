@@ -75,7 +75,7 @@ export async function getFcmToken(): Promise<string | null> {
   if (!vapidKey) {
     console.error("[FCM] NEXT_PUBLIC_FIREBASE_VAPID_KEY is not set in .env");
     return null;
-  }
+  } 
 
   try {
     const token = await getToken(messaging, {

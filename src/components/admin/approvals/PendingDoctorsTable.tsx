@@ -226,7 +226,7 @@ export default function PendingDoctorsTable({
                           <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden shadow-xs">
                             {p.avatarUrl ? (
                               <img
-                                src={
+                                src={ 
                                   p.avatarUrl.startsWith('http')
                                     ? p.avatarUrl
                                     : `${process.env.NEXT_PUBLIC_API_URL}${

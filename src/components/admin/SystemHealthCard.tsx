@@ -25,7 +25,7 @@ export default function SystemHealthCard() {
     const [showLogs, setShowLogs] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    const fetchHealth = async () => {
+    const fetchHealth = async () => { 
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/health`, {
                 credentials: 'include',
@@ -40,7 +40,7 @@ export default function SystemHealthCard() {
             setLoading(false);
         }
     };
-
+ 
     const fetchLogs = async () => {
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/logs`, {

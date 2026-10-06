@@ -16,7 +16,7 @@ export default async function EarningsLayout({
       headers: {
         Cookie: `accessToken=${accessToken}`,
         Authorization: `Bearer ${accessToken}`,
-      },
+      }, 
       cache: 'no-store',
     });
 

@@ -10,7 +10,7 @@ export interface TimeBlock {
 }
 
 export interface BlockAdjustmentSuggestion {
-    roundDownTimeStr?: string; // e.g. "09:45"
+    roundDownTimeStr?: string; // e.g. "09:45" 
     roundDownLabel?: string;   // e.g. "09:45 AM"
     roundDownDuration?: number; // 45
     roundUpTimeStr?: string;   // e.g. "10:00"
@@ -87,13 +87,21 @@ export const validateDailyShifts = (
     const clean = (b: TimeBlock, type: 'online' | 'offline') => {
         const startStr = b.start || b.startTime || '';
         const endStr = b.end || b.endTime || '';
+        let startMins = timeToMinutes(startStr);
+        let endMins = timeToMinutes(endStr);
+
+        // Handle midnight rollover for end time
+        if (endStr === '00:00' && startMins >= 0) {
+            endMins = 1440;
+        }
+
         return {
             id: b.id,
             type,
             startStr,
             endStr,
-            startMins: timeToMinutes(startStr),
-            endMins: timeToMinutes(endStr),
+            startMins,
+            endMins,
             raw: b
         };
     };

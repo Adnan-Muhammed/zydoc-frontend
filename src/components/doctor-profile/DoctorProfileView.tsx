@@ -21,7 +21,8 @@ import {
   Sparkles,
   PhoneCall,
   BadgeCheck,
-  CalendarCheck
+  CalendarCheck,
+  Stethoscope
 } from 'lucide-react';
 import BookButton from '@/components/patient/BookButton';
 import { formatTo12Hour } from '@/utils/timeFormat';
@@ -252,78 +253,90 @@ export default function DoctorProfileView({
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         {/* ── Main Doctor Identity Banner Card ── */}
         <div className="bg-white rounded-3xl border border-slate-100 shadow-[0_12px_30px_rgba(29,40,93,0.06)] overflow-hidden">
-          {/* Cover Header with subtle medical gradient */}
-          <div className="h-32 sm:h-40 bg-gradient-to-r from-[#181852] via-[#2a2b7a] to-[#3a3da8] relative overflow-hidden">
-            <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1.5px,transparent_1.5px)] [background-size:16px_16px]" />
+          {/* Top Blue Banner Header with Doctor Name, Badges & Overlapping Avatar */}
+          <div className="bg-gradient-to-r from-[#181852] via-[#242674] to-[#36389a] relative px-5 sm:px-8 pt-6 pb-6 sm:pb-7 overflow-visible">
+            {/* Ambient visual background patterns */}
+            <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ffffff_1.5px,transparent_1.5px)] [background-size:16px_16px] pointer-events-none" />
             <div className="absolute right-0 top-0 size-80 rounded-full bg-indigo-400/20 blur-3xl pointer-events-none" />
-            <div className="absolute left-1/3 bottom-0 size-48 rounded-full bg-emerald-400/20 blur-2xl pointer-events-none" />
-          </div>
+            <div className="absolute left-1/3 bottom-0 size-48 rounded-full bg-emerald-400/15 blur-2xl pointer-events-none" />
 
-          {/* Profile Identity Info */}
-          <div className="relative px-5 sm:px-8 pb-6 -mt-16 sm:-mt-20">
-            <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-5">
-              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5">
-                {/* Doctor Avatar with verified badge */}
-                <div className="relative size-28 sm:size-36 rounded-2xl sm:rounded-3xl border-4 border-white shadow-xl overflow-hidden bg-indigo-50 shrink-0">
-                  <img src={avatarUrl} alt={fullName} className="size-full object-cover object-center" />
-                  <span className="absolute bottom-1.5 right-1.5 flex size-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full size-3 bg-emerald-500 border-2 border-white"></span>
+            {/* Profile Identity Details inside Blue Banner */}
+            <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-end gap-4 sm:gap-6">
+              {/* Doctor Profile Picture overlapping the bottom border of the blue banner */}
+              <div className="relative size-24 sm:size-32 rounded-2xl sm:rounded-3xl border-4 border-white shadow-xl overflow-hidden bg-indigo-950/70 shrink-0 -mb-10 sm:-mb-14 z-20">
+                <img src={avatarUrl} alt={fullName} className="size-full object-cover object-center" />
+                <span className="absolute bottom-1.5 right-1.5 flex size-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full size-3 bg-emerald-500 border-2 border-white"></span>
+                </span>
+              </div>
+
+              {/* Doctor Details Relocated inside Banner */}
+              <div className="flex-1 min-w-0">
+                {/* System of Medicine & Verified Specialist Badges */}
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  {systemOfMedicine && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/25 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs">
+                      <Sparkles className="size-3 text-indigo-200" />
+                      {systemOfMedicine}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/25 backdrop-blur-md border border-emerald-400/40 px-2.5 py-0.5 text-xs font-semibold text-emerald-300 shadow-xs">
+                    <BadgeCheck className="size-3.5 text-emerald-300" />
+                    Verified Specialist
                   </span>
                 </div>
 
-                {/* Name, System & Specialty */}
-                <div className="pt-2">
-                  <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-100/80 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
-                      <Sparkles className="size-3 text-indigo-600" />
-                      {systemOfMedicine}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                      <BadgeCheck className="size-3.5 text-emerald-600" />
-                      Verified Specialist
-                    </span>
-                  </div>
-
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#101044] capitalize">
+                {/* Doctor Name in Pure White & Degree */}
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white capitalize drop-shadow-xs">
                     {displayName}
-                    {primaryDegree && (
-                      <span className="text-base sm:text-xl font-semibold text-slate-500 ml-2 normal-case">
-                        · {primaryDegree}
-                      </span>
-                    )}
                   </h1>
-
-                  <p className="mt-1 text-sm font-medium text-slate-500 flex flex-wrap items-center gap-x-2">
-                    <span className="font-semibold text-indigo-900">{specialty}</span>
-                    {yearsOfExp > 0 && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span>{yearsOfExp} Years Experience</span>
-                      </>
-                    )}
-                  </p>
-
-                  {/* Rating display */}
-                  <div className="mt-2.5 flex items-center gap-2">
-                    <div className="flex items-center gap-0.5 text-amber-400">
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const isFilled = d.rating && d.rating > 0 && star <= Math.round(d.rating);
-                        return (
-                          <Star
-                            key={star}
-                            className={`size-4 ${
-                              isFilled ? 'fill-amber-400 text-amber-400' : 'fill-slate-100 text-slate-200'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-                    <span className="text-sm font-bold text-[#101044]">
-                      {d.rating && d.rating > 0 ? Number(d.rating).toFixed(1) : '5.0'}
+                  {primaryDegree && (
+                    <span className="text-xs sm:text-sm font-semibold text-indigo-100 bg-white/15 backdrop-blur-md border border-white/20 px-2.5 py-0.5 rounded-lg">
+                      {primaryDegree}
                     </span>
-                    <span className="text-xs text-slate-400">({d.reviewCount ?? 0} reviews)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Profile Details Below Banner (Compact, reduced whitespace) */}
+          <div className="px-5 sm:px-8 pt-10 sm:pt-4 pb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:pl-[152px]">
+              {/* Specialty, Experience, Rating */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                  <Stethoscope className="size-4 text-indigo-600" />
+                  {specialty}
+                </span>
+                {yearsOfExp > 0 && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span className="font-medium text-slate-500">{yearsOfExp} Years Experience</span>
+                  </>
+                )}
+
+                {/* Rating display */}
+                <div className="flex items-center gap-1.5 pl-0 sm:pl-3 sm:border-l sm:border-slate-200">
+                  <div className="flex items-center gap-0.5 text-amber-400">
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const isFilled = d.rating && d.rating > 0 && star <= Math.round(d.rating);
+                      return (
+                        <Star
+                          key={star}
+                          className={`size-3.5 ${
+                            isFilled ? 'fill-amber-400 text-amber-400' : 'fill-slate-100 text-slate-200'
+                          }`}
+                        />
+                      );
+                    })}
                   </div>
+                  <span className="text-xs sm:text-sm font-bold text-[#101044]">
+                    {d.rating && d.rating > 0 ? Number(d.rating).toFixed(1) : '5.0'}
+                  </span>
+                  <span className="text-xs text-slate-400">({d.reviewCount ?? 0} reviews)</span>
                 </div>
               </div>
 
@@ -332,10 +345,10 @@ export default function DoctorProfileView({
             </div>
 
             {/* 4-Metric Quick Stat Strip */}
-            <div className="mt-7 grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-50/70 border border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-100/60 text-indigo-700 shrink-0">
-                  <Award className="size-5" />
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 p-3 sm:p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-100/70 text-indigo-700 shrink-0">
+                  <Award className="size-4.5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Experience</p>
@@ -343,9 +356,9 @@ export default function DoctorProfileView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-100/60 text-emerald-700 shrink-0">
-                  <ShieldCheck className="size-5" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-emerald-100/70 text-emerald-700 shrink-0">
+                  <ShieldCheck className="size-4.5" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Status</p>
@@ -353,9 +366,9 @@ export default function DoctorProfileView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-blue-100/60 text-blue-700 shrink-0">
-                  <LanguagesIcon className="size-5" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-blue-100/70 text-blue-700 shrink-0">
+                  <LanguagesIcon className="size-4.5" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Languages</p>
@@ -365,9 +378,9 @@ export default function DoctorProfileView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-amber-100/60 text-amber-700 shrink-0">
-                  <Star className="size-5 fill-amber-500 text-amber-500" />
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-amber-100/70 text-amber-700 shrink-0">
+                  <Star className="size-4.5 fill-amber-500 text-amber-500" />
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Rating</p>
@@ -399,10 +412,13 @@ export default function DoctorProfileView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Video Consultation Card */}
                 <div
+                  onClick={() => videoEnabled && setActiveScheduleTab('online')}
                   className={`p-5 rounded-2xl border transition-all ${
-                    videoEnabled
-                      ? 'border-indigo-200 bg-gradient-to-b from-indigo-50/40 to-white shadow-xs'
-                      : 'border-slate-100 bg-slate-50/50 opacity-60'
+                    !videoEnabled
+                      ? 'border-slate-100 bg-slate-50/50 opacity-60 cursor-not-allowed'
+                      : activeScheduleTab === 'online'
+                      ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-gradient-to-b from-indigo-50/60 to-white shadow-md cursor-pointer'
+                      : 'border-slate-200/80 bg-white hover:border-indigo-200 hover:bg-slate-50/50 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -411,7 +427,12 @@ export default function DoctorProfileView({
                         <Video className="size-5" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-[#101044]">Online Video Consult</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-[#101044]">Online Video Consult</h3>
+                          {activeScheduleTab === 'online' && videoEnabled && (
+                            <span className="size-2 rounded-full bg-indigo-600 animate-pulse" />
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">HD Call + Digital Rx</p>
                       </div>
                     </div>
@@ -434,10 +455,13 @@ export default function DoctorProfileView({
 
                 {/* In-Person Clinic Card */}
                 <div
+                  onClick={() => physicalEnabled && setActiveScheduleTab('offline')}
                   className={`p-5 rounded-2xl border transition-all ${
-                    physicalEnabled
-                      ? 'border-emerald-200 bg-gradient-to-b from-emerald-50/30 to-white shadow-xs'
-                      : 'border-slate-100 bg-slate-50/50 opacity-60'
+                    !physicalEnabled
+                      ? 'border-slate-100 bg-slate-50/50 opacity-60 cursor-not-allowed'
+                      : activeScheduleTab === 'offline'
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-gradient-to-b from-emerald-50/60 to-white shadow-md cursor-pointer'
+                      : 'border-slate-200/80 bg-white hover:border-emerald-200 hover:bg-slate-50/50 cursor-pointer'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -446,7 +470,12 @@ export default function DoctorProfileView({
                         <Building2 className="size-5" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-[#101044]">Clinic Consultation</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold text-[#101044]">Clinic Consultation</h3>
+                          {activeScheduleTab === 'offline' && physicalEnabled && (
+                            <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">In-Person Assessment</p>
                       </div>
                     </div>
@@ -556,9 +585,8 @@ export default function DoctorProfileView({
                             href={
                               q.certificateUrl.startsWith('http')
                                 ? q.certificateUrl
-                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${
-                                    q.certificateUrl.startsWith('/') ? q.certificateUrl : `/${q.certificateUrl}`
-                                  }`
+                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${q.certificateUrl.startsWith('/') ? q.certificateUrl : `/${q.certificateUrl}`
+                                }` 
                             }
                             target="_blank"
                             rel="noopener noreferrer"
@@ -595,14 +623,23 @@ export default function DoctorProfileView({
           <div className="space-y-6 lg:sticky lg:top-24">
             <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-[0_10px_30px_rgba(29,40,93,0.06)]">
               <div className="pb-4 border-b border-slate-100">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md inline-block mb-2">
-                  Instant Booking
-                </span>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-[#101044]">
-                    ₹{videoFee || physicalFee || d.fee || 500}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md inline-block">
+                    Instant Booking
                   </span>
-                  <span className="text-xs text-slate-400 font-medium">per consultation</span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {activeScheduleTab === 'offline' ? 'In-Person Clinic' : 'Online Video'}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-[#101044] transition-all">
+                    ₹{activeScheduleTab === 'offline'
+                      ? (physicalFee || d.fee || videoFee || 500)
+                      : (videoFee || d.fee || physicalFee || 500)}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">
+                    per {activeScheduleTab === 'offline' ? 'clinic visit' : 'consultation'}
+                  </span>
                 </div>
               </div>
 
@@ -613,11 +650,10 @@ export default function DoctorProfileView({
                     <button
                       type="button"
                       onClick={() => setActiveScheduleTab('online')}
-                      className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
-                        activeScheduleTab === 'online'
-                          ? 'bg-white text-indigo-900 shadow-xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${activeScheduleTab === 'online'
+                        ? 'bg-white text-indigo-900 shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
                     >
                       <Video className="size-3.5" />
                       <span>Video</span>
@@ -627,11 +663,10 @@ export default function DoctorProfileView({
                     <button
                       type="button"
                       onClick={() => setActiveScheduleTab('offline')}
-                      className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
-                        activeScheduleTab === 'offline'
-                          ? 'bg-white text-indigo-900 shadow-xs font-bold'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                      className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${activeScheduleTab === 'offline'
+                        ? 'bg-white text-indigo-900 shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                        }`}
                     >
                       <Building2 className="size-3.5" />
                       <span>Clinic</span>
@@ -654,9 +689,9 @@ export default function DoctorProfileView({
 
                 {activeScheduleTab === 'online'
                   ? renderScheduleSlots(
-                      workingHours.online || workingHours,
-                      !workingHours.online && !workingHours.offline
-                    )
+                    workingHours.online || workingHours,
+                    !workingHours.online && !workingHours.offline
+                  )
                   : renderScheduleSlots(workingHours.offline, false)}
               </div>
 

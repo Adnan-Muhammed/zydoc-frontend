@@ -59,7 +59,7 @@ export default function CallExitConfirmModal({
         {/* Description */}
         <p className="mt-2 text-sm text-slate-300 leading-relaxed">
           {isDoctor
-            ? "Are you sure you want to end this consultation? The session will be marked as Completed, the room will close, and the patient will no longer be able to rejoin."
+            ? "Are you sure you want to end this consultation? The session will be concluded, the room will close, and the patient will no longer be able to rejoin."
             : "Are you sure you want to leave the consultation room? Your video call will be disconnected. You can rejoin later from your appointments page."}
         </p>
 
@@ -77,7 +77,7 @@ export default function CallExitConfirmModal({
             onClick={onConfirm}
             className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-xs font-semibold tracking-wide shadow-lg shadow-rose-600/40 transition-all border border-rose-500/50"
           >
-            {isDoctor ? "End & Leave Call" : "Leave Call"}
+            {isDoctor ? "End Consultation & Leave" : "Leave Call"}
           </button>
         </div>
       </div>

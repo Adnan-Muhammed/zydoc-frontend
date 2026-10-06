@@ -44,6 +44,14 @@ import {
   Phone,
   Stethoscope,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+
+const ModalPortal = ({ children }: { children: React.ReactNode }) => {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!mounted) return null;
+    return createPortal(children, document.body);
+};
 
 export default function DoctorAppointmentsPage() {
     const dispatch = useAppDispatch();
@@ -467,10 +475,14 @@ export default function DoctorAppointmentsPage() {
                 );
 
                 return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#101044]/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={handleCloseModal}>
-                        <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] border border-slate-100" onClick={(e) => e.stopPropagation()}>
+                    <ModalPortal>
+                    <div className="fixed inset-0 z-[999] flex justify-end bg-[#101044]/40 backdrop-blur-sm animate-in fade-in duration-200" onClick={handleCloseModal}>
+                        <div 
+                            className="bg-white w-full sm:w-[450px] md:w-[600px] h-[100dvh] shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300 sm:rounded-l-3xl border-l border-slate-100" 
+                            onClick={(e) => e.stopPropagation()}
+                        >
                             {/* Header */}
-                            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 sticky top-0 z-10 shadow-sm">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-600">
                                         <Activity className="w-4 h-4" />
@@ -479,7 +491,8 @@ export default function DoctorAppointmentsPage() {
                                 </div>
                                 <button
                                     onClick={handleCloseModal}
-                                    className="text-slate-400 hover:text-slate-600 transition-colors w-8 h-8 flex items-center justify-center rounded-xl hover:bg-slate-100"
+                                    className="text-slate-500 hover:text-rose-600 transition-colors w-8 h-8 flex items-center justify-center rounded-xl hover:bg-rose-50 bg-slate-50 border border-slate-200/60 shadow-2xs"
+                                    title="Close panel"
                                 >
                                     <X className="w-5 h-5" />
                                 </button>
@@ -762,7 +775,7 @@ export default function DoctorAppointmentsPage() {
                                                 return (
                                                     <div
                                                         key={file.id || i}
-                                                        className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-100/60 transition-colors"
+                                                         className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-100/60 transition-colors"
                                                     >
                                                         <div className="flex items-center gap-3 min-w-0">
                                                             <div className="w-8 h-8 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center shrink-0 text-slate-500">
@@ -817,15 +830,19 @@ export default function DoctorAppointmentsPage() {
 
                                                 if (isExpired) {
                                                     return (
-                                                        <button disabled title="Appointment window has closed" className="flex-1 bg-slate-100 text-slate-400 py-3 rounded-xl font-bold cursor-not-allowed shadow-2xs flex justify-center items-center border border-slate-200/80 text-xs">
-                                                            <VideoOff className="w-4 h-4 mr-2" /> Consultation Window Expired
-                                                        </button>
+                                                        <Link
+                                                            href={`/doctor/consultation/${activeAppointment._id}?join=true`}
+                                                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-xl font-bold text-xs shadow-xs flex justify-center items-center transition-all active:scale-98"
+                                                            title="Consultation window has passed. Enter room to review attendance and conclude session."
+                                                        >
+                                                            <Video className="w-4 h-4 mr-2" /> Enter Room & Conclude Session
+                                                        </Link>
                                                     );
                                                 }
 
                                                 return isReady ? (
                                                     <Link
-                                                        href={`/doctor/consultation/${activeAppointment._id}`}
+                                                        href={`/doctor/consultation/${activeAppointment._id}?join=true`}
                                                         className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold text-xs shadow-xs flex justify-center items-center transition-all active:scale-98"
                                                     >
                                                         <Video className="w-4 h-4 mr-2" /> Join Video Call
@@ -935,16 +952,22 @@ export default function DoctorAppointmentsPage() {
                                         })()}
                                     </>
                                 ) : (
-                                    <div className="w-full flex items-center justify-center py-2 text-xs font-bold text-slate-500 gap-2">
-                                        <span>Status:</span>
-                                        <span className={`px-3 py-1 rounded-full font-bold ${getAppointmentStatusConfig(activeAppointment.status, 'doctor').badgeClass}`}>
-                                            {getAppointmentStatusConfig(activeAppointment.status, 'doctor').label}
-                                        </span>
+                                    <div className="w-full flex flex-col sm:flex-row items-center justify-between py-2 gap-3">
+                                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                                            <span>Status:</span>
+                                            <span className={`px-3 py-1 rounded-full font-bold ${getAppointmentStatusConfig(activeAppointment.status, 'doctor').badgeClass}`}>
+                                                {getAppointmentStatusConfig(activeAppointment.status, 'doctor').label}
+                                            </span>
+                                        </div>
+                                        <button onClick={handleCloseModal} className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all shadow-2xs active:scale-98">
+                                            Close Panel
+                                        </button>
                                     </div>
                                 )}
                             </div>
                         </div>
                     </div>
+                    </ModalPortal>
                 );
             })()}
         </div>

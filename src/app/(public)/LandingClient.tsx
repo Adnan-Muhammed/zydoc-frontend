@@ -1,7 +1,7 @@
 'use client'
 
 import Hero from '@/components/landing/Hero'
-import DoctorSearchSection from '@/components/landing/DoctorSearchSection'
+import WhyChooseUs from '@/components/landing/WhyChooseUs'
 import HowItWorks from '@/components/landing/HowItWorks'
 import Specialists from '@/components/landing/Specialists'
 import Features from '@/components/landing/Features'
@@ -13,7 +13,7 @@ export default function LandingClient() {
   return (
     <div className="overflow-hidden bg-[#f8faff] text-[#10103d]">
       <Hero />
-      <DoctorSearchSection />
+      <WhyChooseUs />
       <HowItWorks />
       <Specialists />
       <Features />

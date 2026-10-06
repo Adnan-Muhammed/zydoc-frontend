@@ -92,7 +92,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
     const base = process.env.NEXT_PUBLIC_API_URL || '';
     return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
+  }; 
 
   // Actions
   const handleApproveDoctor = async () => {

@@ -40,7 +40,7 @@ export default function MedicalRecordsPage() {
       setLoading(true);
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/records`, {
         credentials: 'include'
-      });
+      }); 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to fetch records');
       setRecords(data.data || []);
@@ -75,7 +75,7 @@ export default function MedicalRecordsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/records`, {
         method: 'POST',
-        credentials: 'include',
+        credentials: 'include', 
         body: form
       });
 
@@ -100,7 +100,7 @@ export default function MedicalRecordsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/records/${id}`, {
         method: 'DELETE',
-        credentials: 'include'
+        credentials: 'include' 
       });
 
       const data = await res.json();
@@ -321,7 +321,7 @@ export default function MedicalRecordsPage() {
                   const color = getCategoryColor(record.category);
                   const fileUrl = `${process.env.NEXT_PUBLIC_API_URL}${record.fileUrl?.startsWith('/') ? '' : '/'}${record.fileUrl}`;
                   return (
-                    <tr key={record._id}>
+                    <tr key={record._id}> 
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div

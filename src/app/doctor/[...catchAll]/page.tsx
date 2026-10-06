@@ -19,7 +19,7 @@ export default function DoctorNotFoundPage() {
         
         <p className="text-slate-500 dark:text-slate-400 mb-8 leading-relaxed">
           The page you are looking for doesn't exist or has been moved. Let's get you back to your dashboard.
-        </p>
+        </p> 
 
         <button
           onClick={() => router.push('/doctor/dashboard')}

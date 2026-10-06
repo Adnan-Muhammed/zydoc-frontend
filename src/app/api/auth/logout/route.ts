@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
             }).catch(err => console.error('[logout proxy] Failed to reach backend:', err));
-        }
+        } 
 
         const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
 

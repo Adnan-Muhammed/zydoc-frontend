@@ -11,7 +11,7 @@ export default async function SettingsMatrixPage() {
         redirect('/login'); 
     }
 
-    try {
+    try { 
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/doctor/profile`, {
             headers: {
                 Cookie: `accessToken=${accessToken}`,

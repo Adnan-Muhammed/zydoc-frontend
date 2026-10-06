@@ -377,7 +377,7 @@ export default function DoctorPrescriptionsPage() {
                                                         : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
 
                                                     return (
-                                                        <div
+                                                         <div
                                                             key={file.id || fIdx}
                                                             className="p-3.5 bg-slate-50/70 border border-slate-100 rounded-2xl text-xs flex items-center justify-between gap-3 hover:bg-white hover:border-emerald-100 hover:shadow-2xs transition-all"
                                                         >

@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest) {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`,
-                },
+                }, 
                 body: JSON.stringify(body),
                 cache: 'no-store',
             }

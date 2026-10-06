@@ -22,7 +22,7 @@ export async function createAppointment(data: {
     notes?: string;
 }) {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/appointments`, {
-        method: 'POST',
+        method: 'POST', 
         headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders()

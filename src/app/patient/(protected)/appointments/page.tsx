@@ -10,6 +10,14 @@ import { getAppointmentStatusConfig } from '@/utils/appointmentStatus';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 import { ReviewModal, reviewService } from '@/modules/reviews-ratings';
 import { EARLY_JOIN_MINUTES, MAX_EXTENSION_MINUTES } from '@/config/videoCallConfig';
+import { createPortal } from 'react-dom';
+
+const ModalPortal = ({ children }: { children: React.ReactNode }) => {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!mounted) return null;
+    return createPortal(children, document.body);
+};
 
 const AppointmentTimer = ({ startTime }: { startTime: number }) => {
     const timerRef = React.useRef<HTMLSpanElement>(null);
@@ -178,42 +186,47 @@ export default function PatientAppointmentsPage() {
             ? Math.round((new Date(app.scheduledEndAt).getTime() - new Date(app.scheduledStartAt).getTime()) / 60000)
             : (Number(app.doctorId?.slotDuration) || 15);
 
-        // ── Active Consultation Re-joins vs First-Join Cut-Off (Rule 4) ─────────
-        // If doctor and patient successfully connected previously (hasOverlapped = true),
-        // patient can re-join anytime until the Slot End Time (unless doctor ended it).
+        // ── Rule 9: Active Consultation Re-Join Allowance & Expiry Boundary ─────────
         const slotEndMs = app.scheduledEndAt
             ? new Date(app.scheduledEndAt).getTime()
             : startTime + slotDurationMins * 60 * 1000;
 
-        if (app.hasOverlapped) {
+        const hasConsultationStarted = Boolean(
+            app.hasOverlapped ||
+            app.sessionStartedAt ||
+            (app.doctorJoinedAt && app.patientJoinedAt)
+        );
+
+        // 1. Conditional Re-join Allowance:
+        // If a consultation between doctor and patient has already successfully started
+        // (whether Early Start or Scheduled Start), patient is allowed to re-join the active
+        // ongoing consultation even if initial Late Join Grace has passed.
+        // 2. Access Expiry Boundary:
+        // Re-join option remains active until the appointment's Scheduled End time.
+        if (hasConsultationStarted) {
             if (now >= slotEndMs) {
                 return 'EXPIRED';
             }
             return 'ACTIVE';
         }
 
-        // ── Strict Patient Join Window (no prior overlap) ──────────────────────────
-        // Patient is allowed between earlyJoinAt (scheduledStart - 10min) and
-        // lateJoinCutoffAt. Past the cutoff = EXPIRED.
+        // ── Strict Restrictions for Un-started Appointments ────────────────────────
+        // If the consultation never started, patient must join before lateJoinCutoffMs.
         let lateJoinCutoffMs: number;
         if (app.lateJoinCutoffAt) {
             lateJoinCutoffMs = new Date(app.lateJoinCutoffAt).getTime();
         } else {
-            let graceMins = 5;
-            if (slotDurationMins <= 10) graceMins = 3;
-            else if (slotDurationMins <= 20) graceMins = 5;
-            else if (slotDurationMins <= 30) graceMins = 8;
-            else if (slotDurationMins <= 45) graceMins = 10;
-            else graceMins = 15;
+            const standardGraces: Record<number, number> = { 10: 2, 15: 4, 20: 5, 25: 6, 30: 8, 45: 10 };
+            const graceMins = standardGraces[slotDurationMins] ?? Math.min(10, Math.round(slotDurationMins * 0.25));
             lateJoinCutoffMs = startTime + graceMins * 60 * 1000;
         }
 
-        // Past lateJoinCutoffAt → permanently blocked (both first-join and un-overlapped re-join)
+        // Past lateJoinCutoffMs when consultation never started → permanently blocked (EXPIRED)
         if (now >= lateJoinCutoffMs) {
             return 'EXPIRED';
         }
 
-        // Within earlyJoinAt to lateJoinCutoffAt → ACTIVE (button enabled)
+        // Within earlyJoinAt to lateJoinCutoffMs → ACTIVE (button enabled)
         const earlyJoinMs = EARLY_JOIN_MINUTES * 60 * 1000;
         if (now >= startTime - earlyJoinMs) {
             return 'ACTIVE';
@@ -334,7 +347,7 @@ export default function PatientAppointmentsPage() {
 
         const statusConfig = getAppointmentStatusConfig(app.status, 'patient');
 
-        // Parse avatar correctly if needed
+        // Parse avatar correctly if needed 
         let avatarUrl = "";
         if (doctor.avatarUrl) {
             if (doctor.avatarUrl.startsWith('http://') || doctor.avatarUrl.startsWith('https://')) {
@@ -695,8 +708,9 @@ export default function PatientAppointmentsPage() {
 
             {/* Appointment Details Modal */}
             {selectedAppointment && (
+                <ModalPortal>
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm"
+                    className="fixed inset-0 z-[999] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm"
                     onClick={() => setSelectedAppointment(null)}
                 >
                     <div
@@ -740,7 +754,7 @@ export default function PatientAppointmentsPage() {
                                                 selectedAppointment.doctorId.avatarUrl.startsWith('http')
                                                 ? selectedAppointment.doctorId.avatarUrl
                                                 : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${selectedAppointment.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${selectedAppointment.doctorId.avatarUrl}`
-                                            }
+                                            } 
                                             alt="Doctor"
                                             className="w-full h-full object-cover"
                                         />
@@ -1005,7 +1019,7 @@ export default function PatientAppointmentsPage() {
                                             const iconClass = isPdf ? 'fa-file-pdf text-rose-500' : isImg ? 'fa-file-image text-emerald-500' : 'fa-file-alt text-indigo-500';
                                             const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
                                             const fileUrl = file.url?.startsWith('http') ? file.url : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
-                                            return (
+                                            return ( 
                                                 <div
                                                     key={file.id || i}
                                                     className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 text-xs flex items-center justify-between gap-3 hover:bg-slate-100/70 transition-colors"
@@ -1058,10 +1072,12 @@ export default function PatientAppointmentsPage() {
                         </div>
                     </div>
                 </div>
+                </ModalPortal>
             )}
             {/* Task 1: Patient Cancellation Modal */}
             {cancelModalAppointment && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                <ModalPortal>
+                <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-rose-50/50">
                             <div className="flex items-center gap-3">
@@ -1126,11 +1142,13 @@ export default function PatientAppointmentsPage() {
                         </div>
                     </div>
                 </div>
+                </ModalPortal>
             )}
 
             {/* Task 3: Offline No-Show Dispute / Refund Request Modal */}
             {disputeModalAppointment && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                <ModalPortal>
+                <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-amber-50/50">
                             <div className="flex items-center gap-3">
@@ -1206,10 +1224,12 @@ export default function PatientAppointmentsPage() {
                         </div>
                     </div>
                 </div>
+                </ModalPortal>
             )}
 
             {/* Doctor Review & Rating Modal */}
             {reviewModalAppointment && (
+                <ModalPortal>
                 <ReviewModal
                     isOpen={Boolean(reviewModalAppointment)}
                     onClose={() => {
@@ -1242,6 +1262,7 @@ export default function PatientAppointmentsPage() {
                         avatarUrl: reviewModalAppointment.doctorId?.avatarUrl,
                     }}
                 />
+                </ModalPortal>
             )}
         </div>
     );

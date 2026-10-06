@@ -17,7 +17,7 @@ export default async function DoctorLayout({
   if (!accessToken) redirect('/login');
 
   let user = null;
-
+ 
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
       headers: {

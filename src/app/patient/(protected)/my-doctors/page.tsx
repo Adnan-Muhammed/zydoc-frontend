@@ -149,13 +149,14 @@ export default function MyDoctorsPage() {
   const fetchMyDoctors = async () => {
     setLoading(true);
     try {
-      const res = await axiosInstance.get('/api/patient/my-doctors');
+      const res = await axiosInstance.get('/patient/my-doctors');
       if (res.data && res.data.success) {
-        setDoctors(res.data.data.doctors || []);
+        setDoctors(res.data.doctors || res.data.data?.doctors || []);
       }
     } catch (err: any) {
       console.error('Failed to fetch consulted doctors:', err);
-      toast.error(err.response?.data?.message || 'Failed to load consulted doctors');
+      const errorMessage = err.response?.data?.message || err.message || 'Unknown network error occurred';
+      toast.error(`Error: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -165,9 +166,9 @@ export default function MyDoctorsPage() {
     setSelectedDoctorId(doctorId);
     setHistoryLoading(true);
     try {
-      const res = await axiosInstance.get(`/api/patient/my-doctors/${doctorId}/history`);
+      const res = await axiosInstance.get(`/patient/my-doctors/${doctorId}/history`);
       if (res.data && res.data.success) {
-        setHistoryData(res.data.data);
+        setHistoryData(res.data.data || res.data);
       }
     } catch (err: any) {
       console.error('Failed to load consultation history:', err);
@@ -411,20 +412,29 @@ export default function MyDoctorsPage() {
           <p style={{ color: 'var(--pat-text-soft)', fontSize: '0.9rem' }}>Loading your consulted doctors...</p>
         </div>
       ) : filteredDoctors.length === 0 ? (
-        <div className="pat-card pat-empty">
-          <div className="pat-empty-icon">
-            <Stethoscope size={30} />
+        <div className="pat-card" style={{ padding: '64px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #ede9fe, #dbeafe)', color: 'var(--pat-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, border: '4px solid #f8fafc' }}>
+            <Stethoscope size={40} />
           </div>
-          <h3>{searchQuery ? 'No matching doctors found' : 'No Consulted Doctors Yet'}</h3>
-          <p>
+          <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--pat-text)', marginBottom: 12 }}>
+            {searchQuery ? 'No Matching Doctors Found' : 'No Consulted Doctors Yet'}
+          </h3>
+          <p style={{ color: 'var(--pat-text-soft)', fontSize: '0.95rem', maxWidth: 450, margin: '0 auto 24px', lineHeight: 1.6 }}>
             {searchQuery
-              ? `No doctors found matching "${searchQuery}".`
-              : 'Doctors you consult with through video calls or clinic visits will be saved here for instant rebooking and record access.'}
+              ? `We couldn't find any doctors matching "${searchQuery}". Try adjusting your filters or search terms.`
+              : 'Your consultation history is currently empty. Doctors you consult with through video calls or in-person clinic visits will automatically appear here for quick access to records and instant rebooking.'}
           </p>
-          <Link href="/patient/find-doctor" className="pat-btn pat-btn-primary" style={{ marginTop: 12 }}>
-            <Search size={15} />
-            <span>Find a Specialist Now</span>
-          </Link>
+          {searchQuery ? (
+            <button onClick={() => setSearchQuery('')} className="pat-btn pat-btn-outline" style={{ padding: '10px 24px' }}>
+              <X size={16} />
+              <span>Clear Search</span>
+            </button>
+          ) : (
+            <Link href="/patient/find-doctor" className="pat-btn pat-btn-primary" style={{ padding: '12px 28px', fontSize: '0.95rem' }}>
+              <Search size={18} />
+              <span>Find & Book a Specialist</span>
+            </Link>
+          )}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>

@@ -108,6 +108,33 @@ export default function VideoCallRoom({
       ? "/doctor/dashboard"
       : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
 
+  const { doctorAppointments, currentAppointment } = useAppSelector((state) => state.appointment);
+
+  // Track strictly continuous overlap time (Doctor 3-Minute Rule)
+  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRemoteReady) {
+      interval = setInterval(() => {
+        setContinuousOverlapSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setContinuousOverlapSeconds(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRemoteReady]);
+
+  const hasConsultationStarted = Boolean(
+    (currentAppointment as any)?.hasOverlapped ||
+    (currentAppointment as any)?.sessionStartedAt ||
+    ((currentAppointment as any)?.doctorJoinedAt && (currentAppointment as any)?.patientJoinedAt) ||
+    isRemoteReady ||
+    continuousOverlapSeconds > 0
+  );
+
   // ── Patient 1-Minute Mandatory Waiting & Lock State (Rule 2) ────────────────
   const [patientRoomElapsedSeconds, setPatientRoomElapsedSeconds] = useState<number>(0);
   const patientJoinedTimeRef = useRef<number>(Date.now());
@@ -124,13 +151,33 @@ export default function VideoCallRoom({
   }, [normalizedRole]);
 
   const canExit = useCallback(() => {
+    if (
+      normalizedRole === "doctor" &&
+      timerConfig &&
+      (hasConsultationStarted || isRemoteReady) &&
+      continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
+    ) {
+      return false;
+    }
     if (normalizedRole === "patient" && patientRoomElapsedSeconds < 60) {
       return false;
     }
     return true;
-  }, [normalizedRole, patientRoomElapsedSeconds]);
+  }, [normalizedRole, timerConfig, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds]);
 
   const onExitBlocked = useCallback(() => {
+    if (
+      normalizedRole === "doctor" &&
+      (hasConsultationStarted || isRemoteReady) &&
+      continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
+    ) {
+      const remaining = MIN_CONSULTATION_DURATION_SECONDS - continuousOverlapSeconds;
+      setPatientLockWarning(
+        `Mandatory Consultation Duration: A minimum of 3 continuous minutes with the patient is required before ending the session (${remaining}s remaining). If disconnected, participants must rejoin to complete.`
+      );
+      setTimeout(() => setPatientLockWarning(null), 5000);
+      return;
+    }
     if (normalizedRole === "patient" && patientRoomElapsedSeconds < 60) {
       const remaining = 60 - patientRoomElapsedSeconds;
       setPatientLockWarning(
@@ -138,7 +185,7 @@ export default function VideoCallRoom({
       );
       setTimeout(() => setPatientLockWarning(null), 5000);
     }
-  }, [normalizedRole, patientRoomElapsedSeconds]);
+  }, [normalizedRole, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds]);
 
   const {
     isExitModalOpen,
@@ -192,28 +239,10 @@ export default function VideoCallRoom({
     appointmentTime?: string;
   } | null>(null);
 
-  const { doctorAppointments, currentAppointment } = useAppSelector((state) => state.appointment);
   const [dismissedOfflineAlertIds, setDismissedOfflineAlertIds] = useState<string[]>([]);
   const [callCurrentTime, setCallCurrentTime] = useState<number>(Date.now());
   const [doctorAbsenceWarning, setDoctorAbsenceWarning] = useState<{ message: string; lateJoinCutoffAt?: string } | null>(null);
   const [isDoctorMissed, setIsDoctorMissed] = useState<{ message: string } | null>(null);
-  
-  // Track strictly continuous overlap time (Rule 2)
-  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState(0);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRemoteReady) {
-      interval = setInterval(() => {
-        setContinuousOverlapSeconds((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setContinuousOverlapSeconds(0);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRemoteReady]);
 
   useEffect(() => {
     if (appointmentId && (!currentAppointment || currentAppointment._id !== appointmentId)) {
@@ -645,12 +674,18 @@ export default function VideoCallRoom({
           isPatient={normalizedRole === "patient"}
           patientRoomElapsedSeconds={patientRoomElapsedSeconds}
           minPatientWaitSeconds={60}
+          isRemoteReady={isRemoteReady}
+          hasConsultationStarted={hasConsultationStarted}
           onEndCall={() => {
-            // Guard: doctor cannot open End Call modal until 3-minute strictly continuous overlap elapses.
-            // Server enforces this too (EndRoomUseCase), but we also block the UI modal
-            // here so the doctor gets clear feedback without a server round-trip rejection.
-            if (normalizedRole === "doctor" && timerConfig && continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS) {
-              return; // Button is already visually locked — do nothing
+            // Guard: doctor cannot open End Call modal if consultation has started or active until 3 continuous minutes elapse
+            if (
+              normalizedRole === "doctor" &&
+              timerConfig &&
+              (hasConsultationStarted || isRemoteReady) &&
+              continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
+            ) {
+              onExitBlocked();
+              return;
             }
             // Guard: patient cannot open Leave modal during mandatory 1-minute waiting period (Rule 2)
             if (normalizedRole === "patient" && patientRoomElapsedSeconds < 60) {

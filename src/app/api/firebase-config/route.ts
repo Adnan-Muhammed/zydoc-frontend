@@ -20,7 +20,7 @@ import { NextResponse } from "next/server";
  *   All values returned here are NEXT_PUBLIC_ variables — they are already
  *   baked into the client-side JavaScript bundle by Next.js at build time.
  *   There is NO sensitive information in this response.
- *
+ * 
  * The service worker fetches this route during its `activate` event and
  * stores the config in-memory before calling `initializeApp()`.
  */
@@ -32,7 +32,7 @@ export async function GET() {
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  };
+  }; 
 
   // Validate that all required fields are present
   const missingKeys = Object.entries(config)

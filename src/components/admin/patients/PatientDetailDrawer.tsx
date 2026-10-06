@@ -83,7 +83,7 @@ export default function PatientDetailDrawer({
         res.message ||
           `Patient account has been ${newStatus === 'active' ? 'reactivated' : 'suspended'}.`
       );
-      onStatusToggled?.();
+      onStatusToggled?.(); 
     } catch (err: any) {
       toast.error(err || 'Failed to update patient account status.');
     } finally {

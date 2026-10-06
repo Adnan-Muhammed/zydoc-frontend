@@ -4,9 +4,10 @@
 
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react'; 
+import { useState, useEffect, useMemo } from 'react'; 
 import Link from 'next/link';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
+import { fetchDoctorDashboardStats } from '@/redux/features/doctor/doctorThunk';
 import { useSocket } from '@/hooks/useSocket';
 import { getAppointmentStatusConfig, getAppointmentStartTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
 import {
@@ -38,6 +39,7 @@ import './doctor-dashboard.css';
 export default function DoctorDashboardPage() {
   const router = useRouter();
   const { user, isLoading } = useAppSelector((state) => state.auth);
+  const { dashboardStats, isLoadingStats } = useAppSelector((state) => state.doctor);
 
   const isPending =
     user?.verificationStatus === 'pending' ||
@@ -85,6 +87,7 @@ export default function DoctorDashboardPage() {
   useEffect(() => {
     if (user && isApproved) {
       dispatch(fetchDoctorAppointments());
+      dispatch(fetchDoctorDashboardStats());
     }
   }, [user, isApproved, dispatch]);
 
@@ -169,6 +172,63 @@ export default function DoctorDashboardPage() {
   });
 
   const doctorSpecialty = (user as any)?.specialty || (user as any)?.profileId?.specialization || 'Medical Specialist';
+
+  // Dynamic exact data metrics
+  const totalPatientsCount = dashboardStats?.totalPatients ?? (
+    appointments ? new Set(appointments.filter((a: any) => a.patientId).map((a: any) => String(a.patientId?._id || a.patientId?.id || a.patientId))).size : 0
+  );
+
+  const completedApptsCount = dashboardStats?.completedAppointments ?? (
+    appointments ? appointments.filter((a: any) => (a.status || '').toLowerCase() === 'completed').length : 0
+  );
+
+  const upcomingApptsCount = dashboardStats?.upcomingAppointments ?? (
+    appointments ? appointments.filter((a: any) => isAppointmentUpcomingOrActive(a)).length : 0
+  );
+
+  const totalApptsCount = dashboardStats?.totalAppointments ?? (appointments?.length || 0);
+
+  const totalRevenue = dashboardStats?.totalEarnings ?? (
+    appointments ? appointments.filter((a: any) => (a.status || '').toLowerCase() === 'completed').reduce((sum: number, a: any) => sum + (a.doctorAmount || a.fee || 0), 0) : 0
+  );
+  const pendingRevenue = dashboardStats?.pendingEarnings ?? 0;
+  const settledRevenue = dashboardStats?.settledEarnings ?? 0;
+
+  const doctorRatingNum = dashboardStats?.rating ?? (user as any)?.rating ?? (user as any)?.profileId?.rating ?? 0;
+  const totalReviewsCount = dashboardStats?.totalReviews ?? (user as any)?.reviewCount ?? (user as any)?.profileId?.reviewCount ?? 0;
+  const ratingFormatted = doctorRatingNum > 0 ? Number(doctorRatingNum).toFixed(1) : '0.0';
+
+  const qualityPercentage = dashboardStats?.qualityScore ?? (doctorRatingNum > 0 ? Math.round((doctorRatingNum / 5) * 100) : (totalApptsCount > 0 ? 100 : 0));
+  const satisfactionPercentage = dashboardStats?.satisfactionRate ?? (totalReviewsCount > 0 ? 100 : (totalApptsCount > 0 ? 100 : 0));
+
+  const onlineConfig = dashboardStats?.consultationSettings?.online ?? (user as any)?.profileId?.consultationSettings?.online ?? { enabled: true, fee: 0 };
+  const offlineConfig = dashboardStats?.consultationSettings?.offline ?? (user as any)?.profileId?.consultationSettings?.offline ?? { enabled: false, fee: 0 };
+
+  const isOnlineActive = Boolean(onlineConfig.enabled);
+  const isOfflineActive = Boolean(offlineConfig.enabled);
+  const availabilityTitle = isOnlineActive && isOfflineActive
+    ? 'Online & In-Clinic Bookings Active'
+    : isOnlineActive
+    ? 'Online Video Consultations Active'
+    : isOfflineActive
+    ? 'In-Clinic Bookings Active'
+    : 'Consultation Bookings Inactive';
+
+  const availabilityDesc = isOnlineActive && isOfflineActive
+    ? `Video Consults (₹${onlineConfig.fee}) & Clinic Visits (₹${offlineConfig.fee}) are live for booking.`
+    : isOnlineActive
+    ? `Video Consultations (₹${onlineConfig.fee}) are live for booking based on your weekly schedule.`
+    : isOfflineActive
+    ? `In-Clinic Visits (₹${offlineConfig.fee}) are live for booking at your clinic.`
+    : 'Set your consultation fees and weekly shift timings in Schedule to enable bookings.';
+
+  const getRatingBadge = () => {
+    if (doctorRatingNum >= 4.8) return { label: 'Top 5% Rated', class: 'bg-amber-50 text-amber-800 border-amber-200/60' };
+    if (doctorRatingNum >= 4.0) return { label: 'Highly Rated', class: 'bg-indigo-50 text-indigo-700 border-indigo-200/60' };
+    if (doctorRatingNum > 0) return { label: 'Verified Rating', class: 'bg-emerald-50 text-emerald-700 border-emerald-200/60' };
+    return { label: 'Verified Physician', class: 'bg-slate-50 text-slate-700 border-slate-200/60' };
+  };
+  const ratingBadge = getRatingBadge();
 
   return (
     <div className="doc-page flex flex-col flex-1 space-y-6 sm:space-y-8">
@@ -641,9 +701,9 @@ export default function DoctorDashboardPage() {
                 <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100/70 group-hover:scale-105 transition-transform">
                   <Users className="w-6 h-6" />
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200/60">
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
-                  +12%
+                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 border border-indigo-200/60">
+                  <Activity className="w-3 h-3 text-indigo-600" />
+                  {totalPatientsCount} Patient{totalPatientsCount === 1 ? '' : 's'}
                 </span>
               </div>
 
@@ -652,10 +712,10 @@ export default function DoctorDashboardPage() {
                   Total Patients
                 </p>
                 <h2 className="mt-1 text-3xl sm:text-4xl font-extrabold text-[#101044] tracking-tight">
-                  342
+                  {totalPatientsCount}
                 </h2>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  Active patients under your care
+                  {completedApptsCount > 0 ? `${completedApptsCount} completed consultation${completedApptsCount === 1 ? '' : 's'}` : 'Distinct patients under your care'}
                 </p>
               </div>
             </div>
@@ -667,20 +727,20 @@ export default function DoctorDashboardPage() {
                   <CalendarCheck className="w-6 h-6" />
                 </div>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200/60">
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
-                  +5 vs last mo
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  {upcomingApptsCount} Upcoming
                 </span>
               </div>
 
               <div className="mt-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Appointments
+                  Total Appointments
                 </p>
                 <h2 className="mt-1 text-3xl sm:text-4xl font-extrabold text-[#101044] tracking-tight">
-                  {appointments ? appointments.length : 28}
+                  {totalApptsCount}
                 </h2>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  Scheduled & completed consultations
+                  {upcomingApptsCount} scheduled • {completedApptsCount} completed
                 </p>
               </div>
             </div>
@@ -691,9 +751,9 @@ export default function DoctorDashboardPage() {
                 <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 border border-blue-100/70 group-hover:scale-105 transition-transform">
                   <Wallet className="w-6 h-6" />
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200/60">
-                  <TrendingUp className="w-3 h-3 text-emerald-600" />
-                  +14%
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 border border-blue-200/60">
+                  <TrendingUp className="w-3 h-3 text-blue-600" />
+                  Wallet Active
                 </span>
               </div>
 
@@ -702,10 +762,10 @@ export default function DoctorDashboardPage() {
                   Practice Revenue
                 </p>
                 <h2 className="mt-1 text-3xl sm:text-4xl font-extrabold text-[#101044] tracking-tight">
-                  ₹2,840
+                  ₹{totalRevenue.toLocaleString('en-IN')}
                 </h2>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  Disbursed directly to your wallet
+                  ₹{settledRevenue.toLocaleString('en-IN')} settled • ₹{pendingRevenue.toLocaleString('en-IN')} pending
                 </p>
               </div>
             </div>
@@ -716,8 +776,8 @@ export default function DoctorDashboardPage() {
                 <div className="flex h-13 w-13 items-center justify-center rounded-2xl bg-amber-50 text-amber-500 border border-amber-100/70 group-hover:scale-105 transition-transform">
                   <Star className="w-6 h-6 fill-amber-400 text-amber-400" />
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200/60">
-                  Top 5% Rated
+                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold border ${ratingBadge.class}`}>
+                  {ratingBadge.label}
                 </span>
               </div>
 
@@ -727,12 +787,12 @@ export default function DoctorDashboardPage() {
                 </p>
                 <div className="mt-1 flex items-baseline gap-2">
                   <h2 className="text-3xl sm:text-4xl font-extrabold text-[#101044] tracking-tight">
-                    4.8
+                    {ratingFormatted}
                   </h2>
                   <span className="text-xs font-semibold text-slate-400">/ 5.0</span>
                 </div>
                 <p className="mt-2 text-xs font-medium text-slate-500">
-                  Based on 125 patient reviews
+                  {totalReviewsCount === 0 ? 'No patient reviews received yet' : `Based on ${totalReviewsCount} verified review${totalReviewsCount === 1 ? '' : 's'}`}
                 </p>
               </div>
             </div>
@@ -920,16 +980,23 @@ export default function DoctorDashboardPage() {
                     <div>
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Patient Rating</span>
                       <div className="flex items-baseline gap-2 mt-0.5">
-                        <span className="text-3xl font-extrabold text-[#101044]">4.8</span>
+                        <span className="text-3xl font-extrabold text-[#101044]">{ratingFormatted}</span>
                         <div className="flex items-center gap-0.5">
                           {[1, 2, 3, 4, 5].map((s) => (
-                            <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            <Star
+                              key={s}
+                              className={`w-4 h-4 ${
+                                s <= Math.round(doctorRatingNum)
+                                  ? 'fill-amber-400 text-amber-400'
+                                  : 'fill-slate-200 text-slate-200'
+                              }`}
+                            />
                           ))}
                         </div>
                       </div>
                     </div>
                     <span className="text-xs font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-                      125 reviews
+                      {totalReviewsCount} review{totalReviewsCount === 1 ? '' : 's'}
                     </span>
                   </div>
 
@@ -937,20 +1004,26 @@ export default function DoctorDashboardPage() {
                     <div>
                       <div className="flex justify-between mb-1">
                         <span>Consultation Quality</span>
-                        <span className="font-bold text-[#101044]">98%</span>
+                        <span className="font-bold text-[#101044]">{qualityPercentage}%</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full w-[98%]"></div>
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                          style={{ width: `${qualityPercentage}%` }}
+                        ></div>
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between mb-1">
                         <span>Patient Satisfaction</span>
-                        <span className="font-bold text-[#101044]">96%</span>
+                        <span className="font-bold text-[#101044]">{satisfactionPercentage}%</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full bg-indigo-600 rounded-full w-[96%]"></div>
+                        <div
+                          className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+                          style={{ width: `${satisfactionPercentage}%` }}
+                        ></div>
                       </div>
                     </div>
                   </div>
@@ -960,13 +1033,13 @@ export default function DoctorDashboardPage() {
                 <div className="mt-5 rounded-2xl border border-slate-100 p-4 bg-white shadow-2xs">
                   <div className="flex items-center gap-2.5">
                     <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isOnlineActive || isOfflineActive ? 'bg-emerald-400' : 'bg-slate-400'} opacity-75`}></span>
+                      <span className={`relative inline-flex rounded-full h-3 w-3 ${isOnlineActive || isOfflineActive ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
                     </span>
-                    <span className="text-xs font-bold text-[#101044]">Online & In-Clinic Bookings Active</span>
+                    <span className="text-xs font-bold text-[#101044]">{availabilityTitle}</span>
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
-                    Patients can book instant video consults and clinic visits based on your configured weekly slots.
+                    {availabilityDesc}
                   </p>
                 </div>
               </div>
@@ -1003,7 +1076,7 @@ export default function DoctorDashboardPage() {
               : "Your doctor dashboard tools and live consultation rooms will unlock automatically as soon as your medical credentials are approved."}
           </p>
         </div>
-      )}
+      )} 
 
     </div>
   );

@@ -30,7 +30,7 @@ export default function PatientProfilePage() {
     const fetchProfile = async () => {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile`, {
-          credentials: 'include',
+          credentials: 'include', 
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || 'Failed to fetch profile');

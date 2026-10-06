@@ -1,20 +1,23 @@
-// src/app/patient/(protected)/dashboard/DashBoardClient.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '@/redux/store';
+import { fetchPatientAppointments } from '@/redux/features/appointment/appointmentThunk';
+import { fetchWalletDetails } from '@/redux/features/wallet/walletThunk';
+import { fetchNotifications } from '@/redux/features/notification/notificationThunk';
+import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 import {
   CalendarCheck,
   Search,
   Stethoscope,
   Wallet,
   Pill,
-  FileHeart,
   Bell,
   ArrowRight,
   Clock,
   Video,
-  TrendingDown,
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
@@ -24,30 +27,125 @@ type Props = {
     name?: string;
     email?: string;
     role?: string;
+    googleName?: string;
   } | null;
 };
 
-const QUICK_ACTIONS = [
-  { href: '/patient/find-doctor',   icon: Search,         label: 'Find Doctor',    color: 'indigo'  },
-  { href: '/patient/appointments',  icon: CalendarCheck,  label: 'Appointments',   color: 'sky'     },
-  { href: '/patient/prescriptions', icon: Pill,           label: 'Prescriptions',  color: 'emerald' },
-  { href: '/patient/records',       icon: FileHeart,      label: 'Records',        color: 'rose'    },
-  { href: '/patient/wallet',        icon: Wallet,         label: 'My Wallet',      color: 'amber'   },
-  { href: '/patient/notifications', icon: Bell,           label: 'Notifications',  color: 'indigo'  },
-];
 
-const QA_COLORS: Record<string, string> = {
-  indigo:  'bg-indigo-50 text-indigo-600 hover:bg-indigo-100',
-  sky:     'bg-sky-50 text-sky-600 hover:bg-sky-100',
-  emerald: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100',
-  rose:    'bg-rose-50 text-rose-600 hover:bg-rose-100',
-  amber:   'bg-amber-50 text-amber-600 hover:bg-amber-100',
+// Helper to calculate time ago
+const timeAgo = (dateString: string) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  
+  if (diffInSeconds < 60) return 'Just now';
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} hr${diffInHours > 1 ? 's' : ''} ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 30) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
 };
 
 export default function DashboardClient({ user }: Props) {
-  const firstName = user?.name?.split(' ')[0] || 'there';
+  const dispatch = useDispatch<AppDispatch>();
+
+  const { appointments } = useSelector((state: RootState) => state.appointment);
+  const { transactions } = useSelector((state: RootState) => state.wallet);
+  const { notifications } = useSelector((state: RootState) => state.notification);
+
+  useEffect(() => {
+    dispatch(fetchPatientAppointments());
+    dispatch(fetchWalletDetails());
+    dispatch(fetchNotifications());
+  }, [dispatch]);
+
+  const firstName = user?.name?.split(' ')[0] || user?.googleName?.split(' ')[0] || 'there';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  // Derived data
+  const { upcomingApps, completedApps, totalSpent, uniqueDoctors, latestPrescriptions } = useMemo(() => {
+    const getAppTimestamp = (app: any) => {
+        if (app?.scheduledStartAt) {
+            const t = new Date(app.scheduledStartAt).getTime();
+            if (!isNaN(t)) return t;
+        }
+        const appDate = new Date(app?.appointmentDate);
+        if (!app?.appointmentTime) return appDate.getTime();
+        const [timePart, modifier] = app.appointmentTime.trim().split(/\s+/);
+        let [hours, minutes] = timePart.split(':').map(Number);
+        if (modifier?.toUpperCase() === 'PM' && hours < 12) hours += 12;
+        if (modifier?.toUpperCase() === 'AM' && hours === 12) hours = 0;
+        return new Date(appDate.getFullYear(), appDate.getMonth(), appDate.getDate(), hours, minutes, 0).getTime();
+    };
+
+    const isUpcoming = (app: any) => {
+        if (['cancelled', 'completed', 'no-show', 'cancelled_by_doctor', 'disputed', 'refunded', 'doctor_missed'].includes(app.status)) return false;
+        const slotDurationMins = Number(app.doctorId?.slotDuration) || 15;
+        const exactAppEndTime = (app.scheduledEndAt 
+            ? new Date(app.scheduledEndAt).getTime() 
+            : getAppTimestamp(app) + slotDurationMins * 60 * 1000) + 10 * 60 * 1000;
+        return Date.now() <= exactAppEndTime;
+    };
+
+    const apps = appointments || [];
+    const upcoming = apps.filter(isUpcoming).sort((a,b) => getAppTimestamp(a) - getAppTimestamp(b));
+    const completed = apps.filter((app: any) => app.status === 'completed').sort((a,b) => getAppTimestamp(b) - getAppTimestamp(a));
+    
+    // Total spent (sum up all DEBITs)
+    const spent = (transactions || []).filter((t: any) => t.type === 'DEBIT').reduce((acc: number, t: any) => acc + t.amount, 0);
+    
+    const docSet = new Set(apps.map((app: any) => app.doctorId?._id).filter(Boolean));
+    
+    const prescriptions = apps
+      .filter((app: any) => app.prescriptions && app.prescriptions.length > 0)
+      .sort((a,b) => getAppTimestamp(b) - getAppTimestamp(a))
+      .slice(0, 2);
+
+    return {
+      upcomingApps: upcoming,
+      completedApps: completed,
+      totalSpent: spent,
+      uniqueDoctors: docSet.size,
+      latestPrescriptions: prescriptions
+    };
+  }, [appointments, transactions]);
+
+  const upcomingCount = upcomingApps.length;
+  const topUpcoming = upcomingApps[0];
+  const recentApp = completedApps[0];
+  const recentNotifs = (notifications || []).slice(0, 3);
+
+  const handleDownloadPrescription = (app: any) => {
+    if (!app) return;
+    const doctor = app.doctorId || {};
+    const doctorName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim() || 'Dr. Consultant';
+    const patientName = user?.name || user?.googleName || user?.email || 'Patient';
+
+    generatePrescriptionPdf({
+        appointmentId: app._id,
+        date: new Date(app.appointmentDate).toDateString(),
+        time: app.appointmentTime,
+        consultationType:
+            app.consultationType === 'offline' || app.consultationType === 'physical'
+                ? 'In-Person Consultation'
+                : 'Online Video Consultation',
+        patient: { name: patientName },
+        doctor: {
+            name: doctorName,
+            specialty: doctor.specialty || 'General Practice',
+            qualifications: doctor.qualifications,
+            clinicName:
+                doctor.consultationSettings?.offline?.clinicName ||
+                doctor.consultationSettings?.physical?.clinicName,
+        },
+        prescriptions: app.prescriptions || [],
+        clinicalAdvice: 'Take medications strictly as directed. If symptoms persist or adverse reactions occur, contact your doctor immediately.',
+    });
+  };
 
   return (
     <div className="pat-page space-y-6">
@@ -57,7 +155,9 @@ export default function DashboardClient({ user }: Props) {
         <div>
           <p className="text-xs font-bold text-white/70 mb-1 uppercase tracking-widest">{greeting}</p>
           <h2>{firstName} 👋</h2>
-          <p className="mt-1">You have <strong>1 upcoming appointment</strong> today.</p>
+          <p className="mt-1">
+            You have <strong>{upcomingCount} upcoming appointment{upcomingCount !== 1 ? 's' : ''}</strong> today.
+          </p>
           <div className="pat-hero-actions">
             <Link href="/patient/find-doctor" className="pat-btn pat-btn-white pat-btn-sm">
               <Search size={14} /> Find a Doctor
@@ -80,50 +180,26 @@ export default function DashboardClient({ user }: Props) {
       <div className="pat-stats-grid">
         <div className="pat-stat-card indigo">
           <div className="pat-stat-icon-wrap"><CalendarCheck size={20} /></div>
-          <div className="pat-stat-value">1</div>
+          <div className="pat-stat-value">{upcomingCount}</div>
           <div className="pat-stat-label">Upcoming</div>
-          <div className="pat-stat-change up"><TrendingDown size={12} /> Today</div>
         </div>
         <div className="pat-stat-card sky">
           <div className="pat-stat-icon-wrap"><CheckCircle2 size={20} /></div>
-          <div className="pat-stat-value">8</div>
+          <div className="pat-stat-value">{completedApps.length}</div>
           <div className="pat-stat-label">Total Visits</div>
         </div>
         <div className="pat-stat-card emerald">
           <div className="pat-stat-icon-wrap"><Stethoscope size={20} /></div>
-          <div className="pat-stat-value">5</div>
+          <div className="pat-stat-value">{uniqueDoctors}</div>
           <div className="pat-stat-label">Doctors</div>
         </div>
         <div className="pat-stat-card amber">
           <div className="pat-stat-icon-wrap"><Wallet size={20} /></div>
-          <div className="pat-stat-value">₹290</div>
+          <div className="pat-stat-value">₹{totalSpent}</div>
           <div className="pat-stat-label">Spent</div>
-          <div className="pat-stat-change down">↓ 12% this month</div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="pat-card">
-        <div className="pat-card-header">
-          <h2>Quick Actions</h2>
-        </div>
-        <div className="pat-card-body">
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-            {QUICK_ACTIONS.map(({ href, icon: Icon, label, color }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`flex flex-col items-center gap-2.5 p-3 rounded-2xl transition-all duration-150 text-center group ${QA_COLORS[color]}`}
-              >
-                <div className="w-11 h-11 rounded-xl bg-white/70 flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-150">
-                  <Icon size={20} />
-                </div>
-                <span className="text-xs font-semibold leading-tight">{label}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {/* Main Content Grid */}
       <div className="pat-content-grid">
@@ -140,34 +216,48 @@ export default function DashboardClient({ user }: Props) {
               </Link>
             </div>
             <div className="pat-card-body">
-              <div className="pat-list-item">
-                <div className="pat-list-avatar">
-                  <Stethoscope size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div>
-                      <p className="font-bold text-sm text-slate-900">Dr. Sarah Johnson</p>
-                      <p className="text-xs text-indigo-600 font-semibold mt-0.5">General Practitioner</p>
+              {topUpcoming ? (
+                <div className="pat-list-item">
+                  <div className="pat-list-avatar">
+                    {topUpcoming.doctorId?.avatarUrl ? (
+                        <img 
+                            src={topUpcoming.doctorId.avatarUrl.startsWith('http') 
+                                ? topUpcoming.doctorId.avatarUrl 
+                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${topUpcoming.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${topUpcoming.doctorId.avatarUrl}`
+                            } 
+                            alt="Doctor"
+                            className="w-full h-full object-cover rounded-full"
+                        /> 
+                    ) : (
+                        <Stethoscope size={22} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="font-bold text-sm text-slate-900">Dr. {topUpcoming.doctorId?.firstName} {topUpcoming.doctorId?.lastName}</p>
+                        <p className="text-xs text-indigo-600 font-semibold mt-0.5 capitalize">{topUpcoming.doctorId?.specialty || 'Consultant'}</p>
+                      </div>
+                      <span className="pat-badge pat-badge-scheduled whitespace-nowrap capitalize">{topUpcoming.status}</span>
                     </div>
-                    <span className="pat-badge pat-badge-scheduled whitespace-nowrap">Scheduled</span>
-                  </div>
-                  <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
-                    <span className="flex items-center gap-1.5"><Clock size={12} /> Mar 15, 2025 · 2:00 PM</span>
-                    <span className="flex items-center gap-1.5"><Video size={12} /> Video Call</span>
-                  </div>
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    <button className="pat-btn pat-btn-primary pat-btn-sm"><Video size={13} /> Join Now</button>
-                    <button className="pat-btn pat-btn-outline pat-btn-sm">Reschedule</button>
-                    <button
-                      className="pat-btn pat-btn-sm"
-                      style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #fecdd3' }}
-                    >
-                      Cancel
-                    </button>
+                    <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
+                      <span className="flex items-center gap-1.5"><Clock size={12} /> {new Date(topUpcoming.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {topUpcoming.appointmentTime}</span>
+                      <span className="flex items-center gap-1.5 capitalize"><Video size={12} /> {topUpcoming.consultationType} Call</span>
+                    </div>
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {(topUpcoming.consultationType === 'online' || topUpcoming.consultationType === 'video') && (
+                          <Link href={`/patient/consultation/${topUpcoming._id}`} className="pat-btn pat-btn-primary pat-btn-sm">
+                            <Video size={13} /> {topUpcoming.patientJoinedAt ? 'Rejoin Call' : 'Join Now'}
+                          </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 text-center text-slate-500 text-sm">
+                  No upcoming appointments.
+                </div>
+              )}
             </div>
           </div>
 
@@ -180,30 +270,49 @@ export default function DashboardClient({ user }: Props) {
               </Link>
             </div>
             <div className="pat-card-body">
-              <div className="pat-list-item">
-                <div className="pat-list-avatar">
-                  <Stethoscope size={22} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div>
-                      <p className="font-bold text-sm text-slate-900">Dr. Michael Chen</p>
-                      <p className="text-xs text-indigo-600 font-semibold mt-0.5">Pediatrician</p>
+              {recentApp ? (
+                <div className="pat-list-item">
+                  <div className="pat-list-avatar">
+                    {recentApp.doctorId?.avatarUrl ? (
+                        <img 
+                            src={recentApp.doctorId.avatarUrl.startsWith('http') 
+                                ? recentApp.doctorId.avatarUrl 
+                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${recentApp.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${recentApp.doctorId.avatarUrl}`
+                            } 
+                            alt="Doctor"
+                            className="w-full h-full object-cover rounded-full"
+                        />
+                    ) : ( 
+                        <Stethoscope size={22} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div>
+                        <p className="font-bold text-sm text-slate-900">Dr. {recentApp.doctorId?.firstName} {recentApp.doctorId?.lastName}</p>
+                        <p className="text-xs text-indigo-600 font-semibold mt-0.5 capitalize">{recentApp.doctorId?.specialty || 'Consultant'}</p>
+                      </div>
+                      <span className="pat-badge pat-badge-completed whitespace-nowrap capitalize">{recentApp.status}</span>
                     </div>
-                    <span className="pat-badge pat-badge-completed whitespace-nowrap">Completed</span>
-                  </div>
-                  <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
-                    <span className="flex items-center gap-1.5"><Clock size={12} /> Mar 5, 2025 · 10:30 AM</span>
-                    <span className="flex items-center gap-1.5"><Video size={12} /> Video Call</span>
-                  </div>
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    <button className="pat-btn pat-btn-outline pat-btn-sm">View Notes</button>
-                    <Link href="/patient/prescriptions" className="pat-btn pat-btn-outline pat-btn-sm flex items-center gap-1.5">
-                      <Pill size={12} /> Prescription
-                    </Link>
+                    <div className="flex flex-wrap gap-3 mt-2.5 text-xs text-slate-500">
+                      <span className="flex items-center gap-1.5"><Clock size={12} /> {new Date(recentApp.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · {recentApp.appointmentTime}</span>
+                      <span className="flex items-center gap-1.5 capitalize"><Video size={12} /> {recentApp.consultationType} Call</span>
+                    </div>
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      <Link href="/patient/appointments" className="pat-btn pat-btn-outline pat-btn-sm">View Details</Link>
+                      {recentApp.prescriptions && recentApp.prescriptions.length > 0 && (
+                          <button onClick={() => handleDownloadPrescription(recentApp)} className="pat-btn pat-btn-outline pat-btn-sm flex items-center gap-1.5">
+                            <Pill size={12} /> Prescription
+                          </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-4 text-center text-slate-500 text-sm">
+                  No recent appointments.
+                </div>
+              )}
             </div>
           </div>
 
@@ -221,22 +330,32 @@ export default function DashboardClient({ user }: Props) {
               </Link>
             </div>
             <div className="pat-card-body space-y-3">
-              {[
-                { date: 'Mar 5, 2025', doctor: 'Dr. Michael Chen',   med: 'Amoxicillin 500mg · 2× daily' },
-                { date: 'Feb 28, 2025', doctor: 'Dr. Sarah Johnson', med: 'Vitamin D3 1000IU · Daily'     },
-              ].map((rx, i) => (
-                <div
-                  key={i}
-                  className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-white hover:border-emerald-200 transition-all"
-                >
-                  <p className="text-xs text-slate-400 font-semibold font-mono mb-1">{rx.date}</p>
-                  <p className="text-sm font-bold text-slate-800">{rx.doctor}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{rx.med}</p>
-                  <button className="text-xs font-bold text-emerald-600 hover:text-emerald-800 mt-2 flex items-center gap-1 transition-colors">
-                    Download PDF <ArrowRight size={11} />
-                  </button>
+              {latestPrescriptions.length > 0 ? (
+                  latestPrescriptions.map((app: any, i) => {
+                      const doctor = app.doctorId || {};
+                      const doctorName = `Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim() || 'Dr. Consultant';
+                      const date = new Date(app.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                      const rxStr = app.prescriptions.slice(0,2).map((r: any) => `${r.medicine} ${r.dosage || ''}`).join(', ') + (app.prescriptions.length > 2 ? '...' : '');
+
+                      return (
+                          <div
+                            key={app._id || i}
+                            className="p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-white hover:border-emerald-200 transition-all"
+                          >
+                            <p className="text-xs text-slate-400 font-semibold font-mono mb-1">{date}</p>
+                            <p className="text-sm font-bold text-slate-800">{doctorName}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{rxStr}</p>
+                            <button onClick={() => handleDownloadPrescription(app)} className="text-xs font-bold text-emerald-600 hover:text-emerald-800 mt-2 flex items-center gap-1 transition-colors">
+                              Download PDF <ArrowRight size={11} />
+                            </button>
+                          </div>
+                      );
+                  })
+              ) : (
+                <div className="p-4 text-center text-slate-500 text-sm">
+                  No prescriptions found.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -249,38 +368,52 @@ export default function DashboardClient({ user }: Props) {
               </Link>
             </div>
             <div className="pat-card-body space-y-2">
-              {[
-                { title: 'Appointment Reminder', msg: 'Dr. Sarah Johnson in 2 hours', time: '2 min ago',  color: 'indigo',  icon: CalendarCheck },
-                { title: 'Prescription Ready',   msg: 'Sent to your pharmacy',        time: '1 hr ago',   color: 'emerald', icon: Pill           },
-                { title: 'Payment Confirmed',    msg: '₹50 received for consult',     time: '5 hrs ago',  color: 'amber',   icon: AlertCircle    },
-              ].map((notif, i) => {
-                const Icon = notif.icon;
-                return (
-                  <div
-                    key={i}
-                    className={`flex gap-3 p-3 rounded-xl border border-l-4 ${
-                      notif.color === 'indigo'  ? 'border-indigo-200 border-l-indigo-500 bg-indigo-50/50' :
-                      notif.color === 'emerald' ? 'border-emerald-200 border-l-emerald-500 bg-emerald-50/50' :
-                                                  'border-amber-200 border-l-amber-500 bg-amber-50/50'
-                    }`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        notif.color === 'indigo'  ? 'bg-indigo-100 text-indigo-600' :
-                        notif.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
-                                                    'bg-amber-100 text-amber-600'
-                      }`}
-                    >
-                      <Icon size={13} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-slate-800 truncate">{notif.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">{notif.msg}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-semibold font-mono">{notif.time}</p>
-                    </div>
-                  </div>
-                );
-              })}
+              {recentNotifs.length > 0 ? (
+                  recentNotifs.map((notif: any, i) => {
+                      let color = 'indigo';
+                      let Icon = Bell;
+                      if (notif.type?.includes('appointment')) {
+                          Icon = CalendarCheck;
+                          color = 'indigo';
+                      } else if (notif.type?.includes('prescription')) {
+                          Icon = Pill;
+                          color = 'emerald';
+                      } else if (notif.type?.includes('payment') || notif.type?.includes('wallet')) {
+                          Icon = AlertCircle;
+                          color = 'amber';
+                      }
+
+                      return (
+                          <div
+                            key={notif._id || i}
+                            className={`flex gap-3 p-3 rounded-xl border border-l-4 ${
+                              color === 'indigo'  ? 'border-indigo-200 border-l-indigo-500 bg-indigo-50/50' :
+                              color === 'emerald' ? 'border-emerald-200 border-l-emerald-500 bg-emerald-50/50' :
+                                                          'border-amber-200 border-l-amber-500 bg-amber-50/50'
+                            }`}
+                          >
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                color === 'indigo'  ? 'bg-indigo-100 text-indigo-600' :
+                                color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+                                                            'bg-amber-100 text-amber-600'
+                              }`}
+                            >
+                              <Icon size={13} />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{notif.title}</p>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">{notif.message}</p>
+                              <p className="text-[10px] text-slate-400 mt-1 font-semibold font-mono">{timeAgo(notif.createdAt)}</p>
+                            </div>
+                          </div>
+                      );
+                  })
+              ) : (
+                <div className="p-4 text-center text-slate-500 text-sm">
+                  No recent notifications.
+                </div>
+              )}
             </div>
           </div>
 

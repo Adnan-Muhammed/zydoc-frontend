@@ -239,7 +239,7 @@ export function useWebRTC({
         const newSocket = io(
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
           { withCredentials: true }
-        );
+        );  
         socketRef.current = newSocket;
         setSocket(newSocket);
 
@@ -624,7 +624,7 @@ export function useWebRTC({
         const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
         fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/appointments/${appointmentId}/end-call`, {
           method: "POST",
-          headers: {
+          headers: { 
             "Content-Type": "application/json",
             ...(token ? { Authorization: `Bearer ${token}` } : {})
           },

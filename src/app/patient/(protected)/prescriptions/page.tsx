@@ -495,7 +495,7 @@ export default function PatientPrescriptionsPage() {
                             : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
 
                           return (
-                            <div
+                            <div 
                               key={file.id || fIdx}
                               style={{
                                 padding: 14,

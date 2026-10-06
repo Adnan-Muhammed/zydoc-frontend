@@ -18,7 +18,7 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
       globalNotificationSocket = io(
         process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
         { withCredentials: true }
-      );
+      ); 
       
       globalNotificationSocket.on('connect', () => {
         globalNotificationSocket?.emit("register", { userId, role });

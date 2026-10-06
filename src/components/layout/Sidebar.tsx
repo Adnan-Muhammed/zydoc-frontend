@@ -284,7 +284,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
                 src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
                 alt="Profile"
                 className="size-full object-cover rounded-xl"
-              />
+              /> 
             ) : (
               getInitials(user?.name || role)
             )}

@@ -74,7 +74,7 @@ export default function DoctorFilters({
   return (
     <form onSubmit={handleSearch} className={`search-form-modern ${className || ''}`} role="search">
       <div className="search-input-wrapper">
-        <Search className="search-icon-inside" />
+        <Search className="search-icon-inside" aria-hidden="true" />
         <input
           type="text"
           className="search-input-modern"
@@ -86,7 +86,7 @@ export default function DoctorFilters({
               handleClear();
             }
           }}
-          aria-label="Search doctors by name or specialty"
+          aria-label="Search doctors by name, specialty, or condition"
         />
         {searchValue && (
           <button
@@ -95,15 +95,15 @@ export default function DoctorFilters({
             className="search-clear-btn"
             aria-label="Clear search text"
           >
-            <X className="size-4 text-slate-400 hover:text-slate-600" />
+            <X className="size-4 text-slate-400 hover:text-slate-600 transition-colors" />
           </button>
         )}
       </div>
 
       <button type="submit" className="search-submit-btn" aria-label="Search doctors">
         <span className="hidden sm:inline">Find Doctors</span>
-        <span className="sm:hidden">Search</span>
-        <ArrowRight className="size-3.5 sm:size-4" />
+        <span className="sm:hidden font-semibold">Search</span>
+        <ArrowRight className="size-3.5 sm:size-4" aria-hidden="true" />
       </button>
     </form>
   );

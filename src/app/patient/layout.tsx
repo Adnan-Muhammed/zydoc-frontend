@@ -16,7 +16,7 @@ export default async function PatientLayout({
 
   let user = null;
 
-  try {
+  try { 
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`,
       {

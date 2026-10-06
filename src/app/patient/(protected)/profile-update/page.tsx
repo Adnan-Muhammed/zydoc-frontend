@@ -57,7 +57,7 @@ export default function PatientProfileUpdatePage() {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile`, {
           credentials: 'include'
         });
-        const data = await res.json();
+        const data = await res.json(); 
         if (res.ok && data.data) {
           const pData = data.data.profile || {};
           const user = data.data.user || {};
@@ -109,7 +109,7 @@ export default function PatientProfileUpdatePage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile-update`, {
         method: 'PUT',
         credentials: 'include',
-        headers: {
+        headers: { 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

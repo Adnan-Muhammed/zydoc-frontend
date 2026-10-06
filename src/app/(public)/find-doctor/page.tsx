@@ -9,7 +9,7 @@ import DoctorList from '@/components/find-doctor/DoctorList';
 import { cookies } from 'next/headers';
 import './finddoctor.css';
 import { getDoctorsList } from '@/lib/doctors';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ShieldCheck } from 'lucide-react';
  
 export const metadata: Metadata = {
   title: 'Find a Doctor Near You | Zydoc Healthcare',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     type: 'website',
   },
 };
-
+ 
 async function getUser(accessToken: string) {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
@@ -61,14 +61,20 @@ export default async function FindDoctorPage({
       {/* ── Compact Utility Header Bar ── */}
       <header className="find-doctor-top-bar">
         <div className="find-doctor-top-bar-inner">
-          <div>
-            <nav aria-label="Breadcrumb" className="compact-breadcrumb">
-              <Link href="/" className="hover:text-[#181952] transition">
-                Home
-              </Link>
-              <ChevronRight className="size-3 text-slate-300" />
-              <span className="text-slate-600 font-semibold">Find Doctors</span>
-            </nav>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <nav aria-label="Breadcrumb" className="compact-breadcrumb">
+                <Link href="/" className="hover:text-[#181952] transition">
+                  Home
+                </Link>
+                <ChevronRight className="size-3 text-slate-300" />
+                <span className="text-slate-600 font-semibold">Find Doctors</span>
+              </nav>
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[11px] font-semibold">
+                <ShieldCheck className="size-3 text-emerald-600 shrink-0" />
+                <span>Verified Specialists</span>
+              </div>
+            </div>
             <h1 className="compact-page-title">Find Doctors &amp; Specialists</h1>
           </div>
 

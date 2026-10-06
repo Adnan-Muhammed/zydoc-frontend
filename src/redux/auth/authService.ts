@@ -26,8 +26,9 @@ const resendOtp = async (data: { email: string }, isAdmin?: boolean) => {
     return res.data;
 };
 
-const logout = async () => {
-    await axiosInstance.post('/auth/logout', {}, { withCredentials: true });
+const logout = async (isAdmin?: boolean) => {
+    const url = isAdmin ? '/admin/auth/logout' : '/auth/logout';
+    await axiosInstance.post(url, {}, { withCredentials: true });
 };
 
 const getCurrentUser = async () => {
@@ -39,7 +40,7 @@ const getCurrentUser = async () => {
     }
 };
 
-const loginWithGoogle = async (role?: string) => {
+const loginWithGoogle = async (role?: string, isAdmin?: boolean) => {
     const provider = new GoogleAuthProvider();
     // Force the Google account selection screen to appear instead of auto-login
     provider.setCustomParameters({
@@ -50,7 +51,8 @@ const loginWithGoogle = async (role?: string) => {
     const firebaseToken = await userCredential.user.getIdToken();
 
     // Send the Firebase token and requested role to our custom backend to issue the JWT
-    const res = await axiosInstance.post('/auth/google', { firebaseToken, role }, { withCredentials: true });
+    const url = isAdmin ? '/admin/auth/google' : '/auth/google';
+    const res = await axiosInstance.post(url, { firebaseToken, role }, { withCredentials: true });
     return res.data;
 };
 

@@ -437,7 +437,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
             >
               <div className="topbar-avatar flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#181852] text-white text-xs font-semibold overflow-hidden shadow-xs shrink-0">
                 {user?.avatarUrl ? (
-                  <img
+                  <img 
                     src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
                     alt="Profile"
                     className="w-full h-full object-cover"

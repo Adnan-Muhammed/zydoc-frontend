@@ -15,7 +15,7 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) return; 
 
     const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
       withCredentials: true,

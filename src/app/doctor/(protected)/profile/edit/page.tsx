@@ -1,7 +1,12 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useAppDispatch, useAppSelector } from '@/redux/hooks';
+import { fetchDoctorProfile, updateDoctorProfile } from '@/redux/features/doctor/doctorThunk';
+import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +27,7 @@ interface WorkingHours {
     mondayToFriday: WorkingHourSlot;
     saturday: WorkingHourSlot;
     sunday: WorkingHourSlot;
+    [key: string]: WorkingHourSlot;
 }
 
 interface FormData {
@@ -49,63 +55,80 @@ const AVAILABLE_LANGUAGES = ['English', 'Malayalam', 'Hindi', 'Tamil', 'Kannada'
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DoctorProfileEditPage() {
-    // 1. Initial State Pre-loaded with your exact initial dummy data payload
+    const dispatch = useAppDispatch();
+    const router = useRouter();
+    const { isUpdatingProfile } = useAppSelector((state) => state.doctor);
+    const [isLoading, setIsLoading] = useState(true);
+
     const [formData, setFormData] = useState<FormData>({
-        firstName: "arif",
-        lastName: "ali",
-        phone: "+911234567821",
+        firstName: "",
+        lastName: "",
+        phone: "",
         bio: "",
-        specialty: "Neurology",
-        licenseNumber: "TCMC/64219/2123",
-        yearsOfExperience: "10",
+        specialty: "",
+        licenseNumber: "",
+        yearsOfExperience: "",
         clinicAddress: "",
         clinicName: "",
         enablePhysical: false,
-        enableVideo: true,
-        expertiseTags: [
-            "Stroke Management",
-            "Epilepsy Treatment",
-            "Headache & Migraine Care",
-            "Parkinson’s Disease Management",
-            "Neuromuscular Disorders",
-        ],
-        physicalFee: "150",
-        videoFee: "800",
-        selectedLanguages: ["English", "Malayalam", "Hindi"],
-        qualifications: [
-            {
-                id: "1779444167761",
-                degree: "MD General Medicine",
-                institution: "Government Medical College Thiruvananthapuram",
-                year: "2015",
-            },
-            {
-                id: "1779444204504",
-                degree: "DM Neurology",
-                institution: "All India Institute of Medical Sciences",
-                year: "2018",
-            },
-            {
-                id: "1779444224026",
-                degree: "Fellowship in Stroke & Neurocritical Care",
-                institution: "Sree Chitra Tirunal Institute for Medical Sciences and Technology",
-                year: "2020",
-            },
-        ],
+        enableVideo: false,
+        expertiseTags: [],
+        physicalFee: "",
+        videoFee: "",
+        selectedLanguages: [],
+        qualifications: [],
         workingHours: {
-            mondayToFriday: { start: "09:00", end: "17:00", active: true },
-            saturday: { start: "10:00", end: "14:00", active: true },
+            mondayToFriday: { start: "09:00", end: "17:00", active: false },
+            saturday: { start: "10:00", end: "14:00", active: false },
             sunday: { start: "00:00", end: "00:00", active: false },
         },
     });
 
-    // File handling states (accumulating instead of replacing)
-    const [existingCertificates, setExistingCertificates] = useState<string[]>([
-        'TCMC_Registration_Certificate.pdf',
-    ]);
+    const [existingCertificates, setExistingCertificates] = useState<string[]>([]);
     const [newCertificates, setNewCertificates] = useState<File[]>([]);
     const [newTagInput, setNewTagInput] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        dispatch(fetchDoctorProfile())
+            .unwrap()
+            .then((data) => {
+                const p = data?.profile || data;
+                if (p) {
+                    setFormData({
+                        firstName: p.firstName || "",
+                        lastName: p.lastName || "",
+                        phone: p.phone || "",
+                        bio: p.bio || "",
+                        specialty: p.specialty || "",
+                        licenseNumber: p.licenseNumber || p.registrationNumber || "",
+                        yearsOfExperience: (p.yearsOfExperience || "").toString(),
+                        clinicAddress: p.consultationSettings?.offline?.clinicAddress || p.consultationSettings?.physical?.clinicAddress || "",
+                        clinicName: p.consultationSettings?.offline?.clinicName || p.consultationSettings?.physical?.clinicName || "",
+                        enablePhysical: p.consultationSettings?.offline?.enabled || p.consultationSettings?.physical?.enabled || false,
+                        enableVideo: p.consultationSettings?.online?.enabled || p.consultationSettings?.video?.enabled || false,
+                        expertiseTags: p.expertiseTags || [],
+                        physicalFee: (p.consultationSettings?.offline?.fee || p.consultationSettings?.physical?.fee || "").toString(),
+                        videoFee: (p.consultationSettings?.online?.fee || p.consultationSettings?.video?.fee || "").toString(),
+                        selectedLanguages: p.languages || [],
+                        qualifications: p.qualifications || [],
+                        workingHours: p.workingHours || {
+                            mondayToFriday: { start: "09:00", end: "17:00", active: false },
+                            saturday: { start: "10:00", end: "14:00", active: false },
+                            sunday: { start: "00:00", end: "00:00", active: false },
+                        },
+                    });
+                    if (p.medicalCertificateUrl) {
+                        setExistingCertificates([p.medicalCertificateUrl.split('/').pop() || 'certificate.pdf']);
+                    }
+                }
+                setIsLoading(false);
+            })
+            .catch((err) => {
+                toast.error('Failed to load profile data');
+                setIsLoading(false);
+            });
+    }, [dispatch]);
 
     // ─── Input Handlers ──────────────────────────────────────────────────────────
     const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -209,17 +232,35 @@ export default function DoctorProfileEditPage() {
 
         // Building complete payload for dynamic backend updates/multipart forms
         const submissionPayload = new FormData();
-        submissionPayload.append('doctorData', JSON.stringify(formData));
+        submissionPayload.append('doctorData', JSON.stringify({
+            ...formData,
+            consultationSettings: {
+                online: { enabled: formData.enableVideo, fee: Number(formData.videoFee) || 0 },
+                offline: { enabled: formData.enablePhysical, fee: Number(formData.physicalFee) || 0, clinicName: formData.clinicName, clinicAddress: formData.clinicAddress },
+            }
+        }));
         submissionPayload.append('retainedCertificates', JSON.stringify(existingCertificates));
         
         newCertificates.forEach((file) => {
             submissionPayload.append('certificates', file);
         });
 
-        console.log("Submitting dynamic updates payload:", formData);
-        console.log("Accumulated new binary files:", newCertificates);
-        alert('Profile change saved successfully!');
+        try {
+            await dispatch(updateDoctorProfile(submissionPayload as any)).unwrap();
+            toast.success('Profile updated successfully');
+            router.push('/doctor/profile');
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update profile');
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#eef0f8]">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#eef0f8] p-4 sm:p-6 lg:p-8">
@@ -604,9 +645,11 @@ export default function DoctorProfileEditPage() {
                         </Link>
                         <button
                             type="submit"
-                            className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all active:scale-95"
+                            disabled={isUpdatingProfile}
+                            className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                         >
-                            Save Changes
+                            {isUpdatingProfile && <Loader2 className="w-3 h-3 animate-spin" />}
+                            {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
                         </button>
                     </div>
 

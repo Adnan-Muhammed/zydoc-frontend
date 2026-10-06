@@ -363,16 +363,6 @@ export default function ScheduleClient() {
         dispatch(fetchDoctorAppointments());
     }, [dispatch]);
 
-    // Calculate initial next working date when rawWH is populated
-    useEffect(() => {
-        if (rawWH && Object.keys(rawWH).length > 0) {
-            const nextDate = findNextWorkingDate(rawWH, today, maxBookingDate);
-            setSelectedDate(nextDate);
-            setCalendarYear(nextDate.getFullYear());
-            setCalendarMonth(nextDate.getMonth());
-        }
-    }, [rawWH, today, maxBookingDate]);
-
     const dateString = useMemo(() => {
         return [
             selectedDate.getFullYear(),

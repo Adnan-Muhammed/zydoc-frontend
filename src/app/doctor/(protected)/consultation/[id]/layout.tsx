@@ -21,7 +21,7 @@ export default async function ConsultationLayout({
 
   if (!accessToken) redirect('/login');
 
-  let user = null;
+  let user = null; 
 
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {

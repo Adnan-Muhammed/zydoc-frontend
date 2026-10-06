@@ -15,6 +15,8 @@ interface CallControlsProps {
   isPatient?: boolean;
   patientRoomElapsedSeconds?: number;
   minPatientWaitSeconds?: number;
+  isRemoteReady?: boolean;
+  hasConsultationStarted?: boolean;
 }
 
 export default function CallControls({
@@ -29,8 +31,11 @@ export default function CallControls({
   isPatient = false,
   patientRoomElapsedSeconds = 0,
   minPatientWaitSeconds = 60,
+  isRemoteReady = false,
+  hasConsultationStarted = false,
 }: CallControlsProps) {
-  const isDoctorLocked = Boolean(isDoctor && elapsedSeconds < minDurationSeconds);
+  // Doctor 3-minute lock applies if consultation has started (connected via Early/Scheduled Start or currently active) until 3 continuous minutes are fulfilled
+  const isDoctorLocked = Boolean(isDoctor && (hasConsultationStarted || isRemoteReady) && elapsedSeconds < minDurationSeconds);
   const doctorLockRemaining = Math.max(0, minDurationSeconds - elapsedSeconds);
 
   const isPatientLocked = Boolean(isPatient && patientRoomElapsedSeconds < minPatientWaitSeconds);
@@ -110,10 +115,10 @@ export default function CallControls({
           }`}
           aria-label={
             isDoctorLocked
-              ? `End Call (Locked: 3m Minimum, ${lockRemaining}s remaining)`
+              ? `End Call (Locked: 3m Continuous Requirement, ${lockRemaining}s remaining)`
               : isPatientLocked
               ? `Leave Call (Mandatory 1m Wait: ${lockRemaining}s remaining)`
-              : (isDoctor ? "End Consultation Call" : "Leave Consultation")
+              : (isDoctor ? "End Consultation & Leave" : "Leave Consultation")
           }
           aria-disabled={isLocked}
         >
@@ -125,15 +130,15 @@ export default function CallControls({
             )}
           </div>
           <span className="font-semibold">
-            {isLocked ? `Locked (${lockRemaining}s)` : (isDoctor ? "End Call" : "Leave Call")}
+            {isLocked ? `Locked (${lockRemaining}s)` : (isDoctor ? "End Consultation & Leave" : "Leave Call")}
           </span>
         </button>
         <span className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900/90 border border-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block shadow-lg">
           {isDoctorLocked
-            ? `Minimum 3m required before ending (${lockRemaining}s remaining)`
+            ? `Minimum 3 continuous minutes required before ending (${lockRemaining}s remaining). If disconnected, participants must rejoin to complete.`
             : isPatientLocked
             ? `Mandatory 1-minute waiting period (${lockRemaining}s remaining)`
-            : (isDoctor ? "Conclude Session" : "Leave Consultation Room")}
+            : (isDoctor ? "End Consultation & Leave" : "Leave Consultation Room")}
         </span>
       </div>
     </nav>

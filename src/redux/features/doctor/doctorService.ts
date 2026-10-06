@@ -34,11 +34,19 @@ export const getProfileAPI = async () => {
     return response.data;
 };
 
+export const fetchDashboardStatsAPI = async () => {
+    const response = await axiosInstance.get(DOCTORS.DASHBOARD_STATS, {
+        withCredentials: true,
+    });
+    return response.data;
+};
+
 const doctorService = {
     updateProfileAPI,
     getProfile: getProfileAPI,
     fetchEarnings: fetchEarningsAPI,
     updateBankDetails: updateBankDetailsAPI,
+    fetchDashboardStats: fetchDashboardStatsAPI,
 };
 
 export default doctorService;

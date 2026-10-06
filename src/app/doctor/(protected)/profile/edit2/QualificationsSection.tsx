@@ -205,7 +205,7 @@ export default function QualificationsSection({ initialData }: { initialData: an
                                     <span>Preview Local File</span>
                                 </a>
                             )}
-                            
+                             
                             {q.certificateUrl && (
                                 <a 
                                     href={`${process.env.NEXT_PUBLIC_API_URL}${q.certificateUrl}`} 
