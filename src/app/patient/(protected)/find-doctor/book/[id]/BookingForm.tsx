@@ -111,6 +111,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const { balance: walletBalance } = useSelector((state: RootState) => state.wallet);
     const currentUserId = user?._id || user?.id;
     const paymentCompleted = useRef(false);
+    const paymentProcessing = useRef(false);
 
     const [useWallet, setUseWallet] = useState<boolean>(true);
 
@@ -203,7 +204,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     useEffect(() => {
         const handleBeforeUnload = () => {
-            if (!paymentCompleted.current && lockInfoRef.current.isLocked) {
+            if (!paymentCompleted.current && !paymentProcessing.current && lockInfoRef.current.isLocked) {
                 dispatch(unlockSlot({
                     doctorId: lockInfoRef.current.doctorId,
                     date: lockInfoRef.current.date,
@@ -217,7 +218,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
-            if (!paymentCompleted.current && lockInfoRef.current.isLocked) {
+            if (!paymentCompleted.current && !paymentProcessing.current && lockInfoRef.current.isLocked) {
                 dispatch(unlockSlot({
                     doctorId: lockInfoRef.current.doctorId,
                     date: lockInfoRef.current.date,
@@ -304,6 +305,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     const handlePayment = async (appointmentId: string, existingOrderId?: string) => {
         setIsPaymentLoading(true);
+        paymentProcessing.current = false;
+        paymentCompleted.current = false;
 
         const walletDeduction = useWallet && walletBalance > 0 ? Math.min(walletBalance, fee) : 0;
         const netPayable = Math.max(0, fee - walletDeduction);
@@ -323,6 +326,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 // ── Seamless Full Wallet Completion ──
                 if (orderResult?.status === 'COMPLETED_VIA_WALLET') {
                     paymentCompleted.current = true;
+                    paymentProcessing.current = false;
                     setShowConfirmModal(false);
                     dispatch(fetchWalletDetails());
                     router.push("/patient/appointments");
@@ -338,6 +342,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
             if (!res) {
                 setModalError('Razorpay SDK failed to load. Are you online?');
                 setIsPaymentLoading(false);
+                paymentProcessing.current = false;
                 return;
             }
 
@@ -354,6 +359,11 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
                 order_id: orderId,
                 handler: async function (response: any) {
+                    // Finding F-03: Prevent duplicate callback executions
+                    if (paymentProcessing.current || paymentCompleted.current) {
+                        return;
+                    }
+                    paymentProcessing.current = true;
                     clearHeartbeat();
                     try {
                         setIsPaymentLoading(true);
@@ -364,10 +374,12 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             appointmentId
                         })).unwrap();
                         paymentCompleted.current = true;
+                        paymentProcessing.current = false;
                         setShowConfirmModal(false);
                         dispatch(fetchWalletDetails());
                         router.push("/patient/appointments");
                     } catch (err: any) {
+                        paymentProcessing.current = false;
                         if (err?.code === 'SLOT_EXPIRED_REFUNDED') {
                             setModalError("Your slot lock expired and was booked by another patient. Any amount charged has been refunded.");
                         } else {
@@ -380,6 +392,13 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 modal: {
                     ondismiss: function () {
                         clearHeartbeat();
+                        // Finding F-03: Prevent Razorpay modal dismissal from unlocking
+                        // the slot when payment processing or verification is in progress,
+                        // or after payment has already completed.
+                        if (paymentProcessing.current || paymentCompleted.current) {
+                            return;
+                        }
+
                         dispatch(unlockSlot({
                             doctorId: doctor._id || doctor.id,
                             date: dateString,
@@ -416,6 +435,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
         } catch (error: any) {
             console.error("Payment initiation failed:", error);
+            paymentProcessing.current = false;
             setModalError(error || "Failed to initiate payment. Please try again.");
         } finally {
             setIsPaymentLoading(false);
@@ -1048,6 +1068,19 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                     type="button"
                                     disabled={isLocking || isPaymentLoading}
                                     onClick={() => {
+                                        if (lockInfoRef.current.isLocked && !paymentProcessing.current && !paymentCompleted.current) {
+                                            dispatch(unlockSlot({
+                                                doctorId: doctor._id || doctor.id,
+                                                date: dateString,
+                                                time,
+                                                consultationType: type
+                                            }));
+                                            setAllSlots(prev => prev.map(slotObj => 
+                                                slotObj.time === time 
+                                                    ? { ...slotObj, status: "available", isLocked: false } 
+                                                    : slotObj
+                                            ));
+                                        }
                                         setShowConfirmModal(false);
                                         setModalError(null);
                                     }}

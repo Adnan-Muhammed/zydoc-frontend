@@ -47,6 +47,7 @@ export default function VideoCallRoom({
 }: VideoCallRoomProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
   const waitingNextPatientRef = useRef<{ appointmentId: string; } | null>(null);
 
   // Rigorous session unmount cleanup: wipe consultation state and appointment keys when leaving room
@@ -100,7 +101,7 @@ export default function VideoCallRoom({
     isTakenOver,
     requestTakeover,
     reclaimCall,
-  } = useWebRTC({ appointmentId, userId, role, onCallEnded, rewindBeforeNavigate });
+  } = useWebRTC({ appointmentId, userId, role, onCallEnded, rewindBeforeNavigate, token: accessToken });
 
   const normalizedRole = role?.toLowerCase() || "";
   const defaultRedirectUrl =

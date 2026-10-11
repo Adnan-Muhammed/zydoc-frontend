@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import toast from 'react-hot-toast';
-import { useAppDispatch } from '../redux/hooks';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { addRealTimeNotification } from '../redux/features/notification/notificationSlice';
 import { markAppointmentCompleted } from '../redux/features/appointment/appointmentSlice';
 
@@ -13,12 +13,14 @@ interface UseSocketProps {
 export const useSocket = ({ userId, role }: UseSocketProps) => {
   const socketRef = useRef<Socket | null>(null);
   const dispatch = useAppDispatch();
+  const accessToken = useAppSelector((state) => state.auth.accessToken);
 
   useEffect(() => {
     if (!userId) return; 
 
     const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
       withCredentials: true,
+      auth: { token: accessToken || undefined },
     });
     
     socketRef.current = socket;
@@ -120,7 +122,7 @@ export const useSocket = ({ userId, role }: UseSocketProps) => {
         socketRef.current.disconnect();
       }
     };
-  }, [userId, role, dispatch]);
+  }, [userId, role, dispatch, accessToken]);
 
   return {
     socket: socketRef.current,

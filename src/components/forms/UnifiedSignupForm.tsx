@@ -155,7 +155,7 @@ const UnifiedSignupForm: React.FC = () => {
     };
 
     const handleOAuth = () => {
-        dispatch(loginWithGoogleUser(role || undefined))
+        dispatch(loginWithGoogleUser({ role: role || undefined }))
             .unwrap()
             .then((res: any) => {
                 const actualRole = res?.user?.role;

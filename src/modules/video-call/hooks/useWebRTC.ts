@@ -24,6 +24,7 @@ interface UseWebRTCOptions {
    * lands on the correct previous page instead of "/".
    */
   rewindBeforeNavigate?: () => Promise<void>;
+  token?: string | null;
 }
 
 interface UseWebRTCReturn {
@@ -78,6 +79,7 @@ export function useWebRTC({
   role,
   onCallEnded,
   rewindBeforeNavigate,
+  token,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const router = useRouter();
 
@@ -238,7 +240,10 @@ export function useWebRTC({
         // ── Step 2: Connect dedicated signaling socket ─────────────────
         const newSocket = io(
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
-          { withCredentials: true }
+          {
+            withCredentials: true,
+            auth: { token: token || undefined },
+          }
         );  
         socketRef.current = newSocket;
         setSocket(newSocket);

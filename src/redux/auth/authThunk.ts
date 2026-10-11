@@ -32,7 +32,7 @@ export const loginWithGoogleUser = createAsyncThunk(
     'auth/loginWithGoogle',
     async (payload: { role?: string; isAdmin?: boolean } = {}, { rejectWithValue }) => {
         try {
-            return await authService.loginWithGoogle(payload.role, payload.isAdmin);
+            return await authService.loginWithGoogle(payload?.role, payload?.isAdmin);
         } catch (error: unknown) {
             return rejectWithValue(extractAuthError(error, 'Google Login failed'));
         }

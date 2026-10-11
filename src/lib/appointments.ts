@@ -73,21 +73,15 @@ export async function getAvailableSlots(doctorId: string, date: string, consulta
 }
 
 export async function extendLock(slotId: string) {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/appointments/extend-lock`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-        },
-        body: JSON.stringify({ slotId }),
-        cache: 'no-store'
-    });
-
-    if (!res.ok) {
-        throw new Error('Failed to extend lock');
+    try {
+        const res = await axiosInstance.post('/appointments/extend-lock', { slotId });
+        return res.data;
+    } catch (err: any) {
+        const message = err.response?.data?.message || err.message || 'Failed to extend lock';
+        const error = new Error(message);
+        (error as any).response = err.response;
+        throw error;
     }
-
-    return res.json();
 }
  
 export async function toggleDoctorSlotOverride(

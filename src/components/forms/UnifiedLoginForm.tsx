@@ -83,9 +83,8 @@ const UnifiedLoginForm: React.FC = () => {
     };
 
     const handleOAuth = () => {
-        // Dispatch the Google login thunk. We don't have a role here, so pass undefined.
-        // authService.ts will handle the actual Firebase popup.
-        dispatch(loginWithGoogleUser(undefined))
+        // Dispatch the Google login thunk. authService.ts will handle the actual Firebase popup.
+        dispatch(loginWithGoogleUser({}))
             .unwrap()
             .then((res: any) => {
 
