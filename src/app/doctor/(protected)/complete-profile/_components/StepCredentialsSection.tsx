@@ -79,6 +79,19 @@ export default function StepCredentialsSection({
             alert('Please upload a certificate for this qualification.');
             return;
         }
+
+        const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+        const ext = '.' + (newCertificate.name.split('.').pop() || '').toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            alert('Invalid file format. Allowed formats: PDF, JPG, PNG, WebP.');
+            return;
+        }
+
+        if (newCertificate.size > 10 * 1024 * 1024) {
+            alert('Certificate exceeds the 10MB limit.');
+            return;
+        }
+
         const id = Date.now().toString();
         const updatedQualifications = [
             ...qualifications,
@@ -398,7 +411,7 @@ export default function StepCredentialsSection({
                                 <input
                                     id="qualificationCertInput"
                                     type="file"
-                                    accept=".pdf,image/*"
+                                    accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp"
                                     onChange={(e) => setNewCertificate(e.target.files?.[0] || null)}
                                     className="w-full max-w-sm text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 dark:file:bg-blue-900/30 dark:file:text-blue-400 file:cursor-pointer transition"
                                 />

@@ -36,6 +36,21 @@ export default function FilesTab({
     setIsUploading(true);
 
     const file = fileList[0]; // Process active file
+
+    const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    if (!allowedExts.includes(ext)) {
+      setUploadError('Invalid file format. Allowed formats: PDF, JPG, PNG, WebP.');
+      setIsUploading(false);
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('File exceeds the 10MB limit.');
+      setIsUploading(false);
+      return;
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('category', selectedCategory);
@@ -57,19 +72,8 @@ export default function FilesTab({
       }
     } catch (err: any) {
       console.error('File upload error:', err);
-      // Fallback local addition if network blips
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'file';
-      const fallbackFile: UploadedFile = {
-        id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        name: file.name,
-        size: `${sizeMB} MB`,
-        type: ext,
-        category: selectedCategory,
-        uploadedBy: isDoctor ? 'Doctor' : 'Patient',
-        timestamp: 'Just now',
-      };
-      onUploadSuccess(fallbackFile);
+      const errMsg = err.response?.data?.message || err.message || 'Failed to upload consultation document.';
+      setUploadError(errMsg);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -148,7 +152,7 @@ export default function FilesTab({
           type="file"
           className="hidden"
           onChange={(e) => handleFiles(e.target.files)}
-          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
         />
 
         {isUploading ? (
@@ -168,7 +172,7 @@ export default function FilesTab({
               Structured under appointment namespace • Encrypted in transit
             </p>
             <p className="text-[9px] text-slate-500 mt-0.5">
-              Supported: PDF, JPG, PNG, DOC (Max 25MB)
+              Supported: PDF, JPG, PNG, WebP (Max 10MB)
             </p>
           </>
         )}

@@ -62,6 +62,19 @@ export default function MedicalRecordsPage() {
       return;
     }
 
+    const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
+    const ext = '.' + (file.name.split('.').pop() || '').toLowerCase();
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedExts.includes(ext) && !allowedTypes.includes(file.type)) {
+      setError('Invalid file format. Only PDF, JPEG, PNG, and WebP medical records are allowed.');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File exceeds the 10MB limit. Please upload a smaller file.');
+      return;
+    }
+
     setIsUploading(true);
     setError('');
     setSuccess('');

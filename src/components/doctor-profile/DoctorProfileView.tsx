@@ -580,22 +580,10 @@ export default function DoctorProfileView({
                       </div>
 
                       <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
-                        {q.certificateUrl && (
-                          <a
-                            href={
-                              q.certificateUrl.startsWith('http')
-                                ? q.certificateUrl
-                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${q.certificateUrl.startsWith('/') ? q.certificateUrl : `/${q.certificateUrl}`
-                                }` 
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-semibold border border-indigo-100 shadow-xs transition"
-                          >
-                            <span>Certificate</span>
-                            <ExternalLink className="size-3" />
-                          </a>
-                        )}
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-semibold border border-emerald-100 shadow-xs">
+                          <CheckCircle2 className="size-3 text-emerald-600" />
+                          <span>Verified</span>
+                        </span>
                         <span className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-xl">
                           {q.year}
                         </span>

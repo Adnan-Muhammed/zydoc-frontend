@@ -56,7 +56,7 @@ export default function StepIdentitySection({
                     <div className="absolute inset-0 bg-black/40 items-center justify-center hidden group-hover:flex">
                         <i className="fas fa-pencil text-white text-sm"></i>
                     </div>
-                    <input type="file" id="avatarInput" accept="image/*" onChange={onAvatarChange} className="hidden" />
+                    <input type="file" id="avatarInput" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={onAvatarChange} className="hidden" />
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide">Professional Display Photo</h4>
                 <p className="text-[11px] text-slate-400 max-w-xs mt-1.5 leading-relaxed">
