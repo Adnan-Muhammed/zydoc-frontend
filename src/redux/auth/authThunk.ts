@@ -3,7 +3,7 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import authService from './authService';
 
 const extractAuthError = (error: unknown, defaultMessage: string): any => {
-    const err = error as { response?: { status?: number, data?: { message?: string, requiresVerification?: boolean, email?: string, signupToken?: string } }, message?: string };
+    const err = error as { response?: { status?: number, data?: { message?: string, requiresVerification?: boolean, email?: string, signupToken?: string, otp?: string, code?: string } }, message?: string };
 
     if (err.response?.data?.requiresVerification) {
         return err.response.data; // Return the whole object for unverified login recovery

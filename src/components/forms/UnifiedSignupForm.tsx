@@ -60,6 +60,11 @@ const UnifiedSignupForm: React.FC = () => {
         const savedEmail = sessionStorage.getItem('signup_email');
         const savedRole = sessionStorage.getItem('signup_role');
         const isOtpView = sessionStorage.getItem('show_otp_view') === 'true';
+        const savedOtp = sessionStorage.getItem('generated_otp');
+
+        if (savedOtp) {
+            setGeneratedOtpCode(savedOtp);
+        }
 
         if (isOtpView && savedEmail && savedRole) {
             setForm(prev => ({ ...prev, email: savedEmail }));
@@ -125,6 +130,14 @@ const UnifiedSignupForm: React.FC = () => {
                 if (res.signupToken) {
                     sessionStorage.setItem('signupToken', res.signupToken);
                 }
+                const newOtp = res.otp || res.code;
+                if (newOtp) {
+                    setGeneratedOtpCode(newOtp);
+                    sessionStorage.setItem('generated_otp', newOtp);
+                } else {
+                    setGeneratedOtpCode('');
+                    sessionStorage.removeItem('generated_otp');
+                }
                 sessionStorage.setItem('show_otp_view', 'true');
                 setShowOtpView(true);
                 startTimer();
@@ -141,6 +154,8 @@ const UnifiedSignupForm: React.FC = () => {
                 sessionStorage.removeItem('signup_role');
                 sessionStorage.removeItem('show_otp_view');
                 sessionStorage.removeItem('signupToken');
+                sessionStorage.removeItem('generated_otp');
+                setGeneratedOtpCode('');
                 router.replace(`/${role}/profile-update`);
             })
             .catch((err: unknown) => setError(typeof err === 'string' ? err : 'Invalid OTP code'));
@@ -193,8 +208,15 @@ const UnifiedSignupForm: React.FC = () => {
         if (timer > 0) return;
         dispatch(resendOtp({ email: form.email }))
             .unwrap()
-            .then((res: { code?: string }) => {
-                setGeneratedOtpCode(res.code ?? '');
+            .then((res: { code?: string; otp?: string }) => {
+                const newOtp = res.otp || res.code;
+                if (newOtp) {
+                    setGeneratedOtpCode(newOtp);
+                    sessionStorage.setItem('generated_otp', newOtp);
+                } else {
+                    setGeneratedOtpCode('');
+                    sessionStorage.removeItem('generated_otp');
+                }
                 startTimer();
                 setError(null);
             })
@@ -221,6 +243,8 @@ const UnifiedSignupForm: React.FC = () => {
                                 sessionStorage.removeItem('signup_email');
                                 sessionStorage.removeItem('signup_role');
                                 sessionStorage.removeItem('show_otp_view');
+                                sessionStorage.removeItem('generated_otp');
+                                setGeneratedOtpCode('');
                                 setShowOtpView(false);
                             }}
                             className="text-xs text-blue-600 hover:underline dark:text-blue-400"
@@ -234,10 +258,30 @@ const UnifiedSignupForm: React.FC = () => {
                     {error && <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg break-words w-full">{error}</div>}
                 </div>
 
-                {/* Dev-only OTP display — remove before production */}
+                {/* Testing/Spam Prevention Mode: Display OTP when config is false */}
                 {generatedOtpCode && (
-                    <div className="p-3 rounded bg-yellow-100 text-black text-center font-bold">
-                        TEST OTP: {generatedOtpCode}
+                    <div className="p-4 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-slate-800 dark:text-slate-200 text-sm space-y-2.5 shadow-xs">
+                        <div className="flex items-center justify-between">
+                            <span className="font-semibold text-xs tracking-wider uppercase text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                <i className="fas fa-shield-alt text-amber-600"></i> Testing Mode Active
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setOtpCode(generatedOtpCode)}
+                                className="text-xs bg-amber-200/80 hover:bg-amber-300 text-amber-950 dark:bg-amber-900/80 dark:hover:bg-amber-800 dark:text-amber-100 px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer flex items-center gap-1"
+                            >
+                                <i className="fas fa-magic text-[10px]"></i> Auto-fill Code
+                            </button>
+                        </div>
+                        <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-3.5 py-2.5 rounded-lg border border-amber-200/80 dark:border-amber-800/80">
+                            <span className="text-xs text-slate-500 font-medium">OTP Code:</span>
+                            <span className="font-mono font-bold text-xl tracking-widest text-blue-600 dark:text-blue-400 select-all">
+                                {generatedOtpCode}
+                            </span>
+                        </div>
+                        <p className="text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                            Email sending is disabled for testing/spam prevention. Use the code above to proceed.
+                        </p>
                     </div>
                 )}
 

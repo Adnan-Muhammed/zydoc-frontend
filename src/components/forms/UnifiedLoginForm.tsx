@@ -74,6 +74,11 @@ const UnifiedLoginForm: React.FC = () => {
                 if (payload.signupToken) {
                     sessionStorage.setItem('signupToken', payload.signupToken);
                 }
+                if (payload.otp || payload.code) {
+                    sessionStorage.setItem('generated_otp', payload.otp || payload.code);
+                } else {
+                    sessionStorage.removeItem('generated_otp');
+                }
                 sessionStorage.setItem('show_otp_view', 'true');
                 window.location.href = '/signup';
                 return;
