@@ -40,6 +40,9 @@ export interface TimerConfig {
   primaryEndTime?: string;
   absoluteHardLimitTime?: string;
   isAlreadyExtended?: boolean;
+  durationEndAt?: string;
+  manualEndAllowedAt?: string;
+  effectiveExtensionDeadlineAt?: string;
 }
 
 /**
@@ -94,7 +97,17 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
       setIsExtended(true);
       hasExtendedRef.current = true;
     }
-  }, [timerConfig?.isAlreadyExtended]);
+    if (timerConfig?.effectiveExtensionDeadlineAt) {
+      const extMs = new Date(timerConfig.effectiveExtensionDeadlineAt).getTime();
+      if (!isNaN(extMs)) {
+        setExtensionDeadlineMs(extMs);
+        extensionDeadlineRef.current = extMs;
+        if (timerConfig?.isAlreadyExtended) {
+          setPhase('Extension');
+        }
+      }
+    }
+  }, [timerConfig?.isAlreadyExtended, timerConfig?.effectiveExtensionDeadlineAt]);
 
   // ── Server-Driven Wrap-Up (Race Condition #3: server authority) ──────────
   // Called when the server emits `server_wrap_up_warning`.
@@ -169,7 +182,19 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
     let durationEndMs: number;
     let computedSessionStatus: 'EARLY' | 'ON_TIME' | 'LATE' = 'ON_TIME';
 
-    if (primaryEndTime) {
+    if (timerConfig.durationEndAt) {
+      durationEndMs = new Date(timerConfig.durationEndAt).getTime();
+      const scheduledEndMs = scheduledEndTime ? new Date(scheduledEndTime).getTime() : (startTime + standardDurationMs);
+      const scheduledStartMs = scheduledEndMs - standardDurationMs;
+      const diffFromScheduledStart = startTime - scheduledStartMs;
+      if (diffFromScheduledStart < -60000) {
+        computedSessionStatus = 'EARLY';
+      } else if (diffFromScheduledStart > 60000) {
+        computedSessionStatus = 'LATE';
+      } else {
+        computedSessionStatus = 'ON_TIME';
+      }
+    } else if (primaryEndTime) {
       durationEndMs = new Date(primaryEndTime).getTime();
       const scheduledEndMs = scheduledEndTime ? new Date(scheduledEndTime).getTime() : (startTime + standardDurationMs);
       const scheduledStartMs = scheduledEndMs - standardDurationMs;
@@ -299,5 +324,6 @@ export function useCallTimer(timerConfig: TimerConfig | null) {
     extensionDeadlineMs,
     /** The configurable max extension value for UI display ("Extend Xm") */
     maxExtensionMinutes: effectiveMaxExtensionMinutes,
+    manualEndAllowedAt: timerConfig?.manualEndAllowedAt ?? null,
   };
 }

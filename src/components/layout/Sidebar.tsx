@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { logoutUser } from '@/redux/auth/authThunk';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   LayoutDashboard,
   UserCheck,
@@ -281,7 +282,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
           <div className="sidebar-avatar">
             {user?.avatarUrl ? (
               <img
-                src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
+                src={resolveFileUrl(user.avatarUrl)}
                 alt="Profile"
                 className="size-full object-cover rounded-xl"
               /> 

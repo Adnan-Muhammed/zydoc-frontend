@@ -9,6 +9,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { fetchMasterDoctors, toggleDoctorStatus } from '@/redux/features/admin/adminThunk';
 import { MasterDoctor } from '@/redux/features/admin/adminTypes';
 import DataTable, { Column } from '@/components/admin/common/DataTable';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import DoctorDetailDrawer from '@/components/admin/doctors/DoctorDetailDrawer';
 import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConfirmModal';
  
@@ -192,11 +193,7 @@ export default function AdminDoctorsClient() {
           <div className="flex items-center gap-3">
             {profile.avatarUrl ? (
               <img
-                src={
-                  profile.avatarUrl.startsWith('http')
-                    ? profile.avatarUrl
-                    : `${process.env.NEXT_PUBLIC_API_URL || ''}/${profile.avatarUrl.replace(/^\//, '')}`
-                }
+                src={resolveFileUrl(profile.avatarUrl)}
                 alt={fullName}
                 className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-100 shadow-2xs shrink-0"
               />

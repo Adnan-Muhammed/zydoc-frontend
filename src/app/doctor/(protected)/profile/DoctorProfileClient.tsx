@@ -29,6 +29,7 @@ import {
   Eye
 } from 'lucide-react';
 import { formatTo12Hour } from '@/utils/timeFormat';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 
 interface WorkingHourSlot {
   start: string;
@@ -81,7 +82,7 @@ export default function DoctorProfileClient({ doctor: d }: DoctorProfileClientPr
   const phone: string = d.phone ?? '';
   const specialty: string = d.specialty ?? 'General Practitioner';
   const licenseNumber: string = d.licenseNumber ?? '';
-  const registrationDocUrl: string = d.medicalCertificateUrl ?? '';
+  const registrationDocUrl: string = resolveFileUrl(d.medicalCertificateUrl);
   const yearsOfExp: number = Number(d.yearsOfExperience ?? 0);
   const bio: string = d.bio ?? '';
   const expertiseTags: string[] = d.expertiseTags ?? [];
@@ -95,12 +96,9 @@ export default function DoctorProfileClient({ doctor: d }: DoctorProfileClientPr
   let avatarUrl =
     'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=350&h=350';
   if (d.avatarUrl && !d.avatarUrl.includes('Lucid_Origin_I_want_a_professionallooking_passpo')) {
-    if (d.avatarUrl.startsWith('http://') || d.avatarUrl.startsWith('https://')) {
-      avatarUrl = d.avatarUrl;
-    } else {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-      const cleanPath = d.avatarUrl.startsWith('/') ? d.avatarUrl : `/${d.avatarUrl}`;
-      avatarUrl = `${baseUrl}${cleanPath}`;
+    const resolvedAvatar = resolveFileUrl(d.avatarUrl);
+    if (resolvedAvatar) {
+      avatarUrl = resolvedAvatar;
     }
   } 
 
@@ -618,13 +616,7 @@ export default function DoctorProfileClient({ doctor: d }: DoctorProfileClientPr
                       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                         {q.certificateUrl && (
                           <a
-                            href={
-                              q.certificateUrl.startsWith('http')
-                                ? q.certificateUrl
-                                : `${process.env.NEXT_PUBLIC_API_URL}${
-                                    q.certificateUrl.startsWith('/') ? '' : '/'
-                                  }${q.certificateUrl}`
-                            } 
+                            href={resolveFileUrl(q.certificateUrl)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-2.5 py-1 rounded-lg transition"

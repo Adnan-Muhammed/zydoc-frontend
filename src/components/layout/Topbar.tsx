@@ -14,6 +14,7 @@ import { AdminNotification } from '@/redux/features/admin/adminTypes';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { logoutUser } from '@/redux/auth/authThunk';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Menu,
   Bell,
@@ -438,7 +439,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
               <div className="topbar-avatar flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#181852] text-white text-xs font-semibold overflow-hidden shadow-xs shrink-0">
                 {user?.avatarUrl ? (
                   <img 
-                    src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
+                    src={resolveFileUrl(user.avatarUrl)}
                     alt="Profile"
                     className="w-full h-full object-cover"
                   />
@@ -465,7 +466,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                     <div className="w-10 h-10 rounded-xl bg-[#181852] text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 shadow-xs">
                       {user?.avatarUrl ? (
                         <img
-                          src={`${process.env.NEXT_PUBLIC_API_URL}${user.avatarUrl.startsWith('/') ? '' : '/'}${user.avatarUrl}`}
+                          src={resolveFileUrl(user.avatarUrl)}
                           alt="Profile"
                           className="w-full h-full object-cover"
                         />

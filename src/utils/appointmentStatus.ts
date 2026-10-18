@@ -1,9 +1,13 @@
+import { isTerminalStatus, getAuthoritativeRefundStatus } from './appointmentTiming';
+
 export type UserRole = 'patient' | 'doctor' | 'admin';
 
 export interface StatusConfig {
   label: string;
   badgeClass: string;
 }
+
+export { isTerminalStatus, getAuthoritativeRefundStatus };
 
 /**
  * Returns role-specific labels and badge styling for appointment statuses.
@@ -13,11 +17,33 @@ export interface StatusConfig {
  * - Doctor:  'no-show' -> 'Patient No-Show' (bg-amber-50 text-amber-700 border border-amber-200)
  * - Admin:   'no-show' -> 'No-Show' (bg-amber-50 text-amber-700 border border-amber-200)
  */
-export function getAppointmentStatusConfig(status?: string | null, role: UserRole = 'patient'): StatusConfig {
+export function getAppointmentStatusConfig(status?: string | null, role: UserRole = 'patient', app?: any): StatusConfig {
   const normalized = (status || '').toLowerCase().trim();
+
+  // If full app object is passed and it has a pending manual review, reflect that authoritatively
+  const refundUpper = (app?.refundState || app?.refundStatus || '').toUpperCase();
+  const paymentUpper = (app?.paymentState || app?.paymentStatus || '').toUpperCase();
+  const statusUpper = (app?.status || status || '').toUpperCase();
+  const isDoctorNoShow = statusUpper === 'DOCTOR_NO_SHOW' || statusUpper === 'DOCTOR_MISSED';
+
+  if (app && (
+    refundUpper === 'PENDING_REVIEW' ||
+    refundUpper === 'MANUAL_REVIEW' ||
+    paymentUpper === 'MANUAL_REVIEW' ||
+    app.status === 'disputed' ||
+    (isDoctorNoShow && refundUpper !== 'COMPLETED' && refundUpper !== 'SUCCEEDED' && paymentUpper !== 'REFUNDED' && statusUpper !== 'REFUNDED')
+  )) {
+    return {
+      label: role === 'doctor'
+        ? (isDoctorNoShow ? 'Missed Consultation (Under Review)' : 'Disputed / Under Review')
+        : (isDoctorNoShow ? 'Doctor Missed (Under Review)' : 'Cancellation Under Review'),
+      badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+    };
+  }
 
   switch (normalized) {
     case 'no-show':
+    case 'patient_no_show':
       if (role === 'patient') {
         return {
           label: 'Missed Appointment',
@@ -36,30 +62,20 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
       };
 
     case 'completed':
+    case 'handover_ended':
       return {
         label: 'Completed',
         badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
       };
 
     case 'cancelled':
-      if (role === 'patient') {
-        return {
-          label: 'Cancelled (Refunded to Wallet)',
-          badgeClass: 'bg-red-50 text-red-700 border border-red-200',
-        };
-      }
       return {
         label: 'Cancelled',
         badgeClass: 'bg-red-50 text-red-700 border border-red-200',
       };
 
     case 'doctor_missed':
-      if (role === 'patient') {
-        return {
-          label: 'Doctor Missed (Refunded to Wallet)',
-          badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
-        };
-      }
+    case 'doctor_no_show':
       if (role === 'doctor') {
         return {
           label: 'Missed Consultation',
@@ -67,23 +83,11 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
         };
       }
       return {
-        label: 'Doctor Missed (Refunded)',
+        label: 'Doctor Missed',
         badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
       };
 
     case 'cancelled_by_doctor':
-      if (role === 'patient') {
-        return {
-          label: 'Cancelled by Doctor (Refunded to Wallet)',
-          badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
-        };
-      }
-      if (role === 'doctor') {
-        return {
-          label: 'Cancelled by Doctor',
-          badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
-        };
-      }
       return {
         label: 'Cancelled by Doctor',
         badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200',
@@ -108,21 +112,29 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
       };
 
     case 'refunded':
-      if (role === 'patient') {
-        return {
-          label: 'Dispute Approved (Refunded to Wallet)',
-          badgeClass: 'bg-teal-50 text-teal-700 border border-teal-200',
-        };
-      }
       return {
-        label: 'Refunded',
+        label: role === 'patient' ? 'Refunded' : 'Refunded',
         badgeClass: 'bg-teal-50 text-teal-700 border border-teal-200',
       };
 
     case 'scheduled':
+    case 'confirmed':
       return {
         label: 'Scheduled',
         badgeClass: 'bg-blue-50 text-blue-700 border border-blue-200',
+      };
+
+    case 'waiting':
+      return {
+        label: 'In Waiting Room',
+        badgeClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+      };
+
+    case 'active':
+    case 'in_progress':
+      return {
+        label: 'In Consultation',
+        badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
       };
 
     case 'time reached':
@@ -143,6 +155,12 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
         badgeClass: 'bg-red-50 text-red-700 border border-red-200',
       };
 
+    case 'system_terminated':
+      return {
+        label: 'System Terminated',
+        badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+      };
+
     default:
       if (!status) {
         return {
@@ -151,7 +169,7 @@ export function getAppointmentStatusConfig(status?: string | null, role: UserRol
         };
       }
       return {
-        label: status.charAt(0).toUpperCase() + status.slice(1),
+        label: status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' '),
         badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
       };
   }
@@ -223,18 +241,8 @@ export function getAppointmentEndTimestamp(app: any): number {
 export function isAppointmentUpcomingOrActive(app: any): boolean {
   if (!app) return false;
 
-  const terminalStatuses = [
-    'completed',
-    'no-show',
-    'cancelled',
-    'cancelled_by_doctor',
-    'doctor_missed',
-    'disputed',
-    'refunded',
-  ];
-
-  const status = (app.status || '').toLowerCase().trim();
-  if (terminalStatuses.includes(status)) {
+  const status = (app.status || '').trim();
+  if (isTerminalStatus(status)) {
     return false;
   }
 
@@ -244,4 +252,5 @@ export function isAppointmentUpcomingOrActive(app: any): boolean {
   // Moves to past once scheduledEndAt has passed
   return Date.now() <= endMs;
 }
+
 

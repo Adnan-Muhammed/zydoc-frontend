@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { fetchAppointmentById } from '@/redux/features/appointment/appointmentThunk';
 import { VideoCallRoom } from '@/modules/video-call';
+import { isTerminalStatus } from '@/utils/appointmentTiming';
 
 interface ConsultationPageProps { 
   params: { id: string };
@@ -28,7 +29,7 @@ export default function PatientConsultationPage({ params }: ConsultationPageProp
 
   useEffect(() => {
     if (currentAppointment) {
-      if (currentAppointment.status === 'completed') {
+      if (isTerminalStatus(currentAppointment.status)) {
         setIsBlockedReentry(true);
         router.replace('/patient/appointments');
         return;

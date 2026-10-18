@@ -8,6 +8,7 @@ import axiosInstance from '@/api/axiosInstance';
 import { useAppDispatch } from '@/redux/hooks';
 import { toggleDoctorStatus } from '@/redux/features/admin/adminThunk';
 import { MasterDoctor } from '@/redux/features/admin/adminTypes';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConfirmModal';
 
 interface DoctorDetailDrawerProps {
@@ -90,12 +91,7 @@ export default function DoctorDetailDrawer({
   const profile = { ...baseProfile, ...(fetchedDetails || {}) };
   const targetId = doctor.userId || (profile as any)._id || (profile as any).id || '';
 
-  const getFullDocUrl = (url?: string) => {
-    if (!url) return ''; 
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const base = process.env.NEXT_PUBLIC_API_URL || '';
-    return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
+  const getFullDocUrl = (url?: string) => resolveFileUrl(url);
 
   const handleCopy = (text?: string, label?: string) => {
     if (!text) return;

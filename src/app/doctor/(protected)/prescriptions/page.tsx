@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Pill,
   FileText,
@@ -371,10 +372,7 @@ export default function DoctorPrescriptionsPage() {
                                                     const fileType = (file.type || '').toLowerCase();
                                                     const isPdf = fileType === 'pdf';
                                                     const isImg = ['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(fileType);
-                                                    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                                                    const fileUrl = file.url?.startsWith('http')
-                                                        ? file.url
-                                                        : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
+                                                    const fileUrl = resolveFileUrl(file.url);
 
                                                     return (
                                                          <div

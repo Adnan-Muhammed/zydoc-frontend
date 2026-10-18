@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { PendingDoctor } from '@/redux/features/admin/adminTypes';
 
 interface PendingDoctorsTableProps {
@@ -226,13 +227,7 @@ export default function PendingDoctorsTable({
                           <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0 overflow-hidden shadow-xs">
                             {p.avatarUrl ? (
                               <img
-                                src={ 
-                                  p.avatarUrl.startsWith('http')
-                                    ? p.avatarUrl
-                                    : `${process.env.NEXT_PUBLIC_API_URL}${
-                                        p.avatarUrl.startsWith('/') ? '' : '/'
-                                      }${p.avatarUrl}`
-                                }
+                                src={resolveFileUrl(p.avatarUrl)}
                                 alt={fullName}
                                 className="w-full h-full object-cover"
                               />

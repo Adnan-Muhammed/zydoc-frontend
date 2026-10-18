@@ -7,7 +7,9 @@ import { fetchDoctorAppointments, completeOfflineAppointment, markNoShowOfflineA
 import { clearAppointmentError } from '@/redux/features/appointment/appointmentSlice';
 
 import { getAppointmentStatusConfig, getAppointmentStartTimestamp, getAppointmentEndTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
+import { computeTimings, canInitialJoin, canRejoin, isTerminalStatus } from '@/utils/appointmentTiming';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Calendar,
   CalendarCheck,
@@ -470,9 +472,7 @@ export default function DoctorAppointmentsPage() {
             {/* Appointment Details Modal - Patient Health Card */}
             {selectedAppointment && (() => {
                 const activeAppointment = appointments.find((a: any) => a._id === selectedAppointment._id) || selectedAppointment;
-                const isTerminal = ['completed', 'no-show', 'cancelled', 'cancelled_by_doctor', 'doctor_missed', 'disputed', 'refunded'].includes(
-                    (activeAppointment.status || '').toLowerCase().trim()
-                );
+                const isTerminal = isTerminalStatus(activeAppointment.status);
 
                 return (
                     <ModalPortal>
@@ -769,8 +769,7 @@ export default function DoctorAppointmentsPage() {
                                         </div>
                                         <div className="space-y-2">
                                             {activeAppointment.consultationFiles.map((file: any, i: number) => {
-                                                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                                                const fileUrl = file.url?.startsWith('http') ? file.url : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
+                                                const fileUrl = resolveFileUrl(file.url);
 
                                                 return (
                                                     <div
@@ -817,16 +816,19 @@ export default function DoctorAppointmentsPage() {
                                             (() => {
                                                 const appTimeMs = getAppointmentStartTimestamp(activeAppointment);
                                                 const nowMs = new Date().getTime();
-                                                const diffMins = (appTimeMs - nowMs) / 1000 / 60;
                                                 const slotDurationMins = (activeAppointment.scheduledStartAt && activeAppointment.scheduledEndAt)
                                                     ? Math.round((new Date(activeAppointment.scheduledEndAt).getTime() - new Date(activeAppointment.scheduledStartAt).getTime()) / 60000)
                                                     : (Number(activeAppointment.doctorId?.slotDuration) || 15);
-                                                const maxSessionEnd = activeAppointment.scheduledEndAt
-                                                    ? new Date(activeAppointment.scheduledEndAt).getTime() + 15 * 60000
-                                                    : appTimeMs + (slotDurationMins + 15) * 60000;
 
-                                                const isReady = diffMins <= 15 && nowMs <= maxSessionEnd;
-                                                const isExpired = nowMs > maxSessionEnd;
+                                                const timings = computeTimings(
+                                                    activeAppointment.scheduledStartAt || appTimeMs,
+                                                    slotDurationMins
+                                                );
+
+                                                const canDoctorRejoin = canRejoin(activeAppointment, timings);
+                                                const canDoctorInitial = canInitialJoin('doctor', timings);
+                                                const isReady = canDoctorRejoin || canDoctorInitial;
+                                                const isExpired = !isReady && (nowMs >= timings.scheduledEndAt.getTime());
 
                                                 if (isExpired) {
                                                     return (
@@ -845,15 +847,15 @@ export default function DoctorAppointmentsPage() {
                                                         href={`/doctor/consultation/${activeAppointment._id}?join=true`}
                                                         className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold text-xs shadow-xs flex justify-center items-center transition-all active:scale-98"
                                                     >
-                                                        <Video className="w-4 h-4 mr-2" /> Join Video Call
+                                                        <Video className="w-4 h-4 mr-2" /> {canDoctorRejoin ? 'Rejoin Video Call' : 'Join Video Call'}
                                                     </Link>
                                                 ) : (
                                                     <button
                                                         disabled
-                                                        title="You can join 15 minutes before the scheduled time."
+                                                        title="Doctor early start window opens 7 minutes before scheduled time."
                                                         className="flex-1 bg-indigo-600/40 text-white py-3 rounded-xl font-bold text-xs cursor-not-allowed shadow-2xs flex justify-center items-center"
                                                     >
-                                                        <Video className="w-4 h-4 mr-2" /> Join Video Call (Opens 15m Prior)
+                                                        <Video className="w-4 h-4 mr-2" /> Join Video Call (Opens 7m Prior)
                                                     </button>
                                                 );
                                             })()

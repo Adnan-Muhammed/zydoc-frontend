@@ -61,6 +61,25 @@ function useDraft() {
     return { draft, setDraft, clearDraft };
 }
 
+// ─── Helper: Reconstruct File from base64 Data URL ─────────────────────────────
+
+function dataURLtoFile(dataurl: string, filename: string): File | null {
+    try {
+        const arr = dataurl.split(',');
+        const mimeMatch = arr[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    } catch {
+        return null;
+    }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CompleteDoctorProfileClient() {
@@ -73,7 +92,8 @@ export default function CompleteDoctorProfileClient() {
     const { currentStep, workingHours } = draft;
 
     const [avatar, setAvatar] = useState<File | null>(null);
-    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(() => draft.avatarUrl || null);
+    const [avatarError, setAvatarError] = useState<string | null>(null);
     const [medicalCertificate, setMedicalCertificate] = useState<File | null>(null);
     const [governmentId, setGovernmentId] = useState<File | null>(null);
     const [qualificationFiles, setQualificationFiles] = useState<Record<string, File>>({});
@@ -89,23 +109,71 @@ export default function CompleteDoctorProfileClient() {
         } catch { /* ignore */ }
     }, []);
 
+    // Reconstruct avatar file from draft if saved as Data URL across page reloads
+    useEffect(() => {
+        if (!avatar && draft.avatarUrl) {
+            if (draft.avatarUrl.startsWith('data:image/')) {
+                const restored = dataURLtoFile(draft.avatarUrl, 'doctor-avatar.jpg');
+                if (restored) {
+                    setAvatar(restored);
+                }
+            }
+            if (!avatarPreview) {
+                setAvatarPreview(draft.avatarUrl);
+            }
+        }
+    }, [draft.avatarUrl, avatar, avatarPreview]);
+
     // ── Handlers ──────────────────────────────────────────────────────────────
+
+    const handleAvatarFile = (file: File) => {
+        // Validation: Max file size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            setAvatarError('Profile picture exceeds 5 MB. Please choose a smaller file.');
+            return;
+        }
+
+        // Validation: MIME types
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            setAvatarError('Invalid image format. Allowed formats: JPG, PNG, WebP.');
+            return;
+        }
+
+        setAvatar(file);
+        setAvatarError(null);
+        setServerErrors(null);
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const previewUrl = event.target?.result as string;
+            setAvatarPreview(previewUrl);
+            setDraft({ avatarUrl: previewUrl });
+        };
+        reader.readAsDataURL(file);
+    };
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setAvatar(file);
-            const reader = new FileReader();
-            reader.onload = (event) => setAvatarPreview(event.target?.result as string);
-            reader.readAsDataURL(file);
+            handleAvatarFile(file);
         }
     };
 
     const nextStep = (e: React.MouseEvent) => {
         e.preventDefault();
-        if (currentStep === 1 && (!draft.firstName || !draft.lastName || !draft.phone)) {
-            alert('Please fill out all required personal information fields.');
-            return;
+        setAvatarError(null);
+
+        if (currentStep === 1) {
+            const hasAvatar = Boolean(avatar || avatarPreview || draft.avatarUrl || user?.avatarUrl);
+            if (!hasAvatar) {
+                setAvatarError('Profile picture is mandatory. Please upload or capture an avatar to proceed.');
+                return;
+            }
+            if (!draft.firstName || !draft.lastName || !draft.phone) {
+                alert('Please fill out all required personal information fields.');
+                return;
+            }
         }
         if (currentStep === 2) {
             if (!draft.systemOfMedicine || !draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
@@ -184,6 +252,14 @@ export default function CompleteDoctorProfileClient() {
         }
         
         // --- FILE INTEGRITY VALIDATION (In case of page reload restoring draft but losing files) ---
+        const hasAvatar = Boolean(avatar || avatarPreview || draft.avatarUrl || user?.avatarUrl);
+        if (!hasAvatar) {
+            alert('Your profile picture is missing. Please upload or capture an avatar in Step 1.');
+            setAvatarError('Profile picture is mandatory. Please upload or capture an avatar.');
+            setDraft({ currentStep: 1 });
+            return;
+        }
+
         // @ts-ignore
         const existingMedicalCert = user?.medicalCertificateUrl || user?.doctorProfile?.medicalCertificateUrl;
         // @ts-ignore
@@ -232,6 +308,7 @@ export default function CompleteDoctorProfileClient() {
                 firstName: draft.firstName,
                 lastName: draft.lastName,
                 phone: draft.phone,
+                avatarUrl: draft.avatarUrl && !draft.avatarUrl.startsWith('data:') ? draft.avatarUrl : undefined,
                 systemOfMedicine: draft.systemOfMedicine || 'Modern Medicine',
                 specialty: draft.specialty,
                 licenseNumber: draft.licenseNumber,
@@ -306,8 +383,8 @@ export default function CompleteDoctorProfileClient() {
                     message: errorMessage,
                 });
 
-                // Auto-navigate to the step containing the duplicate field
-                if (errorField === 'phone') {
+                // Auto-navigate to the step containing the invalid field
+                if (errorField === 'phone' || errorField === 'avatar') {
                     setDraft({ currentStep: 1 });
                 } else if (errorField === 'licenseNumber') {
                     setDraft({ currentStep: 2 });
@@ -345,6 +422,8 @@ export default function CompleteDoctorProfileClient() {
                             setDraft={setDraft}
                             avatarPreview={avatarPreview}
                             onAvatarChange={handleAvatarChange}
+                            onAvatarFile={handleAvatarFile}
+                            avatarError={avatarError}
                             serverErrors={serverErrors}
                         />
                     )}

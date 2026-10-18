@@ -28,6 +28,7 @@ import ConsultationSidebar from "./ConsultationSidebar";
 import CallExitConfirmModal from "./CallExitConfirmModal";
 import DuplicateTabFallback from "./DuplicateTabFallback";
 import WaitingOverlay from "./WaitingOverlay";
+import ManualEndLockModal from "./ManualEndLockModal";
 import { WRAP_UP_COUNTDOWN_SECONDS, EARLY_START_MINUTES, EARLY_JOIN_MINUTES, MIN_CONSULTATION_DURATION_SECONDS } from "@/config/videoCallConfig";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -101,6 +102,9 @@ export default function VideoCallRoom({
     isTakenOver,
     requestTakeover,
     reclaimCall,
+    waitingRoomStatus,
+    reconnectionGrace,
+    terminationInfo,
   } = useWebRTC({ appointmentId, userId, role, onCallEnded, rewindBeforeNavigate, token: accessToken });
 
   const normalizedRole = role?.toLowerCase() || "";
@@ -110,6 +114,14 @@ export default function VideoCallRoom({
       : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
 
   const { doctorAppointments, currentAppointment } = useAppSelector((state) => state.appointment);
+
+  // Manual End Call Lock modal state (§8)
+  const [manualLockModalData, setManualLockModalData] = useState<{
+    isOpen: boolean;
+    elapsedSeconds: number;
+    remainingSeconds: number;
+    manualEndAllowedAt?: string;
+  } | null>(null);
 
   // Track strictly continuous overlap time (Doctor 3-Minute Rule)
   const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState(0);
@@ -173,10 +185,12 @@ export default function VideoCallRoom({
       continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
     ) {
       const remaining = MIN_CONSULTATION_DURATION_SECONDS - continuousOverlapSeconds;
-      setPatientLockWarning(
-        `Mandatory Consultation Duration: A minimum of 3 continuous minutes with the patient is required before ending the session (${remaining}s remaining). If disconnected, participants must rejoin to complete.`
-      );
-      setTimeout(() => setPatientLockWarning(null), 5000);
+      setManualLockModalData({
+        isOpen: true,
+        elapsedSeconds: continuousOverlapSeconds,
+        remainingSeconds: remaining,
+        manualEndAllowedAt: timerConfig?.manualEndAllowedAt,
+      });
       return;
     }
     if (normalizedRole === "patient" && patientRoomElapsedSeconds < 60) {
@@ -186,7 +200,19 @@ export default function VideoCallRoom({
       );
       setTimeout(() => setPatientLockWarning(null), 5000);
     }
-  }, [normalizedRole, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds]);
+  }, [normalizedRole, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds, timerConfig?.manualEndAllowedAt]);
+
+  const handleConfirmExit = useCallback(async () => {
+    const res = await endCall();
+    if (res && typeof res === "object" && res.locked) {
+      setManualLockModalData({
+        isOpen: true,
+        elapsedSeconds: res.elapsedSeconds ?? continuousOverlapSeconds,
+        remainingSeconds: res.remainingSeconds ?? Math.max(0, MIN_CONSULTATION_DURATION_SECONDS - continuousOverlapSeconds),
+        manualEndAllowedAt: res.manualEndAllowedAt,
+      });
+    }
+  }, [endCall, continuousOverlapSeconds]);
 
   const {
     isExitModalOpen,
@@ -197,7 +223,7 @@ export default function VideoCallRoom({
   } = usePreventCallExit({
     isActive: !isCallEnded && !error && !isDuplicateTab && !isTakenOver,
     onLeaveCall: cleanupMediaAndConnections,
-    onConfirmExit: endCall,
+    onConfirmExit: handleConfirmExit,
     defaultRedirectUrl,
     appointmentId,
     canExit,
@@ -591,7 +617,19 @@ export default function VideoCallRoom({
             formattedCountdownToEarlyStart={formattedCountdownToEarlyStart}
             isEarlyStartWindow={isEarlyStartWindow}
             isPastScheduledStart={isPastScheduledStart}
+            waitingRoomStatus={waitingRoomStatus}
           />
+        )}
+
+        {/* ── 30-Second Reconnection Grace Alert Banner ── */}
+        {reconnectionGrace?.isDisconnected && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-slate-950 px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-amber-300 font-medium text-xs sm:text-sm animate-pulse backdrop-blur-md">
+            <i className="fas fa-satellite-dish text-base"></i>
+            <span>
+              <strong>{reconnectionGrace.userRole === "doctor" ? "Doctor" : "Patient"} disconnected temporarily.</strong>{" "}
+              Reconnection grace active ({reconnectionGrace.gracePeriodSeconds}s remaining).
+            </span>
+          </div>
         )}
 
         {/* Call Ended / Consultation Completed Overlay */}
@@ -607,13 +645,18 @@ export default function VideoCallRoom({
               </div>
 
               <h3 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
-                Consultation Completed
+                {terminationInfo?.reason === "HANDOVER_AUTO_CUT" || terminationInfo?.reason === "next_patient_live"
+                  ? "Next Patient Handover"
+                  : terminationInfo?.reason === "MAX_EXTENSION_HARD_STOP" || terminationInfo?.reason === "max_extension_reached"
+                  ? "Maximum Extension Reached"
+                  : "Consultation Completed"}
               </h3>
 
               <p className="text-slate-300 text-xs sm:text-sm mt-2 mb-6 leading-relaxed max-w-xs">
-                {normalizedRole === "doctor"
-                  ? "Consultation session has been concluded. Records and prescriptions have been saved."
-                  : "Your consultation has ended successfully. Prescriptions, clinical notes, and session details are available in your appointments."}
+                {terminationInfo?.message ||
+                  (normalizedRole === "doctor"
+                    ? "Consultation session has been concluded. Records and prescriptions have been saved."
+                    : "Your consultation has ended successfully. Prescriptions, clinical notes, and session details are available in your appointments.")}
               </p>
 
               {/* Primary Navigation Button */}
@@ -649,7 +692,7 @@ export default function VideoCallRoom({
               </h3>
 
               <p className="text-slate-300 text-xs sm:text-sm mt-2 mb-6 leading-relaxed max-w-xs">
-                {isDoctorMissed.message || "The doctor did not attend the scheduled consultation. A full refund has been credited to your wallet."}
+                {isDoctorMissed.message || "The doctor did not attend the scheduled consultation. Your appointment has been routed for administrative review and refund processing."}
               </p>
 
               <button
@@ -746,6 +789,15 @@ export default function VideoCallRoom({
         role={role}
         onCancel={cancelExit}
         onConfirm={confirmExit}
+      />
+
+      {/* ── Manual End Call Locked Modal (§8) ───────────────────────── */}
+      <ManualEndLockModal
+        isOpen={Boolean(manualLockModalData?.isOpen)}
+        elapsedSeconds={manualLockModalData?.elapsedSeconds ?? continuousOverlapSeconds}
+        remainingSeconds={manualLockModalData?.remainingSeconds ?? Math.max(0, MIN_CONSULTATION_DURATION_SECONDS - continuousOverlapSeconds)}
+        manualEndAllowedAt={manualLockModalData?.manualEndAllowedAt}
+        onClose={() => setManualLockModalData(null)}
       />
     </div>
   );

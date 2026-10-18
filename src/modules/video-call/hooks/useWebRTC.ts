@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { TimerConfig, ExtensionState } from "./useCallTimer";
 import { useCallTabSync } from "./useCallTabSync";
+import { appointmentService } from "@/redux/features/appointment/appointmentService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,39 @@ interface UseWebRTCOptions {
    */
   rewindBeforeNavigate?: () => Promise<void>;
   token?: string | null;
+  /** Explicit rejoin flag for session reconnect (§18.2) */
+  isRejoin?: boolean;
+}
+
+export interface WaitingRoomStatus {
+  appointmentId: string;
+  serverNow: string;
+  waitingRoomEnteredAt: string;
+  holdSeconds: number;
+  remainingHoldSeconds: number;
+}
+
+export interface ReconnectionGrace {
+  isDisconnected: boolean;
+  userRole: string;
+  userId?: string;
+  gracePeriodSeconds: number;
+  disconnectedAt: number;
+}
+
+export interface TerminationInfo {
+  reason: string;
+  message: string;
+  nextAppointmentId?: string;
+  patientName?: string;
+}
+
+export interface ManualEndLockResult {
+  locked: boolean;
+  elapsedSeconds?: number;
+  remainingSeconds?: number;
+  manualEndAllowedAt?: string;
+  message?: string;
 }
 
 interface UseWebRTCReturn {
@@ -44,7 +78,7 @@ interface UseWebRTCReturn {
   /** Action functions */
   toggleAudio: () => void;
   toggleVideo: () => void;
-  endCall: () => void;
+  endCall: () => Promise<ManualEndLockResult | void>;
   cleanupMediaAndConnections: () => void;
   /** Timer Config from Server */
   timerConfig: TimerConfig | null;
@@ -55,6 +89,10 @@ interface UseWebRTCReturn {
   isTakenOver: boolean;
   requestTakeover: () => void;
   reclaimCall: () => void;
+  /** Waiting room and reconnection lifecycle */
+  waitingRoomStatus: WaitingRoomStatus | null;
+  reconnectionGrace: ReconnectionGrace | null;
+  terminationInfo: TerminationInfo | null;
 }
 
 // ─── STUN Servers ─────────────────────────────────────────────────────────────
@@ -80,6 +118,7 @@ export function useWebRTC({
   onCallEnded,
   rewindBeforeNavigate,
   token,
+  isRejoin = false,
 }: UseWebRTCOptions): UseWebRTCReturn {
   const router = useRouter();
 
@@ -89,6 +128,8 @@ export function useWebRTC({
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const currentJoinTokenRef = useRef<string | null>(null);
+  const hasJoinedOnceRef = useRef<boolean>(Boolean(isRejoin));
 
   // ── State ───────────────────────────────────────────────────────────────
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -100,8 +141,10 @@ export function useWebRTC({
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
-
   const [timerConfig, setTimerConfig] = useState<TimerConfig | null>(null);
+  const [waitingRoomStatus, setWaitingRoomStatus] = useState<WaitingRoomStatus | null>(null);
+  const [reconnectionGrace, setReconnectionGrace] = useState<ReconnectionGrace | null>(null);
+  const [terminationInfo, setTerminationInfo] = useState<TerminationInfo | null>(null);
 
   // ── Multi-Tab Coordination ─────────────────────────────────────────────
   const {
@@ -157,6 +200,33 @@ export function useWebRTC({
       setSocket(null);
     }
   }, [isTakenOver]);
+
+  // ── Countdown Effects for Waiting Room Hold & Reconnection Grace ───────
+  useEffect(() => {
+    if (!waitingRoomStatus || waitingRoomStatus.remainingHoldSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setWaitingRoomStatus((prev) => {
+        if (!prev || prev.remainingHoldSeconds <= 1) {
+          return prev ? { ...prev, remainingHoldSeconds: 0 } : null;
+        }
+        return { ...prev, remainingHoldSeconds: prev.remainingHoldSeconds - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [waitingRoomStatus?.remainingHoldSeconds]);
+
+  useEffect(() => {
+    if (!reconnectionGrace || reconnectionGrace.gracePeriodSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setReconnectionGrace((prev) => {
+        if (!prev || prev.gracePeriodSeconds <= 1) {
+          return prev ? { ...prev, gracePeriodSeconds: 0 } : null;
+        }
+        return { ...prev, gracePeriodSeconds: prev.gracePeriodSeconds - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [reconnectionGrace?.gracePeriodSeconds]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -237,12 +307,62 @@ export function useWebRTC({
           localVideoRef.current.srcObject = stream;
         }
 
-        // ── Step 2: Connect dedicated signaling socket ─────────────────
+        // ── Step 2: Request appointment-specific Join Token from Backend (§18.2) ──
+        let joinTokenData: { token: string; jti?: string; sessionId?: string; expiresInSeconds?: number };
+        try {
+          const isRejoining = hasJoinedOnceRef.current;
+          const res = await appointmentService.getJoinToken(appointmentId, isRejoining);
+          joinTokenData = res;
+          currentJoinTokenRef.current = res.token;
+          hasJoinedOnceRef.current = true;
+        } catch (tokenErr: any) {
+          console.error("[useWebRTC] Failed to obtain join token:", tokenErr);
+          if (!isMounted) return;
+
+          const status = tokenErr?.response?.status;
+          const errData = tokenErr?.response?.data;
+          const code = errData?.code;
+          let msg = errData?.message;
+
+          if (code === "NOT_AUTHORIZED" || status === 403) {
+            msg = msg || "Unauthorized: You are not an assigned participant for this appointment.";
+          } else if (code === "JOIN_TOO_EARLY") {
+            msg = msg || (errData?.earlyJoinAt 
+              ? `Consultation room opens at ${new Date(errData.earlyJoinAt).toLocaleTimeString()}`
+              : "Consultation room is not open yet.");
+          } else if (code === "JOIN_WINDOW_CLOSED") {
+            msg = msg || "The join window for this appointment has closed.";
+          } else if (code === "SESSION_TERMINAL") {
+            msg = msg || "This consultation session has ended.";
+          } else if (status === 404) {
+            msg = msg || "Appointment not found.";
+          } else {
+            msg = msg || "Failed to obtain secure consultation join token.";
+          }
+
+          setError(msg);
+          if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach((t) => {
+              try { t.stop(); } catch (_) {}
+            });
+            localStreamRef.current = null;
+            setLocalStream(null);
+          }
+          return;
+        }
+
+        if (!isMounted) return;
+
+        // ── Step 3: Connect dedicated signaling socket ─────────────────
         const newSocket = io(
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
           {
             withCredentials: true,
-            auth: { token: token || undefined },
+            auth: {
+              token: token || undefined, // Normal user JWT preserves user auth & socket.userId binding
+              joinToken: joinTokenData.token, // Issued appointment-specific join token
+              roomToken: joinTokenData.token,
+            },
           }
         );  
         socketRef.current = newSocket;
@@ -251,7 +371,93 @@ export function useWebRTC({
         newSocket.on("connect", () => {
           console.log("[useWebRTC] Signaling socket connected:", newSocket.id);
           newSocket.emit("register", { userId, role });
-          newSocket.emit("join_room", { appointmentId });
+          newSocket.emit("join_room", { appointmentId, joinToken: currentJoinTokenRef.current });
+          if (role?.toLowerCase() === "patient") {
+            newSocket.emit("join_waiting_room", { appointmentId });
+          }
+        });
+
+        // ── Fresh token lifecycle on reconnect (§18.2, §18.3) ────────
+        // Reconnect must obtain a fresh token with isRejoin: true to avoid replay rejection
+        newSocket.io.on("reconnect_attempt", async (attempt) => {
+          console.log(`[useWebRTC] Reconnect attempt #${attempt}. Fetching fresh join token...`);
+          try {
+            const freshRes = await appointmentService.getJoinToken(appointmentId, true);
+            currentJoinTokenRef.current = freshRes.token;
+            newSocket.auth = {
+              token: token || undefined,
+              joinToken: freshRes.token,
+              roomToken: freshRes.token,
+            };
+          } catch (reconnectErr: any) {
+            console.error("[useWebRTC] Failed to refresh join token on reconnect:", reconnectErr);
+            const status = reconnectErr?.response?.status;
+            const code = reconnectErr?.response?.data?.code;
+            if (status === 403 || code === "SESSION_TERMINAL") {
+              newSocket.disconnect();
+              setError(reconnectErr?.response?.data?.message || "Consultation session ended or unauthorized.");
+            }
+          }
+        });
+
+        newSocket.on("connect_error", async (err: any) => {
+          console.warn("[useWebRTC] Socket connect_error:", err.message);
+          if (
+            err?.message?.includes("TOKEN_EXPIRED") ||
+            err?.message?.includes("TOKEN_REPLAYED") ||
+            err?.message?.includes("jwt expired") ||
+            err?.message?.includes("Invalid or expired join token")
+          ) {
+            try {
+              console.log("[useWebRTC] Token expired/replayed. Fetching fresh join token for reconnect...");
+              const freshRes = await appointmentService.getJoinToken(appointmentId, true);
+              currentJoinTokenRef.current = freshRes.token;
+              newSocket.auth = {
+                token: token || undefined,
+                joinToken: freshRes.token,
+                roomToken: freshRes.token,
+              };
+              newSocket.connect();
+              return;
+            } catch (refreshErr: any) {
+              console.error("[useWebRTC] Failed to refresh join token after connect_error:", refreshErr);
+              setError(refreshErr?.response?.data?.message || refreshErr?.message || "Authentication error connecting to call.");
+              newSocket.disconnect();
+              return;
+            }
+          }
+          if (err?.message?.includes("Unauthorized")) {
+            setError(err.message);
+          }
+        });
+
+        newSocket.on("call_error", (payload: { message?: string; code?: string }) => {
+          console.error("[useWebRTC] Backend call_error received:", payload);
+          setError(payload?.message || "Call error occurred.");
+          if (payload?.code === "SESSION_TERMINAL") {
+            setIsCallEnded(true);
+          }
+        });
+
+        newSocket.on("waiting_room_status", (payload: WaitingRoomStatus) => {
+          console.log("[useWebRTC] waiting_room_status received:", payload);
+          setWaitingRoomStatus(payload);
+        });
+
+        newSocket.on("peer_temporarily_disconnected", (payload: any) => {
+          console.warn("[useWebRTC] peer_temporarily_disconnected received:", payload);
+          setReconnectionGrace({
+            isDisconnected: true,
+            userRole: payload?.userRole || (role?.toLowerCase() === "doctor" ? "patient" : "doctor"),
+            userId: payload?.userId,
+            gracePeriodSeconds: payload?.gracePeriodSeconds || 30,
+            disconnectedAt: Date.now(),
+          });
+        });
+
+        newSocket.on("peer_reconnected", (payload: any) => {
+          console.log("[useWebRTC] peer_reconnected received:", payload);
+          setReconnectionGrace(null);
         });
 
         // ── Step 3: Wire signaling events ─────────────────────────────
@@ -411,6 +617,10 @@ export function useWebRTC({
 
         newSocket.on("call_ended", (payload) => {
           console.log("[useWebRTC] Call officially ended by backend.", payload);
+          setTerminationInfo({
+            reason: payload?.reason || "consultation_ended",
+            message: payload?.message || "Consultation successfully concluded and completed.",
+          });
           setIsCallEnded(true);
           if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((t) => {
@@ -452,6 +662,30 @@ export function useWebRTC({
         // force_end_call: server-enforced hard cut (Online→Offline strict termination)
         newSocket.on("force_end_call", (payload) => {
           console.log("[useWebRTC] force_end_call received from server. Hard-terminating call.", payload);
+          const reason = payload?.reason || "SYSTEM_TERMINATED";
+          let message = payload?.message;
+          if (!message) {
+            if (
+              reason === "HANDOVER_AUTO_CUT" ||
+              reason === "next_patient_live" ||
+              reason === "next_patient_waiting" ||
+              reason === "next_patient_time_reached"
+            ) {
+              message = "Call ended by next patient handover. Please return to dashboard.";
+            } else if (reason === "MAX_EXTENSION_HARD_STOP" || reason === "max_extension_reached") {
+              message = "Maximum extension limit reached. Consultation automatically concluded.";
+            } else {
+              message = "Consultation terminated by system.";
+            }
+          }
+
+          setTerminationInfo({
+            reason,
+            message,
+            nextAppointmentId: payload?.appointmentId || payload?.nextAppointmentId,
+            patientName: payload?.patientName,
+          });
+
           if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((t) => { try { t.stop(); } catch (_) { } });
             localStreamRef.current = null;
@@ -463,11 +697,12 @@ export function useWebRTC({
           peerConnectionRef.current?.close();
           peerConnectionRef.current = null;
           setIsCallEnded(true);
+
           // Patient cannot rejoin after force_end_call
           if (typeof window !== "undefined") {
             sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
-            if (payload?.appointmentId && (payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached')) {
+            if (payload?.appointmentId && (payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached' || payload?.reason === 'HANDOVER_AUTO_CUT')) {
               sessionStorage.setItem('pending_patient_b', JSON.stringify({
                 appointmentId: payload.appointmentId,
                 patientName: payload.patientName || 'Next Patient',
@@ -477,7 +712,10 @@ export function useWebRTC({
           if (onCallEnded) {
             onCallEnded();
           } else {
-            const isNextPatientCut = payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached';
+            const isNextPatientCut =
+              payload?.reason === 'next_patient_live' ||
+              payload?.reason === 'next_patient_time_reached' ||
+              payload?.reason === 'HANDOVER_AUTO_CUT';
             const destination =
               role?.toLowerCase() === "doctor"
                 ? (isNextPatientCut && payload?.appointmentId
@@ -532,6 +770,12 @@ export function useWebRTC({
 
     return () => {
       isMounted = false;
+      currentJoinTokenRef.current = null;
+      if (socketRef.current && role?.toLowerCase() === "patient" && appointmentId) {
+        try {
+          socketRef.current.emit("leave_waiting_room", { appointmentId });
+        } catch (_) {}
+      }
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
       peerConnectionRef.current?.close();
@@ -606,11 +850,49 @@ export function useWebRTC({
       socketRef.current = null;
       setSocket(null);
     }
+    currentJoinTokenRef.current = null;
   }, [releaseTab]);
 
-  const endCall = useCallback(() => {
-    // Explicit call termination: emit end_call to backend to mark appointment completed
+  const endCall = useCallback(async (): Promise<ManualEndLockResult | void> => {
     const isDoctor = role?.toLowerCase() === "doctor";
+
+    // ── Check Manual End Lock via REST for Doctor (§8) ──────────────────────
+    if (isDoctor && appointmentId) {
+      try {
+        const authToken = token || (typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "");
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/appointments/${appointmentId}/end-call`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            credentials: "include",
+          }
+        );
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data?.code === "MANUAL_END_LOCKED") {
+            console.warn("[useWebRTC] End call locked by backend:", data);
+            return {
+              locked: true,
+              elapsedSeconds: data.elapsedSeconds ?? 0,
+              remainingSeconds: data.remainingSeconds ?? 180,
+              manualEndAllowedAt: data.manualEndAllowedAt,
+              message:
+                data.message ||
+                "Minimum 3 continuous minutes of consultation is required before ending this session.",
+            };
+          }
+        }
+      } catch (e) {
+        console.warn("[useWebRTC] Verification end-call REST failed:", e);
+      }
+    }
+
+    // Explicit call termination: emit end_call or leave_room
     if (socketRef.current) {
       try {
         if (isDoctor) {
@@ -621,21 +903,6 @@ export function useWebRTC({
       } catch (err) {
         console.warn("[useWebRTC] Failed to emit end_call/leave_room in endCall:", err);
       }
-    }
-
-    // Dual-channel reliability: call backend REST endpoint as doctor to guarantee completion
-    if (isDoctor && appointmentId) {
-      try {
-        const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") || "" : "";
-        fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/appointments/${appointmentId}/end-call`, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          credentials: "include"
-        }).catch((e) => console.warn("[useWebRTC] Fallback end-call REST failed:", e));
-      } catch (e) { }
     }
 
     if (typeof window !== "undefined") {
@@ -662,7 +929,9 @@ export function useWebRTC({
         }
       }
     }, 150);
-  }, [cleanupMediaAndConnections, role, appointmentId, router, onCallEnded, rewindBeforeNavigate]);
+
+    return { locked: false };
+  }, [cleanupMediaAndConnections, role, appointmentId, router, onCallEnded, rewindBeforeNavigate, token]);
 
   return {
     localVideoRef,
@@ -684,6 +953,9 @@ export function useWebRTC({
     isTakenOver,
     requestTakeover,
     reclaimCall,
+    waitingRoomStatus,
+    reconnectionGrace,
+    terminationInfo,
   };
 }
 

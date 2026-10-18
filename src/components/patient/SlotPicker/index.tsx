@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { CalendarX, CalendarOff, Globe, Clock, Lock, Ban, Zap } from 'lucide-react';
+import { canBook } from '@/utils/appointmentTiming';
 
 export interface Slot {
     time: string;               // Display string e.g. "09:00 AM" — for rendering only
@@ -197,7 +198,8 @@ export default function SlotPicker({
                                 const isLockedByMe = (isAnyLocked && selectedTime === slotTime && isSlotLocked) || isPendingPayment;
                                 const isLockedByOther = isAnyLocked && !isLockedByMe;
                                 const isBooked = status === "booked" || status === "Booked";
-                                const isPast = status === "past" || isExpired === true;
+                                const isCutoffPassed = slotObj.startTimeUTC ? !canBook(slotObj.startTimeUTC) : false;
+                                const isPast = status === "past" || isExpired === true || isCutoffPassed;
                                 const isBreak = status === "unavailable" || status === "break" || status === "closed" || apiIsBreak === true || (slotObj.available === false && !isBooked && !isAnyLocked && !isPast);
                                 
                                 const patientLocalTime = patientTimezone && doctorTimezone && patientTimezone !== doctorTimezone && slotObj.startTimeUTC
@@ -230,6 +232,7 @@ export default function SlotPicker({
                                             : isLockedByMe ? "Locked for your payment"
                                             : isBooked ? "Already booked"
                                             : isBreak ? (breakReason || "Doctor is on break / slot unavailable")
+                                            : isCutoffPassed ? "Booking cutoff reached (within 3 minutes of scheduled start)"
                                             : isPast ? "Slot has passed"
                                             : isOngoing ? `Ongoing session: ~${remainingMinutes} mins remaining upon joining`
                                             : "Click to select"

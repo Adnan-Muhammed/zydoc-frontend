@@ -7,5 +7,4 @@ export { useCallTabSync } from './hooks/useCallTabSync';
 export * from './components/sidebar/types';
 export { useVideoCallNotifications } from './hooks/useVideoCallNotifications';
 export { VideoCallNotificationManager } from './components/VideoCallNotificationManager';
-
- 
+export { default as ManualEndLockModal } from './components/ManualEndLockModal';

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import axiosInstance from '@/api/axiosInstance';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConfirmModal';
 
 interface DoctorDetailPageProps {
@@ -87,12 +88,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const getFullDocUrl = (url?: string) => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const base = process.env.NEXT_PUBLIC_API_URL || '';
-    return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
-  }; 
+  const getFullDocUrl = (url?: string) => resolveFileUrl(url); 
 
   // Actions
   const handleApproveDoctor = async () => {

@@ -14,6 +14,7 @@ interface WaitingOverlayProps {
   formattedCountdownToEarlyStart: string;
   isEarlyStartWindow: boolean;
   isPastScheduledStart: boolean;
+  waitingRoomStatus?: { remainingHoldSeconds: number } | null;
 }
 
 export default function WaitingOverlay({
@@ -27,7 +28,12 @@ export default function WaitingOverlay({
   formattedCountdownToEarlyStart,
   isEarlyStartWindow,
   isPastScheduledStart,
+  waitingRoomStatus,
 }: WaitingOverlayProps) {
+  const remainingWaitSeconds = waitingRoomStatus?.remainingHoldSeconds !== undefined
+    ? waitingRoomStatus.remainingHoldSeconds
+    : Math.max(0, 60 - patientRoomElapsedSeconds);
+  const isWaitActive = remainingWaitSeconds > 0;
   return (
     <div
       className="absolute inset-0 flex items-center justify-center bg-radial from-slate-900/95 via-[#090d16]/98 to-black z-10 p-4 sm:p-6"
@@ -125,7 +131,7 @@ export default function WaitingOverlay({
 
         {/* Patient 1-Minute Mandatory Waiting & Doctor Buffer Progress */}
         {normalizedRole === "patient" &&
-          (patientRoomElapsedSeconds < 60 ? (
+          (isWaitActive ? (
             <div className="w-full mt-3 bg-amber-500/15 border border-amber-500/35 rounded-2xl p-3.5 sm:p-4 text-left text-xs text-amber-200 flex items-start gap-2.5 shadow-lg">
               <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-300 mt-0.5">
                 <i className="fas fa-lock text-[11px]"></i>
@@ -134,7 +140,7 @@ export default function WaitingOverlay({
                 <div className="flex items-center justify-between font-semibold text-amber-300 text-xs sm:text-sm">
                   <span>1-Minute Mandatory Wait Active</span>
                   <span className="font-mono text-[11px] bg-amber-500/25 px-2 py-0.5 rounded-full border border-amber-400/30">
-                    {60 - patientRoomElapsedSeconds}s left
+                    {remainingWaitSeconds}s left
                   </span>
                 </div>
                 <p className="text-[11px] sm:text-xs text-amber-200/90 mt-1 leading-relaxed">

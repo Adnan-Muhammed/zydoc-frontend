@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { fetchPatientAppointments } from '@/redux/features/appointment/appointmentThunk';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Pill,
   FileText,
@@ -489,10 +490,7 @@ export default function PatientPrescriptionsPage() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                         {app.consultationFiles.map((file: any, fIdx: number) => {
-                          const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                          const fileUrl = file.url?.startsWith('http')
-                            ? file.url
-                            : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
+                          const fileUrl = resolveFileUrl(file.url);
 
                           return (
                             <div 

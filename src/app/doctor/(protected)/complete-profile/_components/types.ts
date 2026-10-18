@@ -53,10 +53,12 @@ export interface DraftState {
     clinicAddress: string;
     workingHours: WorkingHours;
     timezone?: string;
+    avatarUrl?: string;
 }
 
 export const DEFAULT_DRAFT: DraftState = {
     currentStep: 1,
+    avatarUrl: '',
     systemOfMedicine: 'Modern Medicine',
     firstName: '',
     lastName: '',

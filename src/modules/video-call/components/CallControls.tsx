@@ -106,11 +106,10 @@ export default function CallControls({
       <div className="relative group">
         <button
           type="button"
-          onClick={isLocked ? undefined : onEndCall}
-          disabled={isLocked}
+          onClick={onEndCall}
           className={`bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white px-4 py-2.5 sm:px-6 sm:py-3.5 rounded-full font-bold text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 shadow-[0_6px_25px_rgba(225,29,72,0.45)] transition-all duration-200 border tracking-wide ${
             isLocked
-              ? "opacity-70 cursor-not-allowed border-amber-400/80 shadow-[0_6px_25px_rgba(245,158,11,0.3)]"
+              ? "opacity-85 border-amber-400/80 shadow-[0_6px_25px_rgba(245,158,11,0.3)] hover:brightness-110 cursor-pointer"
               : "hover:from-red-500 hover:to-rose-500 active:scale-95 hover:shadow-[0_8px_30px_rgba(225,29,72,0.65)] hover:scale-105 border-rose-400/50 cursor-pointer"
           }`}
           aria-label={

@@ -2,6 +2,7 @@
 
 // src/app/patient/(protected)/records/page.tsx
 import React, { useState, useEffect } from 'react';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   FileText,
   Upload,
@@ -332,7 +333,7 @@ export default function MedicalRecordsPage() {
               <tbody>
                 {filteredRecords.map((record) => {
                   const color = getCategoryColor(record.category);
-                  const fileUrl = `${process.env.NEXT_PUBLIC_API_URL}${record.fileUrl?.startsWith('/') ? '' : '/'}${record.fileUrl}`;
+                  const fileUrl = resolveFileUrl(record.fileUrl);
                   return (
                     <tr key={record._id}> 
                       <td>

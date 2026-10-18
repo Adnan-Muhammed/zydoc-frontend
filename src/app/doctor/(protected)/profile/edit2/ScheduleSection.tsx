@@ -9,9 +9,9 @@ const DURATION_OPTIONS = [
     { value: 10, label: '10 Minutes' },
     { value: 15, label: '15 Minutes (Standard)' },
     { value: 20, label: '20 Minutes' },
+    { value: 25, label: '25 Minutes' },
     { value: 30, label: '30 Minutes' },
     { value: 45, label: '45 Minutes' },
-    { value: 60, label: '60 Minutes (1 Hour)' },
 ];
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;

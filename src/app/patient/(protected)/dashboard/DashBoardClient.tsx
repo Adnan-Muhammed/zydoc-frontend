@@ -8,6 +8,7 @@ import { fetchPatientAppointments } from '@/redux/features/appointment/appointme
 import { fetchWalletDetails } from '@/redux/features/wallet/walletThunk';
 import { fetchNotifications } from '@/redux/features/notification/notificationThunk';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   CalendarCheck,
   Search,
@@ -221,10 +222,7 @@ export default function DashboardClient({ user }: Props) {
                   <div className="pat-list-avatar">
                     {topUpcoming.doctorId?.avatarUrl ? (
                         <img 
-                            src={topUpcoming.doctorId.avatarUrl.startsWith('http') 
-                                ? topUpcoming.doctorId.avatarUrl 
-                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${topUpcoming.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${topUpcoming.doctorId.avatarUrl}`
-                            } 
+                            src={resolveFileUrl(topUpcoming.doctorId.avatarUrl)} 
                             alt="Doctor"
                             className="w-full h-full object-cover rounded-full"
                         /> 
@@ -275,10 +273,7 @@ export default function DashboardClient({ user }: Props) {
                   <div className="pat-list-avatar">
                     {recentApp.doctorId?.avatarUrl ? (
                         <img 
-                            src={recentApp.doctorId.avatarUrl.startsWith('http') 
-                                ? recentApp.doctorId.avatarUrl 
-                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${recentApp.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${recentApp.doctorId.avatarUrl}`
-                            } 
+                            src={resolveFileUrl(recentApp.doctorId.avatarUrl)} 
                             alt="Doctor"
                             className="w-full h-full object-cover rounded-full"
                         />

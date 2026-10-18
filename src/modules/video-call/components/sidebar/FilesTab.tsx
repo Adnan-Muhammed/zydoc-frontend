@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import axiosInstance from '@/api/axiosInstance';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { UploadedFile } from './types';
 
 interface FilesTabProps {
@@ -89,9 +90,8 @@ export default function FilesTab({
   };
 
   const handleDownload = (file: UploadedFile) => {
-    if (file.url) {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-      const targetUrl = file.url.startsWith('http') ? file.url : `${baseUrl}${file.url.startsWith('/') ? '' : '/'}${file.url}`;
+    const targetUrl = resolveFileUrl(file.url);
+    if (targetUrl) {
       window.open(targetUrl, '_blank');
     } else {  
       alert(`Preparing ${file.name} for download.`);

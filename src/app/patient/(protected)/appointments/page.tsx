@@ -8,8 +8,10 @@ import { AppDispatch, RootState } from '@/redux/store';
 import { fetchPatientAppointments, cancelAppointment, disputeAppointment } from '@/redux/features/appointment/appointmentThunk';
 import { getAppointmentStatusConfig } from '@/utils/appointmentStatus';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { ReviewModal, reviewService } from '@/modules/reviews-ratings';
 import { EARLY_JOIN_MINUTES, MAX_EXTENSION_MINUTES } from '@/config/videoCallConfig';
+import { computeTimings, canInitialJoin, canRejoin, isTerminalStatus, getAuthoritativeRefundStatus } from '@/utils/appointmentTiming';
 import { createPortal } from 'react-dom';
 
 const ModalPortal = ({ children }: { children: React.ReactNode }) => {
@@ -180,60 +182,33 @@ export default function PatientAppointmentsPage() {
     };
 
     const getAppointmentTimeState = (app: any) => {
-        const now = new Date().getTime();
-        const startTime = getAppTimestamp(app);
+        if (isTerminalStatus(app.status)) {
+            return 'EXPIRED';
+        }
+
+        const scheduledStart = app.scheduledStartAt || getAppTimestamp(app);
         const slotDurationMins = (app.scheduledStartAt && app.scheduledEndAt)
             ? Math.round((new Date(app.scheduledEndAt).getTime() - new Date(app.scheduledStartAt).getTime()) / 60000)
             : (Number(app.doctorId?.slotDuration) || 15);
 
-        // ── Rule 9: Active Consultation Re-Join Allowance & Expiry Boundary ─────────
-        const slotEndMs = app.scheduledEndAt
-            ? new Date(app.scheduledEndAt).getTime()
-            : startTime + slotDurationMins * 60 * 1000;
+        const timings = computeTimings(scheduledStart, slotDurationMins);
 
-        const hasConsultationStarted = Boolean(
-            app.hasOverlapped ||
-            app.sessionStartedAt ||
-            (app.doctorJoinedAt && app.patientJoinedAt)
-        );
-
-        // 1. Conditional Re-join Allowance:
-        // If a consultation between doctor and patient has already successfully started
-        // (whether Early Start or Scheduled Start), patient is allowed to re-join the active
-        // ongoing consultation even if initial Late Join Grace has passed.
-        // 2. Access Expiry Boundary:
-        // Re-join option remains active until the appointment's Scheduled End time.
-        if (hasConsultationStarted) {
-            if (now >= slotEndMs) {
-                return 'EXPIRED';
-            }
+        // 1. Conditional Re-join Allowance
+        if (canRejoin(app, timings)) {
             return 'ACTIVE';
         }
 
-        // ── Strict Restrictions for Un-started Appointments ────────────────────────
-        // If the consultation never started, patient must join before lateJoinCutoffMs.
-        let lateJoinCutoffMs: number;
-        if (app.lateJoinCutoffAt) {
-            lateJoinCutoffMs = new Date(app.lateJoinCutoffAt).getTime();
-        } else {
-            const standardGraces: Record<number, number> = { 10: 2, 15: 4, 20: 5, 25: 6, 30: 8, 45: 10 };
-            const graceMins = standardGraces[slotDurationMins] ?? Math.min(10, Math.round(slotDurationMins * 0.25));
-            lateJoinCutoffMs = startTime + graceMins * 60 * 1000;
-        }
-
-        // Past lateJoinCutoffMs when consultation never started → permanently blocked (EXPIRED)
-        if (now >= lateJoinCutoffMs) {
-            return 'EXPIRED';
-        }
-
-        // Within earlyJoinAt to lateJoinCutoffMs → ACTIVE (button enabled)
-        const earlyJoinMs = EARLY_JOIN_MINUTES * 60 * 1000;
-        if (now >= startTime - earlyJoinMs) {
+        // 2. Initial join within earlyJoinAt to lateJoinCutoff
+        if (canInitialJoin('patient', timings)) {
             return 'ACTIVE';
         }
 
-        // Before earlyJoinAt → UPCOMING (button disabled, shows countdown)
-        return 'UPCOMING';
+        const now = Date.now();
+        if (now < timings.earlyJoinAt.getTime()) {
+            return 'UPCOMING';
+        }
+
+        return 'EXPIRED';
     };
 
     const getCancellationEligibility = (app: any) => {
@@ -425,17 +400,23 @@ export default function PatientAppointmentsPage() {
                                 <i className="fas fa-user-check text-[10px]"></i> Follow-up
                             </span>
                         ) : null}
-                        {/* Payment badge */}
-                        {(app.paymentStatus === 'refunded' || app.status === 'refunded' || app.status === 'cancelled_by_doctor' || app.status === 'doctor_missed' || app.status === 'cancelled') ? (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
-                                <i className="fas fa-undo text-[10px] text-teal-500"></i> Refunded
-                            </span>
-                        ) : (
-                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
-                                <i className="fas fa-check-circle text-[10px] text-emerald-500"></i>
-                                {app.paymentMethod === 'FULL_WALLET' ? 'Wallet' : app.paymentMethod === 'SPLIT' ? 'Split' : 'Paid'}
-                            </span>
-                        )}
+                        {/* Authoritative Payment & Refund Badge */}
+                        {(() => {
+                            const refundInfo = getAuthoritativeRefundStatus(app);
+                            if (refundInfo.status !== 'NONE') {
+                                return (
+                                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border flex items-center gap-1 ${refundInfo.badgeClass}`}>
+                                        <i className="fas fa-undo text-[10px]"></i> {refundInfo.badgeLabel}
+                                    </span>
+                                );
+                            }
+                            return (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 flex items-center gap-1">
+                                    <i className="fas fa-check-circle text-[10px] text-emerald-500"></i>
+                                    {app.paymentMethod === 'FULL_WALLET' ? 'Wallet' : app.paymentMethod === 'SPLIT' ? 'Split' : 'Paid'}
+                                </span>
+                            );
+                        })()}
                     </div>
 
                     {/* Row 3: Fee (left) + Primary CTA/Join (right) */}
@@ -522,9 +503,9 @@ export default function PatientAppointmentsPage() {
                                 <i className="fas fa-ban text-rose-500"></i> <span className="hidden sm:inline">Doctor Cancelled</span><span className="sm:hidden">Cancelled</span>
                             </span>
                         )}
-                        {app.status === 'doctor_missed' && (
-                            <span className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5">
-                                <i className="fas fa-user-xmark text-rose-500"></i> <span className="hidden sm:inline">Doctor Missed</span><span className="sm:hidden">Missed</span>
+                        {(app.status === 'doctor_missed' || (app.status || '').toLowerCase() === 'doctor_no_show') && (
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1.5">
+                                <i className="fas fa-clock text-amber-500"></i> <span className="hidden sm:inline">Doctor Missed (Under Review)</span><span className="sm:hidden">Under Review</span>
                             </span>
                         )}
                     </div>
@@ -1017,8 +998,7 @@ export default function PatientAppointmentsPage() {
                                             const isPdf = fileType === 'pdf';
                                             const isImg = ['png', 'jpg', 'jpeg', 'webp', 'svg'].includes(fileType);
                                             const iconClass = isPdf ? 'fa-file-pdf text-rose-500' : isImg ? 'fa-file-image text-emerald-500' : 'fa-file-alt text-indigo-500';
-                                            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                                            const fileUrl = file.url?.startsWith('http') ? file.url : `${baseUrl}${file.url?.startsWith('/') ? '' : '/'}${file.url}`;
+                                            const fileUrl = resolveFileUrl(file.url);
                                             return ( 
                                                 <div
                                                     key={file.id || i}

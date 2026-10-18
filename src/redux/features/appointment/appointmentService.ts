@@ -83,6 +83,17 @@ export const appointmentService = {
         const res = await axiosInstance.post(`/admin/appointments/${payload.appointmentId}/refund`, { notes: payload.notes });
         return res.data;
     },
+
+    getJoinToken: async (appointmentId: string, isRejoin?: boolean) => {
+        const res = await axiosInstance.post(
+            `/appointments/${appointmentId}/join-token`,
+            { isRejoin: Boolean(isRejoin) },
+            {
+                params: isRejoin ? { rejoin: 'true' } : undefined,
+            }
+        );
+        return res.data;
+    },
 };
 
 

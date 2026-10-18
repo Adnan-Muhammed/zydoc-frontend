@@ -132,7 +132,7 @@ export default function PatientWalletPage() {
           </div>
           <div className="pat-card-body">
             <p className="text-sm text-slate-600 leading-relaxed">
-              If a doctor misses a session or you cancel with <strong>24+ hours notice</strong>, 100% of your fee is instantly credited here. Use your balance on future bookings or combine with online payment.
+              If you cancel with <strong>24+ hours notice</strong>, 100% of your fee is instantly credited here. In case of doctor absence, appointments are routed for administrative review before refund processing. Use your balance on future bookings or combine with online payment.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
               {[

@@ -2,6 +2,7 @@
 'use client';
 
 import React from 'react';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { RefundTicket } from '@/redux/features/admin/adminTypes';
 
 interface RefundDetailsModalProps {
@@ -22,6 +23,8 @@ export default function RefundDetailsModal({
   actionLoading = false,
 }: RefundDetailsModalProps) {
   if (!isOpen || !ticket) return null;
+
+  const resolvedProofUrl = resolveFileUrl(ticket.proofUrl);
 
   const appt = ticket.appointmentId;
   const patientProfile = ticket.patientId?.profileId;
@@ -114,9 +117,9 @@ export default function RefundDetailsModal({
           <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2">
             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
               <span>Patient Dispute Statement</span>
-              {ticket.proofUrl && (
+              {resolvedProofUrl && (
                 <a
-                  href={ticket.proofUrl}
+                  href={resolvedProofUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs font-medium text-indigo-600 hover:underline flex items-center gap-1"

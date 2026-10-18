@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { PendingDoctor } from '@/redux/features/admin/adminTypes';
 
 interface DoctorDetailsModalProps {
@@ -138,12 +139,7 @@ export default function DoctorDetailsModal({
       })
     : 'Not Provided';
 
-  const getFullDocUrl = (url?: string) => { 
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const base = process.env.NEXT_PUBLIC_API_URL || '';
-    return `${base}${url.startsWith('/') ? '' : '/'}${url}`;
-  };
+  const getFullDocUrl = (url?: string) => resolveFileUrl(url);
 
   const getInitials = (name: string) => {
     if (!name) return 'DR';
