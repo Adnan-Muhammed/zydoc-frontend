@@ -145,9 +145,9 @@ self.addEventListener("push", (event) => {
           }
         }
 
-        // 2. Once messaging is initialized, Firebase's own background handler
-        // will process the push event if it's registered. BUT we need to make sure
-        // we display the notification if it falls through.
+        // 2. Once messaging is initialized, Firebase's own onBackgroundMessage handler
+        // will process and display the background push notification.
+        // We do not call self.registration.showNotification here to prevent duplicate delivery.
         if (!event.data) return;
 
         let payload;
@@ -157,24 +157,7 @@ self.addEventListener("push", (event) => {
           payload = { notification: { title: "New Notification", body: event.data.text() } };
         }
 
-        console.log("[SW] Custom Push Listener Received Payload:", payload);
-
-        // If the payload has a 'notification' object and Firebase SDK is active,
-        // Firebase or the browser will automatically show it. 
-        // We only manually show it if we explicitly need to.
-        const notification = payload?.notification || payload?.data || {};
-        const title = notification.title || "Zydoc Notification";
-        const options = {
-          body: notification.body || "You have a new message.",
-          icon: "/favicon.ico",
-          badge: "/favicon.ico",
-          data: payload?.data || {},
-          requireInteraction: false,
-        };
-
-        // We only show it if the browser doesn't do it automatically.
-        // Actually, for safety, we'll just show it. If it duplicates, we'll know it worked.
-        await self.registration.showNotification(title, options);
+        console.log("[SW] Push Event Received Payload:", payload);
       } catch (error) {
         console.error("[SW] Error handling push event:", error);
       }

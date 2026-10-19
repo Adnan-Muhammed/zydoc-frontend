@@ -21,10 +21,13 @@ import {
   initConsultation,
   cleanupConsultationState,
   addConsultationMessage,
+  syncConsultationMessages,
   setConsultationPrescriptions,
+  syncConsultationPrescriptions,
   addConsultationPrescription,
   removeConsultationPrescription,
   addConsultationFile,
+  syncConsultationFiles,
   setConsultationNotes,
   setPatientClinicalContext,
 } from '@/redux/features/consultation/consultationSlice';
@@ -52,16 +55,16 @@ export default function ConsultationSidebar({
   const [inputText, setInputText] = useState('');
   const prescriptionsRef = useRef<PrescriptionItem[]>([]);
 
-  // ── Rigorous Appointment Data Isolation & Lifecycle Cleanups ──────────────
+  // ── Rigorous Appointment Data Isolation & In-Session Restoration ──────────
   useEffect(() => {
-    // 1. Initialize Redux container keyed by active appointmentId
+    // 1. Initialize Redux container keyed by active appointmentId (restores from sessionStorage)
     dispatch(initConsultation({ appointmentId, role: normalizedRole }));
 
     // Reset default active tab for new appointment
     setActiveTab(isDoctor ? 'patient-info' : 'chat');
     setInputText('');
 
-    // Fetch clinical context if doctor
+    // 2. Fetch clinical context if doctor, or appointment data if patient
     if (isDoctor) {
       axiosInstance
         .get(`/appointments/${appointmentId}/clinical-context`)
@@ -82,12 +85,39 @@ export default function ConsultationSidebar({
         .catch((err) => {
           console.warn('Initial clinical context load failed:', err);
         });
+    } else {
+      // Patient: Fetch appointment details to restore shared prescriptions and files
+      axiosInstance
+        .get(`/appointments/${appointmentId}`)
+        .then((res) => {
+          if (res.data?.success && res.data.appointment) {
+            const app = res.data.appointment;
+            if (Array.isArray(app.prescriptions) && app.prescriptions.length > 0) {
+              dispatch(
+                syncConsultationPrescriptions({
+                  appointmentId,
+                  prescriptions: app.prescriptions,
+                })
+              );
+            }
+            if (Array.isArray(app.consultationFiles) && app.consultationFiles.length > 0) {
+              dispatch(
+                syncConsultationFiles({
+                  appointmentId,
+                  files: app.consultationFiles,
+                })
+              );
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('Initial patient consultation data load failed:', err);
+        });
     }
 
-    // 2. UNMOUNT CLEANUP: Completely wipe local session states when leaving or switching appointments
+    // 3. Unmount: Auto-flush draft prescriptions if doctor
     return () => {
-      console.log(`[ConsultationSidebar] Running strict unmount cleanup for appointment: ${appointmentId}`);
-      // Auto-flush draft prescriptions if doctor before wiping
+      console.log(`[ConsultationSidebar] Running unmount cleanup for appointment: ${appointmentId}`);
       if (isDoctor && prescriptionsRef.current.length > 0) {
         axiosInstance
           .post(`/appointments/${appointmentId}/prescriptions`, {
@@ -95,9 +125,6 @@ export default function ConsultationSidebar({
           })
           .catch(() => {});
       }
-
-      // Purge Redux consultation state for this appointmentId to prevent cross-contamination
-      dispatch(cleanupConsultationState(appointmentId));
     };
   }, [appointmentId, dispatch, isDoctor, normalizedRole]);
 
@@ -121,7 +148,7 @@ export default function ConsultationSidebar({
     prescriptionsRef.current = prescriptions;
   }, [prescriptions]);
 
-  // ── Real-time Socket Synchronization ──────────────────────────────────────
+  // ── Real-time Socket Synchronization & Reconnection Handling ──────────────
   useEffect(() => {
     if (!socket) return;
 
@@ -134,7 +161,11 @@ export default function ConsultationSidebar({
     // 2. Prescriptions real-time sync
     const handleIncomingRxUpdate = (payload: { appointmentId: string; prescriptions: PrescriptionItem[] }) => {
       if (payload && payload.appointmentId === appointmentId && Array.isArray(payload.prescriptions)) {
-        dispatch(setConsultationPrescriptions({ appointmentId, prescriptions: payload.prescriptions }));
+        if (payload.prescriptions.length > 0) {
+          dispatch(syncConsultationPrescriptions({ appointmentId, prescriptions: payload.prescriptions }));
+        } else {
+          dispatch(setConsultationPrescriptions({ appointmentId, prescriptions: payload.prescriptions }));
+        }
       }
     };
 
@@ -145,16 +176,62 @@ export default function ConsultationSidebar({
       }
     };
 
+    // 4. In-session full sync (messages, prescriptions, files)
+    const handleSessionSync = (payload: {
+      appointmentId: string;
+      messages?: ChatMessage[];
+      prescriptions?: PrescriptionItem[];
+      files?: UploadedFile[];
+    }) => {
+      if (!payload || payload.appointmentId !== appointmentId) return;
+
+      if (Array.isArray(payload.messages) && payload.messages.length > 0) {
+        dispatch(syncConsultationMessages({ appointmentId, messages: payload.messages }));
+      }
+      if (Array.isArray(payload.prescriptions) && payload.prescriptions.length > 0) {
+        dispatch(syncConsultationPrescriptions({ appointmentId, prescriptions: payload.prescriptions }));
+      }
+      if (Array.isArray(payload.files) && payload.files.length > 0) {
+        dispatch(syncConsultationFiles({ appointmentId, files: payload.files }));
+      }
+    };
+
+    // 5. Peer rejoined or reconnected: synchronize latest data
+    const handlePeerJoinedOrReconnected = () => {
+      if (isDoctor && prescriptionsRef.current.length > 0) {
+        socket.emit('consultation-rx-updated', {
+          appointmentId,
+          prescriptions: prescriptionsRef.current,
+        });
+      }
+      socket.emit('request_consultation_sync', { appointmentId });
+    };
+
+    const handleSocketConnect = () => {
+      socket.emit('request_consultation_sync', { appointmentId });
+    };
+
     socket.on('consultation-chat-message', handleIncomingChatMessage);
     socket.on('consultation-rx-updated', handleIncomingRxUpdate);
     socket.on('consultation-file-uploaded', handleIncomingFileUpload);
+    socket.on('consultation-session-sync', handleSessionSync);
+    socket.on('peer_joined', handlePeerJoinedOrReconnected);
+    socket.on('peer_reconnected', handlePeerJoinedOrReconnected);
+    socket.on('connect', handleSocketConnect);
+
+    // Initial request immediately on socket availability
+    socket.emit('request_consultation_sync', { appointmentId });
 
     return () => {
       socket.off('consultation-chat-message', handleIncomingChatMessage);
       socket.off('consultation-rx-updated', handleIncomingRxUpdate);
       socket.off('consultation-file-uploaded', handleIncomingFileUpload);
+      socket.off('consultation-session-sync', handleSessionSync);
+      socket.off('peer_joined', handlePeerJoinedOrReconnected);
+      socket.off('peer_reconnected', handlePeerJoinedOrReconnected);
+      socket.off('connect', handleSocketConnect);
     };
-  }, [socket, appointmentId, dispatch]);
+  }, [socket, appointmentId, dispatch, isDoctor]);
 
   // ── Chat Actions ──────────────────────────────────────────────────────────
   const handleSendMessage = (e?: React.FormEvent) => {

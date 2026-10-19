@@ -51,11 +51,13 @@ export default function VideoCallRoom({
   const accessToken = useAppSelector((state) => state.auth.accessToken);
   const waitingNextPatientRef = useRef<{ appointmentId: string; } | null>(null);
 
-  // Rigorous session unmount cleanup: wipe consultation state and appointment keys when leaving room
+  // Session unmount cleanup: wipe consultation state only if call was explicitly ended/exited
   useEffect(() => {
     return () => {
       console.log(`[VideoCallRoom] Unmounting room session for appointment: ${appointmentId}`);
-      dispatch(cleanupConsultationState(appointmentId));
+      if (typeof window !== "undefined" && sessionStorage.getItem(`consultation_exited_${appointmentId}`)) {
+        dispatch(cleanupConsultationState(appointmentId));
+      }
     };
   }, [appointmentId, dispatch]);
 
@@ -65,8 +67,12 @@ export default function VideoCallRoom({
   const onCallEnded = useCallback(() => {
     if (typeof window !== "undefined" && appointmentId) {
       sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
       sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
+    dispatch(cleanupConsultationState(appointmentId));
     const dest = role?.toLowerCase() === "doctor"
       ? "/doctor/dashboard"
       : "/patient/appointments";
@@ -75,7 +81,7 @@ export default function VideoCallRoom({
     rewindHistorySentinels(sentinelCountRef.current).then(() => {
       router.replace(dest);
     });
-  }, [role, appointmentId, router]);
+  }, [role, appointmentId, dispatch, router]);
 
   // Stable callback so useWebRTC can rewind history sentinels before any internal router.replace
   const rewindBeforeNavigate = useCallback(
@@ -123,22 +129,82 @@ export default function VideoCallRoom({
     manualEndAllowedAt?: string;
   } | null>(null);
 
-  // Track strictly continuous overlap time (Doctor 3-Minute Rule)
-  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState(0);
+  // Helper to compute overlap seconds from appointment attendance logs in DB
+  const getDbOverlapSeconds = useCallback((app: any): number => {
+    if (!app?.doctorAttendanceLogs || !app?.patientAttendanceLogs) return 0;
+    let total = 0;
+    const nowMs = Date.now();
+    for (const dLog of app.doctorAttendanceLogs) {
+      if (!dLog.joinedAt) continue;
+      const dJoin = new Date(dLog.joinedAt).getTime();
+      const dLeave = dLog.leftAt ? new Date(dLog.leftAt).getTime() : nowMs;
+      for (const pLog of app.patientAttendanceLogs) {
+        if (!pLog.joinedAt) continue;
+        const pJoin = new Date(pLog.joinedAt).getTime();
+        const pLeave = pLog.leftAt ? new Date(pLog.leftAt).getTime() : nowMs;
+        const start = Math.max(dJoin, pJoin);
+        const end = Math.min(dLeave, pLeave);
+        if (end > start) {
+          total += (end - start) / 1000;
+        }
+      }
+    }
+    return Math.round(total);
+  }, []);
 
+  // Track doctor consultation time (3-Minute Rule)
+  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState<number>(() => {
+    if (typeof window === "undefined" || !appointmentId) return 0;
+    const isCompleted = localStorage.getItem(`doctor_3min_completed_${appointmentId}`) === "true";
+    if (isCompleted) return MIN_CONSULTATION_DURATION_SECONDS;
+    const saved = localStorage.getItem(`doctor_overlap_${appointmentId}`);
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+
+  // Sync with DB attendance logs if available
+  useEffect(() => {
+    if (!currentAppointment || !appointmentId) return;
+    const dbOverlap = getDbOverlapSeconds(currentAppointment);
+    if (dbOverlap > 0) {
+      setContinuousOverlapSeconds((prev) => {
+        const best = Math.max(prev, dbOverlap);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`doctor_overlap_${appointmentId}`, best.toString());
+          if (best >= MIN_CONSULTATION_DURATION_SECONDS) {
+            localStorage.setItem(`doctor_3min_completed_${appointmentId}`, "true");
+          }
+        }
+        return best;
+      });
+    }
+  }, [currentAppointment, appointmentId, getDbOverlapSeconds]);
+
+  // Tick timer during live consultation; pause when doctor leaves or remote disconnects
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRemoteReady) {
       interval = setInterval(() => {
-        setContinuousOverlapSeconds((prev) => prev + 1);
+        setContinuousOverlapSeconds((prev) => {
+          if (prev >= MIN_CONSULTATION_DURATION_SECONDS) {
+            return prev;
+          }
+          const next = prev + 1;
+          if (typeof window !== "undefined" && appointmentId) {
+            localStorage.setItem(`doctor_overlap_${appointmentId}`, next.toString());
+            if (next >= MIN_CONSULTATION_DURATION_SECONDS) {
+              localStorage.setItem(`doctor_3min_completed_${appointmentId}`, "true");
+            }
+          }
+          return next;
+        });
       }, 1000);
-    } else {
-      setContinuousOverlapSeconds(0);
     }
+    // When isRemoteReady is false (doctor or remote left), interval is cleared.
+    // Countdown pauses and does not reset to 0 or 3 minutes.
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRemoteReady]);
+  }, [isRemoteReady, appointmentId]);
 
   const hasConsultationStarted = Boolean(
     (currentAppointment as any)?.hasOverlapped ||
@@ -354,11 +420,15 @@ export default function VideoCallRoom({
   const handleExitCompletedConsultation = useCallback(() => {
     if (typeof window !== "undefined" && appointmentId) {
       sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
       sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
+    dispatch(cleanupConsultationState(appointmentId));
     const destination = normalizedRole === "doctor" ? "/doctor/dashboard" : "/patient/appointments";
     router.replace(destination);
-  }, [appointmentId, normalizedRole, router]);
+  }, [appointmentId, dispatch, normalizedRole, router]);
 
   useEffect(() => {
     if (!isCallEnded) return;
@@ -622,12 +692,12 @@ export default function VideoCallRoom({
         )}
 
         {/* ── 30-Second Reconnection Grace Alert Banner ── */}
-        {reconnectionGrace?.isDisconnected && (
+        {Boolean(reconnectionGrace?.isDisconnected && (reconnectionGrace.gracePeriodSeconds ?? 0) > 0) && (
           <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 bg-amber-500/95 text-slate-950 px-5 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-amber-300 font-medium text-xs sm:text-sm animate-pulse backdrop-blur-md">
             <i className="fas fa-satellite-dish text-base"></i>
             <span>
-              <strong>{reconnectionGrace.userRole === "doctor" ? "Doctor" : "Patient"} disconnected temporarily.</strong>{" "}
-              Reconnection grace active ({reconnectionGrace.gracePeriodSeconds}s remaining).
+              <strong>{reconnectionGrace?.userRole === "doctor" ? "Doctor" : "Patient"} disconnected temporarily.</strong>{" "}
+              Reconnection grace active ({reconnectionGrace?.gracePeriodSeconds}s remaining).
             </span>
           </div>
         )}

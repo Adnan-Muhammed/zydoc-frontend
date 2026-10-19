@@ -71,6 +71,10 @@ export const consultationSlice = createSlice({
       const { appointmentId } = action.payload;
       if (!state.consultations[appointmentId]) {
         let initialMessages: ChatMessage[] = [];
+        let initialPrescriptions: PrescriptionItem[] = [];
+        let initialFiles: UploadedFile[] = [];
+        let initialNotes = '';
+
         if (typeof window !== 'undefined') {
           try {
             const savedChat = sessionStorage.getItem(`consultation_chat_${appointmentId}`);
@@ -80,8 +84,26 @@ export const consultationSlice = createSlice({
                 initialMessages = parsed;
               }
             }
+            const savedRx = sessionStorage.getItem(`consultation_rx_${appointmentId}`);
+            if (savedRx) {
+              const parsedRx = JSON.parse(savedRx);
+              if (Array.isArray(parsedRx) && parsedRx.length > 0) {
+                initialPrescriptions = parsedRx;
+              }
+            }
+            const savedFiles = sessionStorage.getItem(`consultation_files_${appointmentId}`);
+            if (savedFiles) {
+              const parsedFiles = JSON.parse(savedFiles);
+              if (Array.isArray(parsedFiles) && parsedFiles.length > 0) {
+                initialFiles = parsedFiles;
+              }
+            }
+            const savedNotes = sessionStorage.getItem(`consultation_notes_${appointmentId}`);
+            if (savedNotes) {
+              initialNotes = savedNotes;
+            }
           } catch (e) {
-            console.warn('[consultationSlice] Error reading session chat:', e);
+            console.warn('[consultationSlice] Error reading session storage:', e);
           }
         }
 
@@ -101,6 +123,9 @@ export const consultationSlice = createSlice({
         state.consultations[appointmentId] = {
           ...initialSingleState,
           messages: initialMessages,
+          prescriptions: initialPrescriptions,
+          files: initialFiles,
+          notes: initialNotes,
         };
       }
     },
@@ -163,6 +188,39 @@ export const consultationSlice = createSlice({
       }
     },
 
+    syncConsultationMessages: (
+      state,
+      action: PayloadAction<{ appointmentId: string; messages: ChatMessage[] }>
+    ) => {
+      const { appointmentId, messages } = action.payload;
+      if (!Array.isArray(messages) || messages.length === 0) return;
+
+      if (!state.consultations[appointmentId]) {
+        state.consultations[appointmentId] = { ...initialSingleState, messages };
+      } else {
+        const currentMessages = state.consultations[appointmentId].messages;
+        const msgMap = new Map<string, ChatMessage>();
+
+        for (const m of currentMessages) {
+          if (m?.id) msgMap.set(m.id, m);
+        }
+        for (const m of messages) {
+          if (m?.id && !msgMap.has(m.id)) {
+            msgMap.set(m.id, m);
+          }
+        }
+        state.consultations[appointmentId].messages = Array.from(msgMap.values());
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_chat_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].messages)
+          );
+        } catch (e) {}
+      }
+    },
+
     setConsultationPrescriptions: (
       state,
       action: PayloadAction<{ appointmentId: string; prescriptions: PrescriptionItem[] }>
@@ -171,7 +229,59 @@ export const consultationSlice = createSlice({
       if (!state.consultations[appointmentId]) {
         state.consultations[appointmentId] = { ...initialSingleState, prescriptions };
       } else {
+        // Prevent accidental overwrite with empty array if existing data exists
+        if (Array.isArray(prescriptions) && prescriptions.length === 0 && state.consultations[appointmentId].prescriptions.length > 0) {
+          return;
+        }
         state.consultations[appointmentId].prescriptions = prescriptions;
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_rx_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].prescriptions)
+          );
+        } catch (e) {}
+      }
+    },
+
+    syncConsultationPrescriptions: (
+      state,
+      action: PayloadAction<{ appointmentId: string; prescriptions: PrescriptionItem[] }>
+    ) => {
+      const { appointmentId, prescriptions } = action.payload;
+      if (!Array.isArray(prescriptions) || prescriptions.length === 0) return;
+
+      if (!state.consultations[appointmentId]) {
+        state.consultations[appointmentId] = { ...initialSingleState, prescriptions };
+      } else {
+        const currentRx = state.consultations[appointmentId].prescriptions;
+        if (currentRx.length === 0) {
+          state.consultations[appointmentId].prescriptions = prescriptions;
+        } else {
+          const rxMap = new Map<string, PrescriptionItem>();
+          for (const rx of currentRx) {
+            const key = rx.id || `${rx.medicine}_${rx.dosage}_${rx.frequency}`;
+            rxMap.set(key, rx);
+          }
+          for (const rx of prescriptions) {
+            const key = rx.id || `${rx.medicine}_${rx.dosage}_${rx.frequency}`;
+            if (!rxMap.has(key)) {
+              rxMap.set(key, rx);
+            } else {
+              rxMap.set(key, { ...rxMap.get(key)!, ...rx });
+            }
+          }
+          state.consultations[appointmentId].prescriptions = Array.from(rxMap.values());
+        }
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_rx_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].prescriptions)
+          );
+        } catch (e) {}
       }
     },
 
@@ -186,7 +296,20 @@ export const consultationSlice = createSlice({
           prescriptions: [prescription],
         };
       } else {
-        state.consultations[appointmentId].prescriptions.unshift(prescription);
+        const exists = state.consultations[appointmentId].prescriptions.some(
+          (p) => (p.id && p.id === prescription.id) || (p.medicine === prescription.medicine && p.dosage === prescription.dosage && p.frequency === prescription.frequency)
+        );
+        if (!exists) {
+          state.consultations[appointmentId].prescriptions.unshift(prescription);
+        }
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_rx_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].prescriptions)
+          );
+        } catch (e) {}
       }
     },
 
@@ -199,6 +322,14 @@ export const consultationSlice = createSlice({
         state.consultations[appointmentId].prescriptions = state.consultations[
           appointmentId
         ].prescriptions.filter((item) => item.id !== id);
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem(
+              `consultation_rx_${appointmentId}`,
+              JSON.stringify(state.consultations[appointmentId].prescriptions)
+            );
+          } catch (e) {}
+        }
       }
     },
 
@@ -212,6 +343,11 @@ export const consultationSlice = createSlice({
       } else {
         state.consultations[appointmentId].notes = notes;
       }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(`consultation_notes_${appointmentId}`, notes);
+        } catch (e) {}
+      }
     },
 
     setConsultationFiles: (
@@ -222,7 +358,56 @@ export const consultationSlice = createSlice({
       if (!state.consultations[appointmentId]) {
         state.consultations[appointmentId] = { ...initialSingleState, files };
       } else {
+        if (Array.isArray(files) && files.length === 0 && state.consultations[appointmentId].files.length > 0) {
+          return;
+        }
         state.consultations[appointmentId].files = files;
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_files_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].files)
+          );
+        } catch (e) {}
+      }
+    },
+
+    syncConsultationFiles: (
+      state,
+      action: PayloadAction<{ appointmentId: string; files: UploadedFile[] }>
+    ) => {
+      const { appointmentId, files } = action.payload;
+      if (!Array.isArray(files) || files.length === 0) return;
+
+      if (!state.consultations[appointmentId]) {
+        state.consultations[appointmentId] = { ...initialSingleState, files };
+      } else {
+        const currentFiles = state.consultations[appointmentId].files;
+        if (currentFiles.length === 0) {
+          state.consultations[appointmentId].files = files;
+        } else {
+          const fileMap = new Map<string, UploadedFile>();
+          for (const f of currentFiles) {
+            const key = f.id || f.url || f.name;
+            fileMap.set(key, f);
+          }
+          for (const f of files) {
+            const key = f.id || f.url || f.name;
+            if (!fileMap.has(key)) {
+              fileMap.set(key, f);
+            }
+          }
+          state.consultations[appointmentId].files = Array.from(fileMap.values());
+        }
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_files_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].files)
+          );
+        } catch (e) {}
       }
     },
 
@@ -234,10 +419,20 @@ export const consultationSlice = createSlice({
       if (!state.consultations[appointmentId]) {
         state.consultations[appointmentId] = { ...initialSingleState, files: [file] };
       } else {
-        const exists = state.consultations[appointmentId].files.some((f) => f.id === file.id);
+        const exists = state.consultations[appointmentId].files.some(
+          (f) => (f.id && f.id === file.id) || (f.url && f.url === file.url)
+        );
         if (!exists) {
           state.consultations[appointmentId].files.unshift(file);
         }
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `consultation_files_${appointmentId}`,
+            JSON.stringify(state.consultations[appointmentId].files)
+          );
+        } catch (e) {}
       }
     },
 
@@ -270,13 +465,59 @@ export const consultationSlice = createSlice({
         if (currentNotes !== undefined && !state.consultations[appointmentId].notes) {
           state.consultations[appointmentId].notes = currentNotes;
         }
-        if (prescriptions && prescriptions.length > 0 && state.consultations[appointmentId].prescriptions.length === 0) {
-          state.consultations[appointmentId].prescriptions = prescriptions;
+        if (prescriptions && prescriptions.length > 0) {
+          if (state.consultations[appointmentId].prescriptions.length === 0) {
+            state.consultations[appointmentId].prescriptions = prescriptions;
+          } else {
+            const rxMap = new Map<string, PrescriptionItem>();
+            for (const rx of state.consultations[appointmentId].prescriptions) {
+              const key = rx.id || `${rx.medicine}_${rx.dosage}_${rx.frequency}`;
+              rxMap.set(key, rx);
+            }
+            for (const rx of prescriptions) {
+              const key = rx.id || `${rx.medicine}_${rx.dosage}_${rx.frequency}`;
+              if (!rxMap.has(key)) {
+                rxMap.set(key, rx);
+              }
+            }
+            state.consultations[appointmentId].prescriptions = Array.from(rxMap.values());
+          }
         }
-        if (files && files.length > 0 && state.consultations[appointmentId].files.length === 0) {
-          state.consultations[appointmentId].files = files;
+        if (files && files.length > 0) {
+          if (state.consultations[appointmentId].files.length === 0) {
+            state.consultations[appointmentId].files = files;
+          } else {
+            const fileMap = new Map<string, UploadedFile>();
+            for (const f of state.consultations[appointmentId].files) {
+              const key = f.id || f.url || f.name;
+              fileMap.set(key, f);
+            }
+            for (const f of files) {
+              const key = f.id || f.url || f.name;
+              if (!fileMap.has(key)) {
+                fileMap.set(key, f);
+              }
+            }
+            state.consultations[appointmentId].files = Array.from(fileMap.values());
+          }
         }
         state.consultations[appointmentId].isLoaded = true;
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          if (state.consultations[appointmentId].prescriptions.length > 0) {
+            sessionStorage.setItem(
+              `consultation_rx_${appointmentId}`,
+              JSON.stringify(state.consultations[appointmentId].prescriptions)
+            );
+          }
+          if (state.consultations[appointmentId].files.length > 0) {
+            sessionStorage.setItem(
+              `consultation_files_${appointmentId}`,
+              JSON.stringify(state.consultations[appointmentId].files)
+            );
+          }
+        } catch (e) {}
       }
     },
   },
@@ -291,11 +532,14 @@ export const {
   resetAllConsultations,
   setConsultationMessages,
   addConsultationMessage,
+  syncConsultationMessages,
   setConsultationPrescriptions,
+  syncConsultationPrescriptions,
   addConsultationPrescription,
   removeConsultationPrescription,
   setConsultationNotes,
   setConsultationFiles,
+  syncConsultationFiles,
   addConsultationFile,
   setPatientClinicalContext,
 } = consultationSlice.actions;

@@ -220,7 +220,7 @@ export function useWebRTC({
     const interval = setInterval(() => {
       setReconnectionGrace((prev) => {
         if (!prev || prev.gracePeriodSeconds <= 1) {
-          return prev ? { ...prev, gracePeriodSeconds: 0 } : null;
+          return null;
         }
         return { ...prev, gracePeriodSeconds: prev.gracePeriodSeconds - 1 };
       });
@@ -248,6 +248,7 @@ export function useWebRTC({
           remoteVideoRef.current.srcObject = event.streams[0];
           setRemoteStream(event.streams[0]);
           setIsRemoteReady(true);
+          setReconnectionGrace(null);
         }
       };
 
@@ -256,6 +257,9 @@ export function useWebRTC({
         console.log(
           `[useWebRTC] PeerConnection state: ${pc.connectionState}`
         );
+        if (pc.connectionState === "connected") {
+          setReconnectionGrace(null);
+        }
       };
 
       return pc;
@@ -489,6 +493,7 @@ export function useWebRTC({
 
         newSocket.on("peer_joined", async () => {
           console.log("[useWebRTC] Peer joined. Creating offer…");
+          setReconnectionGrace(null);
 
           const pc = createPeerConnection(newSocket);
           peerConnectionRef.current = pc;
@@ -509,6 +514,7 @@ export function useWebRTC({
           "webrtc_offer",
           async ({ offer }: { offer: RTCSessionDescriptionInit }) => {
             console.log("[useWebRTC] Received offer. Creating answer…");
+            setReconnectionGrace(null);
 
             const pc = createPeerConnection(newSocket);
             peerConnectionRef.current = pc;
@@ -531,6 +537,7 @@ export function useWebRTC({
           "webrtc_answer",
           async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
             console.log("[useWebRTC] Received answer. Setting remote desc…");
+            setReconnectionGrace(null);
             await peerConnectionRef.current?.setRemoteDescription(
               new RTCSessionDescription(answer)
             );
@@ -600,6 +607,9 @@ export function useWebRTC({
             ) {
               if (typeof window !== "undefined" && appointmentId) {
                 sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+                sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+                sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+                sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
                 sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
               }
               const destination = role?.toLowerCase() === "doctor" ? "/doctor/appointments" : "/patient/appointments";
@@ -643,6 +653,9 @@ export function useWebRTC({
 
           if (typeof window !== "undefined") {
             sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
           }
 
@@ -701,6 +714,9 @@ export function useWebRTC({
           // Patient cannot rejoin after force_end_call
           if (typeof window !== "undefined") {
             sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+            sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
             sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
             if (payload?.appointmentId && (payload?.reason === 'next_patient_live' || payload?.reason === 'next_patient_time_reached' || payload?.reason === 'HANDOVER_AUTO_CUT')) {
               sessionStorage.setItem('pending_patient_b', JSON.stringify({
@@ -729,6 +745,7 @@ export function useWebRTC({
 
         newSocket.on("peer_left", () => {
           console.log("[useWebRTC] Peer left the call.");
+          setReconnectionGrace(null);
           if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = null;
           }
@@ -907,6 +924,9 @@ export function useWebRTC({
 
     if (typeof window !== "undefined") {
       sessionStorage.removeItem(`consultation_chat_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_rx_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_files_${appointmentId}`);
+      sessionStorage.removeItem(`consultation_notes_${appointmentId}`);
       sessionStorage.setItem(`consultation_exited_${appointmentId}`, Date.now().toString());
     }
 
