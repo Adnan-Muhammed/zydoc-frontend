@@ -103,6 +103,5 @@ testStructure.js
 # Docs and Tests folders
 docs/
 tests/
-
 # Implementation Plan file
 S3_FRONTEND_IMPLEMENTATION_PLAN.md
