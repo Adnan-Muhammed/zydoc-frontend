@@ -98,3 +98,8 @@ planningFolder/
 ZYDOC_FRONTEND_AUDIT_REPORT.md
 REPORT.md
 S3_FRONTEND_IMPLEMENTATION_PLAN.md
+
+
+docs/
+tests/
+testStructure.js
