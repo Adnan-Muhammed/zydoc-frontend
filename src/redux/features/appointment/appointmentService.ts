@@ -19,7 +19,7 @@ export const appointmentService = {
         return res.data;
     },
     
-    unlockSlot: async (payload: { doctorId: string; date: string; time: string; consultationType: string }) => {
+    unlockSlot: async (payload: { appointmentId: string } | { doctorId: string; date: string; time: string; consultationType: string }) => {
         const res = await axiosInstance.post('/appointments/unlock', payload);
         return res.data;
     },

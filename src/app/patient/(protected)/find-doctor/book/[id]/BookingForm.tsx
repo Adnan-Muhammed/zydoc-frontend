@@ -1,5 +1,5 @@
 "use client";
- 
+
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getAvailableSlots, extendLock } from "@/lib/appointments";
@@ -9,37 +9,37 @@ import { lockSlot, unlockSlot, createRazorpayOrder, verifyPayment } from "@/redu
 import { fetchWalletDetails } from "@/redux/features/wallet/walletThunk";
 import SlotPicker, { Slot } from "@/components/patient/SlotPicker";
 import {
-  Video, 
-  Building2,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  Clock, 
-  Users,
-  UserPlus,
-  UserCheck,
-  FileText,
-  Lock,
-  ShieldCheck,
-  X,
-  Wallet,
-  CreditCard,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Check,
-  CalendarCheck,
+    Video,
+    Building2,
+    Calendar,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    Users,
+    UserPlus,
+    UserCheck,
+    FileText,
+    Lock,
+    ShieldCheck,
+    X,
+    Wallet,
+    CreditCard,
+    AlertCircle,
+    CheckCircle2,
+    Loader2,
+    Check,
+    CalendarCheck,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════ 
    Constants   
 ═══════════════════════════════════════════════════════════════════ */
 const MONTH_NAMES = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December",
-]; 
-const DAY_LABELS  = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const DAY_NAMES_JS = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+];
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_NAMES_JS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 /* ═══════════════════════════════════════════════════════════════════
    WorkingHours helpers (Checks doctor's working blocks)
@@ -104,10 +104,10 @@ const loadRazorpayScript = () => {
 export default function BookingForm({ doctor }: { doctor: any }) {
     const router = useRouter();
     const rawWH = doctor.workingHours || {};
-    
+
     const dispatch = useDispatch<AppDispatch>();
     const { isSlotLocked } = useSelector((state: RootState) => state.appointment);
-    const { user } = useSelector((state: RootState) => state.auth);
+    const { user, accessToken } = useSelector((state: RootState) => state.auth);
     const { balance: walletBalance } = useSelector((state: RootState) => state.wallet);
     const currentUserId = user?._id || user?.id;
     const paymentCompleted = useRef(false);
@@ -137,9 +137,9 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     /* ── State ── */
     const [type, setType] = useState<"online" | "offline">(isOnlineEnabled ? "online" : "offline");
     const [patientType, setPatientType] = useState<"NEW" | "FOLLOW_UP" | "">("NEW");
-    
+
     const [selectedDate, setSelectedDate] = useState<Date>(today);
-    
+
     const [calendarYear, setCalendarYear] = useState(() => today.getFullYear());
     const [calendarMonth, setCalendarMonth] = useState(() => today.getMonth());
 
@@ -150,7 +150,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const [allSlots, setAllSlots] = useState<Slot[]>([]);
     const [doctorWorking, setDoctorWorking] = useState(true);
     const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-    
+
     // Timezone states (Auto-detected patient IANA timezone and doctor's operating timezone)
     const [patientTimezone] = useState<string>(() => {
         return typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
@@ -158,7 +158,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     const [doctorTimezone, setDoctorTimezone] = useState<string>(() => {
         return doctor?.timezone || "Asia/Kolkata";
     });
-    
+
     // Modal states
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
@@ -182,16 +182,18 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     /* ── Slot Lock Edge Case ── */
     const lockInfoRef = useRef({
         isLocked: false,
+        appointmentId: "",
         doctorId: doctor._id || doctor.id,
         date: dateString,
         time: time,
-        type: type 
+        type: type
     });
 
-    useEffect(() => { 
+    useEffect(() => {
         if (isSlotLocked) {
             lockInfoRef.current = {
                 isLocked: true,
+                appointmentId: lockInfoRef.current.appointmentId,
                 doctorId: doctor._id || doctor.id,
                 date: dateString,
                 time: time,
@@ -203,15 +205,24 @@ export default function BookingForm({ doctor }: { doctor: any }) {
     }, [isSlotLocked, doctor, dateString, time, type]);
 
     useEffect(() => {
+        const releaseLockOnExit = () => {
+            const lock = lockInfoRef.current;
+            if (paymentCompleted.current || paymentProcessing.current || !lock.isLocked || !lock.appointmentId) return;
+
+            fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/appointments/unlock`, {
+                method: "POST",
+                credentials: "include",
+                keepalive: true,
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                },
+                body: JSON.stringify({ appointmentId: lock.appointmentId }),
+            }).catch(() => {});
+        };
+
         const handleBeforeUnload = () => {
-            if (!paymentCompleted.current && !paymentProcessing.current && lockInfoRef.current.isLocked) {
-                dispatch(unlockSlot({
-                    doctorId: lockInfoRef.current.doctorId,
-                    date: lockInfoRef.current.date,
-                    time: lockInfoRef.current.time,
-                    consultationType: lockInfoRef.current.type
-                }));
-            }
+            releaseLockOnExit();
         };
 
         window.addEventListener('beforeunload', handleBeforeUnload);
@@ -219,15 +230,10 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         return () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
             if (!paymentCompleted.current && !paymentProcessing.current && lockInfoRef.current.isLocked) {
-                dispatch(unlockSlot({
-                    doctorId: lockInfoRef.current.doctorId,
-                    date: lockInfoRef.current.date,
-                    time: lockInfoRef.current.time,
-                    consultationType: lockInfoRef.current.type
-                }));
+                dispatch(unlockSlot({ appointmentId: lockInfoRef.current.appointmentId }));
             }
         };
-    }, [dispatch]);
+    }, [dispatch, accessToken]);
 
     /* ── Fetch slots directly from backend API ── */
     const fetchSlots = useCallback(async (preserveTime = false) => {
@@ -266,8 +272,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         }
     }, [dateString, type, doctor._id, doctor.id]);
 
-    useEffect(() => { 
-        fetchSlots(); 
+    useEffect(() => {
+        fetchSlots();
     }, [fetchSlots]);
 
     // Refresh slot availability when patient returns to or focuses the tab
@@ -353,7 +359,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
             const options = {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-                amount: orderAmount, 
+                amount: orderAmount,
                 currency: orderCurrency,
                 name: "Zydoc Healthcare",
                 description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
@@ -399,16 +405,11 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             return;
                         }
 
-                        dispatch(unlockSlot({
-                            doctorId: doctor._id || doctor.id,
-                            date: dateString,
-                            time,
-                            consultationType: type
-                        }));
-                        
-                        setAllSlots(prev => prev.map(slotObj => 
-                            slotObj.time === time 
-                                ? { ...slotObj, status: "available", isLocked: false } 
+                        dispatch(unlockSlot({ appointmentId }));
+
+                        setAllSlots(prev => prev.map(slotObj =>
+                            slotObj.time === time
+                                ? { ...slotObj, status: "available", isLocked: false }
                                 : slotObj
                         ));
 
@@ -447,10 +448,10 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         let lockSuccess = false;
         let lockResult: any = null;
         try {
-            lockResult = await dispatch(lockSlot({ 
-                doctorId: doctor._id || doctor.id, 
-                date: dateString, 
-                time, 
+            lockResult = await dispatch(lockSlot({
+                doctorId: doctor._id || doctor.id,
+                date: dateString,
+                time,
                 consultationType: type,
                 patientType,
                 notes,
@@ -461,14 +462,14 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 // re-deriving them from the display time string.
                 ...(allSlots.find(s => s.time === time)?.startTimeUTC && {
                     startTimeUTC: allSlots.find(s => s.time === time)!.startTimeUTC,
-                    endTimeUTC:   allSlots.find(s => s.time === time)!.endTimeUTC,
+                    endTimeUTC: allSlots.find(s => s.time === time)!.endTimeUTC,
                 }),
             })).unwrap();
             lockSuccess = true;
-            
-            setAllSlots(prev => prev.map(slotObj => 
-                slotObj.time === time 
-                    ? { ...slotObj, status: "Locked", isLocked: true } 
+
+            setAllSlots(prev => prev.map(slotObj =>
+                slotObj.time === time
+                    ? { ...slotObj, status: "Locked", isLocked: true }
                     : slotObj
             ));
         } catch (err: any) {
@@ -481,12 +482,13 @@ export default function BookingForm({ doctor }: { doctor: any }) {
         if (lockSuccess && lockResult) {
             const appointmentId = lockResult._id || lockResult.appointmentId || lockResult.id;
             if (appointmentId) {
+                lockInfoRef.current.appointmentId = appointmentId;
                 await handlePayment(appointmentId);
             } else {
                 setModalError("Could not retrieve appointment confirmation details.");
             }
             setIsLocking(false);
-        } 
+        }
     };
 
     /* ── 14-Day Calendar helpers ── */
@@ -495,9 +497,9 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     const goToPrevMonth = () => {
         if (!canGoPrevMonth) return;
-        if (calendarMonth === 0) { 
-            setCalendarYear(y => y - 1); 
-            setCalendarMonth(11); 
+        if (calendarMonth === 0) {
+            setCalendarYear(y => y - 1);
+            setCalendarMonth(11);
         } else {
             setCalendarMonth(m => m - 1);
         }
@@ -505,9 +507,9 @@ export default function BookingForm({ doctor }: { doctor: any }) {
 
     const goToNextMonth = () => {
         if (!canGoNextMonth) return;
-        if (calendarMonth === 11) { 
-            setCalendarYear(y => y + 1); 
-            setCalendarMonth(0); 
+        if (calendarMonth === 11) {
+            setCalendarYear(y => y + 1);
+            setCalendarMonth(0);
         } else {
             setCalendarMonth(m => m + 1);
         }
@@ -570,16 +572,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {isOnlineEnabled && (
                         <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 sm:p-5 transition-all
-                            ${type === "online" 
-                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-indigo-50/20 border-[#101044] shadow-md shadow-[#101044]/5" 
+                            ${type === "online"
+                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-indigo-50/20 border-[#101044] shadow-md shadow-[#101044]/5"
                                 : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/40 shadow-2xs"}`}>
-                            <input 
-                                type="radio" 
-                                name="consultationType" 
-                                value="online" 
+                            <input
+                                type="radio"
+                                name="consultationType"
+                                value="online"
                                 className="sr-only"
-                                checked={type === "online"} 
-                                onChange={() => setType("online")} 
+                                checked={type === "online"}
+                                onChange={() => setType("online")}
                             />
                             <div className="flex w-full items-center justify-between gap-3">
                                 <div className="flex items-center gap-3.5">
@@ -611,16 +613,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                     )}
                     {isOfflineEnabled && (
                         <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 sm:p-5 transition-all
-                            ${type === "offline" 
-                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-emerald-50/20 border-[#101044] shadow-md shadow-[#101044]/5" 
+                            ${type === "offline"
+                                ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-emerald-50/20 border-[#101044] shadow-md shadow-[#101044]/5"
                                 : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/40 shadow-2xs"}`}>
-                            <input 
-                                type="radio" 
-                                name="consultationType" 
-                                value="offline" 
+                            <input
+                                type="radio"
+                                name="consultationType"
+                                value="offline"
                                 className="sr-only"
-                                checked={type === "offline"} 
-                                onChange={() => setType("offline")} 
+                                checked={type === "offline"}
+                                onChange={() => setType("offline")}
                             />
                             <div className="flex w-full items-center justify-between gap-3">
                                 <div className="flex items-center gap-3.5">
@@ -674,8 +676,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 {MONTH_NAMES[calendarMonth]} {calendarYear}
                             </span>
                             <div className="flex items-center gap-1">
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={goToPrevMonth}
                                     disabled={!canGoPrevMonth}
                                     title="Previous Month"
@@ -683,8 +685,8 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 >
                                     <ChevronLeft className="size-3.5" />
                                 </button>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     onClick={goToNextMonth}
                                     disabled={!canGoNextMonth}
                                     title="Next Month"
@@ -748,7 +750,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                         ${past || outOfWindow ? "text-slate-300" : drOff ? "text-slate-300" : selected ? "text-indigo-200" : "text-slate-400"}`}>
                                         {drOff ? "Off" : outOfWindow ? "—" : MONTH_NAMES[day.getMonth()].slice(0, 3)}
                                     </span>
-                                </button> 
+                                </button>
                             );
                         })}
                     </div>
@@ -781,16 +783,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 transition-all
-                                ${patientType === "NEW" 
-                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs" 
+                                ${patientType === "NEW"
+                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs"
                                     : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                                <input 
-                                    type="radio" 
-                                    name="patientType" 
-                                    value="NEW" 
+                                <input
+                                    type="radio"
+                                    name="patientType"
+                                    value="NEW"
                                     className="sr-only"
-                                    checked={patientType === "NEW"} 
-                                    onChange={() => setPatientType("NEW")} 
+                                    checked={patientType === "NEW"}
+                                    onChange={() => setPatientType("NEW")}
                                 />
                                 <div className="flex w-full items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
@@ -814,16 +816,16 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             </label>
 
                             <label className={`relative flex cursor-pointer rounded-2xl border-2 p-4 transition-all
-                                ${patientType === "FOLLOW_UP" 
-                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs" 
+                                ${patientType === "FOLLOW_UP"
+                                    ? "bg-gradient-to-br from-[#101044]/[0.03] via-white to-slate-50/50 border-[#101044] shadow-xs"
                                     : "bg-white border-slate-200 hover:border-slate-300"}`}>
-                                <input 
-                                    type="radio" 
-                                    name="patientType" 
-                                    value="FOLLOW_UP" 
+                                <input
+                                    type="radio"
+                                    name="patientType"
+                                    value="FOLLOW_UP"
                                     className="sr-only"
-                                    checked={patientType === "FOLLOW_UP"} 
-                                    onChange={() => setPatientType("FOLLOW_UP")} 
+                                    checked={patientType === "FOLLOW_UP"}
+                                    onChange={() => setPatientType("FOLLOW_UP")}
                                 />
                                 <div className="flex w-full items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
@@ -858,7 +860,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                             </span>
                             Select Time Slot
                             <span className="text-xs font-normal text-slate-500 hidden sm:inline">
-                                — {MONTH_NAMES[selectedDate.getMonth()].slice(0,3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                                — {MONTH_NAMES[selectedDate.getMonth()].slice(0, 3)} {selectedDate.getDate()}, {selectedDate.getFullYear()}
                             </span>
                         </h2>
                         {availableCount > 0 && !isLoadingSlots && (
@@ -954,10 +956,10 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                 {!time
                                     ? "Please Select a Time Slot to Proceed"
                                     : isFullWallet
-                                    ? `Confirm & Pay ₹${fee} with Wallet Balance`
-                                    : walletDeduction > 0
-                                    ? `Confirm & Pay ₹${netPayable} (₹${walletDeduction} Wallet Applied)`
-                                    : `Confirm Appointment & Proceed (₹${fee})`}
+                                        ? `Confirm & Pay ₹${fee} with Wallet Balance`
+                                        : walletDeduction > 0
+                                            ? `Confirm & Pay ₹${netPayable} (₹${walletDeduction} Wallet Applied)`
+                                            : `Confirm Appointment & Proceed (₹${fee})`}
                             </span>
                         </button>
                     </div>
@@ -1075,9 +1077,9 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                                                 time,
                                                 consultationType: type
                                             }));
-                                            setAllSlots(prev => prev.map(slotObj => 
-                                                slotObj.time === time 
-                                                    ? { ...slotObj, status: "available", isLocked: false } 
+                                            setAllSlots(prev => prev.map(slotObj =>
+                                                slotObj.time === time
+                                                    ? { ...slotObj, status: "available", isLocked: false }
                                                     : slotObj
                                             ));
                                         }

@@ -26,7 +26,7 @@ export const lockSlot = createAsyncThunk(
 
 export const unlockSlot = createAsyncThunk(
     'appointment/unlockSlot',
-    async (payload: { doctorId: string; date: string; time: string; consultationType: string }, thunkAPI) => {
+    async (payload: { appointmentId: string } | { doctorId: string; date: string; time: string; consultationType: string }, thunkAPI) => {
         try {
             return await appointmentService.unlockSlot(payload);
         } catch (error: any) {
