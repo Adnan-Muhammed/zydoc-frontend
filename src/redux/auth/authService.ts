@@ -12,7 +12,7 @@ const login = async (credentials: { email: string; password: string }, isAdmin?:
         ...credentials,
         ...(isAdmin ? { isAdmin: true } : {}),
     }, { withCredentials: true });
-    return res.data; 
+    return res.data;
 };
 
 const signup = async (userData: { name: string; email: string; password: string; role: string; signupToken?: string }) => {
@@ -29,7 +29,7 @@ const verifyOtp = async (data: { email: string; otpCode: string }, isAdmin?: boo
 const resendOtp = async (data: { email: string }, isAdmin?: boolean) => {
     const url = isAdmin ? '/admin/auth/resend-otp' : '/auth/resend-otp';
     const res = await axiosInstance.post(url, data, { withCredentials: true });
-    return res.data; 
+    return res.data;
 };
 
 const logout = async (isAdmin?: boolean) => {
@@ -59,7 +59,7 @@ const loginWithGoogle = async (role?: string, isAdmin?: boolean) => {
     provider.setCustomParameters({
         prompt: 'select_account'
     });
-    
+
     const userCredential = await signInWithPopup(auth, provider);
     const firebaseToken = await userCredential.user.getIdToken();
 

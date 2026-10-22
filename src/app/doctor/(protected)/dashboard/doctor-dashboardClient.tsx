@@ -8,7 +8,6 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
 import { fetchDoctorDashboardStats } from '@/redux/features/doctor/doctorThunk';
-import { useSocket } from '@/hooks/useSocket';
 import { getAppointmentStatusConfig, getAppointmentStartTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
 import {
   Users,
@@ -75,14 +74,6 @@ export default function DoctorDashboardPage() {
     }
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
-
-  // Get the socket instance
-  const { socket } = useSocket({ userId: user?._id || user?.id, role: user?.role });
-
-  useEffect(() => {
-    if (!socket) return;
-    // Local socket listeners if any
-  }, [socket]);
 
   useEffect(() => {
     if (user && isApproved) {

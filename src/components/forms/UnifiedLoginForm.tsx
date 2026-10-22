@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { loginUser, loginWithGoogleUser } from '@/redux/auth/authThunk';
-import Button from '../ui/Button'; 
+import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -182,7 +182,7 @@ const UnifiedLoginForm: React.FC = () => {
                     {error}
                 </div>
             )}
- 
+
             {/* Google OAuth */}
             <button
                 type="button"
@@ -233,7 +233,7 @@ const UnifiedLoginForm: React.FC = () => {
                     <i className={`fas fa-eye${showPassword ? '-slash' : ''}`}></i>
                 </button>
             </div>
-            
+
             <div className="flex justify-end w-full">
                 <Link href="/forgot-password" className="text-sm text-blue-600 font-medium hover:underline">
                     Forgot Password?

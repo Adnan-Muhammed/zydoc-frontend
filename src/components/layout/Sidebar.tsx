@@ -168,8 +168,8 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
     role === 'admin'
       ? getAdminNav(pendingDoctorsTotal, pendingRefundsTotal)
       : role === 'doctor'
-      ? getDoctorNav(isDoctorLocked)
-      : PATIENT_NAV;
+        ? getDoctorNav(isDoctorLocked)
+        : PATIENT_NAV;
 
   const handleLogout = async () => {
     try {
@@ -190,7 +190,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */} 
+      {/* Mobile Backdrop Overlay */}
       {isOpen && (
         <div
           className="sidebar-overlay"
@@ -286,7 +286,7 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
                 src={resolveFileUrl(user.avatarUrl)}
                 alt="Profile"
                 className="size-full object-cover rounded-xl"
-              /> 
+              />
             ) : (
               getInitials(user?.name || role)
             )}

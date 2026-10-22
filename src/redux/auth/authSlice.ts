@@ -98,7 +98,7 @@ const authSlice = createSlice({
                 (action: { type: string; payload?: any }) => action.type.startsWith('auth/') && action.type.endsWith('/rejected'),
                 (state: AuthState, action: { type: string; payload?: any }) => {
                     state.isLoading = false;
-                    
+
                     // Don't set error on checkAuth rejection to avoid showing "No token" on login page
                     if (action.type !== 'auth/checkAuth/rejected') {
                         state.error = typeof action.payload === 'string' ? action.payload : action.payload?.message || "Authentication failed";

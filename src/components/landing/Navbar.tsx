@@ -59,21 +59,19 @@ export default function Navbar({ user: initialUser = null }: NavbarProps) {
         <nav className="hidden items-center gap-8 text-sm font-medium text-[#595979] md:flex">
           <Link
             href="/"
-            className={`transition ${
-              pathname === '/'
+            className={`transition ${pathname === '/'
                 ? 'font-bold text-[#181952]'
                 : 'hover:text-[#181952]'
-            }`}
+              }`}
           >
             Home
           </Link>
           <Link
             href="/find-doctor"
-            className={`transition ${
-              isFindDoctor
+            className={`transition ${isFindDoctor
                 ? 'rounded-full bg-[#e8edfc] px-3.5 py-1.5 font-bold text-[#1f267a]'
                 : 'font-semibold text-[#2f3590] hover:text-[#181952]'
-            }`}
+              }`}
           >
             Find Doctors
           </Link>
@@ -129,22 +127,20 @@ export default function Navbar({ user: initialUser = null }: NavbarProps) {
             <Link
               href="/"
               onClick={() => setMenuOpen(false)}
-              className={`py-1 ${
-                pathname === '/'
+              className={`py-1 ${pathname === '/'
                   ? 'font-bold text-[#181952]'
                   : 'font-medium text-[#595979] hover:text-[#181952]'
-              }`}
+                }`}
             >
               Home
             </Link>
             <Link
               href="/find-doctor"
               onClick={() => setMenuOpen(false)}
-              className={`py-1 ${
-                isFindDoctor
+              className={`py-1 ${isFindDoctor
                   ? 'font-bold text-[#1f267a]'
                   : 'font-semibold text-[#2f3590] hover:text-[#181952]'
-              }`}
+                }`}
             >
               Find Doctors
             </Link>

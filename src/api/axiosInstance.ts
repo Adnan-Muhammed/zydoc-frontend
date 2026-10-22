@@ -7,7 +7,7 @@ let store: Store;
 
 export const injectStore = (_store: Store) => {
     store = _store;
-}; 
+};
 
 const axiosInstance: AxiosInstance = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL + "/api",
@@ -58,7 +58,7 @@ axiosInstance.interceptors.response.use(
                 axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                 originalRequest.headers['Authorization'] = `Bearer ${accessToken}`;
                 return axiosInstance(originalRequest);
-            } catch {   
+            } catch {
                 if (store) {
                     store.dispatch({ type: 'auth/clearCredentials' });
                 }

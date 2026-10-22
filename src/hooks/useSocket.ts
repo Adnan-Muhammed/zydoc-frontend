@@ -1,130 +1,17 @@
-import { useEffect, useRef } from 'react';
-import { io, Socket } from 'socket.io-client';
-import toast from 'react-hot-toast';
-import { useAppDispatch, useAppSelector } from '../redux/hooks';
-import { addRealTimeNotification } from '../redux/features/notification/notificationSlice';
-import { markAppointmentCompleted } from '../redux/features/appointment/appointmentSlice';
+// src/hooks/useSocket.ts
+'use client';
+
+import { Socket } from 'socket.io-client';
 
 interface UseSocketProps {
   userId?: string | null;
   role?: string | null;
 }
 
-export const useSocket = ({ userId, role }: UseSocketProps) => {
-  const socketRef = useRef<Socket | null>(null);
-  const dispatch = useAppDispatch();
-  const accessToken = useAppSelector((state) => state.auth.accessToken);
-
-  useEffect(() => {
-    if (!userId) return; 
-
-    const socket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000', {
-      withCredentials: true,
-      auth: { token: accessToken || undefined },
-    });
-    
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log('Connected to socket server');
-      socket.emit('register', { userId, role });
-    });
-
-
-
-    socket.on('new_notification', (notification: any) => {
-      dispatch(addRealTimeNotification(notification));
-      
-      if (typeof document !== 'undefined') {
-        if (document.visibilityState === 'visible') {
-          // 1. Active Tab: Show in-app toast
-          toast.success(notification.title || 'New Notification!', {
-            duration: 4000,
-            position: 'top-right',
-          });
-        } else {
-          // 2. Background Tab: Trigger SYSTEM push notification
-          if (typeof window !== "undefined" && "Notification" in window) {
-            if (Notification.permission === "granted") {
-              new Notification(notification.title || "New Notification!", {
-                body: notification.message || notification.body,
-                icon: "/favicon.ico", // Ensure you have an icon, or it defaults
-              });
-            }
-          }
-          
-          // Play a programmatic beep sound
-          try {
-            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioContextClass) {
-              const ctx = new AudioContextClass();
-              const osc = ctx.createOscillator();
-              const gainNode = ctx.createGain();
-              
-              osc.type = 'sine';
-              osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch (A5)
-              
-              // Fade out to avoid clicks
-              gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
-              gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-              
-              osc.connect(gainNode);
-              gainNode.connect(ctx.destination);
-              
-              osc.start();
-              osc.stop(ctx.currentTime + 0.5); // 500ms beep
-            }
-          } catch (e) {
-            console.error("Audio playback failed", e);
-          }
-        }
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Disconnected from socket server');
-    });
-
-    // ── Consultation Completed (Rule 4 / Rule 1.3) ────────────────────────────
-    // Emitted by EndRoomUseCase when doctor ends the call.
-    // Immediately disables the patient's rejoin button by updating Redux state.
-    socket.on('consultation_completed', (payload: any) => {
-      const { appointmentId } = payload || {};
-      if (appointmentId) {
-        dispatch(markAppointmentCompleted({ appointmentId }));
-        console.log(`[useSocket] Consultation ${appointmentId} marked completed in Redux.`);
-      }
-    });
-
-    // ── Doctor Absence Warning (Rule 2.1) ─────────────────────────────────────
-    // Emitted when patient joins/re-joins after lateJoinCutoffAt but the doctor
-    // has never appeared. Surface a clear, informational toast.
-    socket.on('doctor_absence_warning', (payload: any) => {
-      const msg = payload?.message || 'The doctor has not joined yet. A refund will be issued automatically if the doctor misses this consultation.';
-      toast(msg, {
-        icon: '⚠️',
-        duration: 8000,
-        position: 'top-center',
-        style: { maxWidth: '420px' },
-      });
-    });
-
-    const handleBeforeUnload = () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
-    };
-  }, [userId, role, dispatch, accessToken]);
-
-  return {
-    socket: socketRef.current,
-  };
+/**
+ * DEPRECATED: Global socket connection is removed in favor of Firebase Cloud Messaging (FCM).
+ * Sockets are strictly restricted to Video Call and Consultation Room components.
+ */
+export const useSocket = (_props?: UseSocketProps): { socket: Socket | null } => {
+  return { socket: null };
 };

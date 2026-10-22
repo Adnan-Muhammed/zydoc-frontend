@@ -29,9 +29,9 @@ function getRedirectForRole(role: string, pathname: string, isProfileCompleted?:
         // Since we are showing the role selection modal inline on the login/signup page,
         // we just need to let them stay on auth routes or redirect them to login.
         if (pathname === '/login' || pathname === '/signup') {
-            return null; 
+            return null;
         }
-        return '/login'; 
+        return '/login';
     }
 
     const dashboard = ROLE_DASHBOARD[role];

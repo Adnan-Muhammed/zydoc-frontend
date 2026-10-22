@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAppSelector, useAppDispatch } from '../../redux/hooks';
-import { useSocket } from '../../hooks/useSocket';
+import { useFcmForeground } from '@/hooks/useFcmForeground';
 import { fetchNotifications, markNotificationRead } from '../../redux/features/notification/notificationThunk';
 import { NotificationItem } from '../../redux/features/notification/notificationService';
 import {
@@ -68,8 +68,8 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
   // Get correct ID based on the user object shape
   const userId = (user as any)?.profileId || user?.id || (user as any)?._id;
 
-  // Initialize socket for real-time notifications
-  useSocket({ userId, role });
+  // Initialize FCM foreground listener for real-time notifications
+  useFcmForeground({ userId, role });
 
   useEffect(() => {
     if (role === 'admin') {
@@ -98,7 +98,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
       dispatch(markNotificationRead(notification._id));
     }
     setDropdownOpen(false);
-    
+
     // Route based on notification type and user role
     if (notification.type === 'BOOKING') {
       router.push(`/${role}/appointments`);
@@ -190,7 +190,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
 
       <div className="topbar-right flex items-center gap-2 sm:gap-4 h-full">
         <div className="topbar-actions flex items-center gap-2 sm:gap-3 relative">
-          
+
           {/* Notifications Dropdown Container */}
           <div ref={dropdownRef} className="relative">
             <button
@@ -236,7 +236,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                     </button>
                   )}
                 </div>
-                
+
                 <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100">
                   {/* ADMIN ROLE NOTIFICATIONS */}
                   {role === 'admin' ? (
@@ -251,39 +251,37 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                           <div
                             key={notif._id}
                             onClick={() => handleAdminNotificationClick(notif)}
-                            className={`p-3.5 cursor-pointer hover:bg-slate-50/80 transition-colors border-l-4 ${
-                              !notif.isRead
+                            className={`p-3.5 cursor-pointer hover:bg-slate-50/80 transition-colors border-l-4 ${!notif.isRead
                                 ? isApproval
                                   ? 'bg-amber-50/50 border-amber-500'
                                   : isRefund
-                                  ? 'bg-rose-50/50 border-rose-500'
-                                  : isDisputed
-                                  ? 'bg-orange-50/50 border-orange-500'
-                                  : 'bg-indigo-50/40 border-indigo-500'
+                                    ? 'bg-rose-50/50 border-rose-500'
+                                    : isDisputed
+                                      ? 'bg-orange-50/50 border-orange-500'
+                                      : 'bg-indigo-50/40 border-indigo-500'
                                 : 'bg-white border-transparent opacity-80 hover:opacity-100'
-                            }`}
+                              }`}
                           >
                             <div className="flex gap-3">
                               <div
-                                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs shadow-xs ${
-                                  isApproval
+                                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 text-xs shadow-xs ${isApproval
                                     ? 'bg-amber-100 text-amber-700'
                                     : isRefund
-                                    ? 'bg-rose-100 text-rose-700'
-                                    : isDisputed
-                                    ? 'bg-orange-100 text-orange-700'
-                                    : 'bg-indigo-100 text-indigo-700'
-                                }`}
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : isDisputed
+                                        ? 'bg-orange-100 text-orange-700'
+                                        : 'bg-indigo-100 text-indigo-700'
+                                  }`}
                               >
                                 <i
                                   className={
                                     isApproval
                                       ? 'fas fa-user-check'
                                       : isRefund
-                                      ? 'fas fa-hand-holding-dollar'
-                                      : isDisputed
-                                      ? 'fas fa-triangle-exclamation'
-                                      : 'fas fa-bell'
+                                        ? 'fas fa-hand-holding-dollar'
+                                        : isDisputed
+                                          ? 'fas fa-triangle-exclamation'
+                                          : 'fas fa-bell'
                                   }
                                 />
                               </div>
@@ -291,11 +289,10 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-1">
                                   <p
-                                    className={`text-xs truncate ${
-                                      !notif.isRead
+                                    className={`text-xs truncate ${!notif.isRead
                                         ? 'font-bold text-slate-900'
                                         : 'font-semibold text-slate-700'
-                                    }`}
+                                      }`}
                                   >
                                     {notif.title}
                                   </p>
@@ -337,8 +334,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                       {waitingPatients.length > 0 &&
                         waitingPatients.map((appt) => {
                           const patientName = appt.patientId?.profileId?.firstName
-                            ? `${appt.patientId.profileId.firstName} ${
-                                appt.patientId.profileId.lastName || ''
+                            ? `${appt.patientId.profileId.firstName} ${appt.patientId.profileId.lastName || ''
                               }`.trim()
                             : appt.patientId?.googleName || 'A patient';
 
@@ -376,25 +372,22 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                           <div
                             key={notif._id}
                             onClick={() => handleNotificationClick(notif)}
-                            className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors border-l-4 ${
-                              !notif.isRead
+                            className={`p-4 cursor-pointer hover:bg-slate-50 transition-colors border-l-4 ${!notif.isRead
                                 ? 'bg-green-50 border-green-500'
                                 : 'bg-white border-transparent'
-                            }`}
+                              }`}
                           >
                             <div className="flex gap-3">
                               <div
-                                className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
-                                  !notif.isRead ? 'bg-green-500' : 'bg-transparent'
-                                }`}
+                                className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${!notif.isRead ? 'bg-green-500' : 'bg-transparent'
+                                  }`}
                               />
                               <div>
                                 <p
-                                  className={`text-sm ${
-                                    !notif.isRead
+                                  className={`text-sm ${!notif.isRead
                                       ? 'font-semibold text-slate-800'
                                       : 'font-medium text-slate-600'
-                                  }`}
+                                    }`}
                                 >
                                   {notif.title}
                                 </p>
@@ -417,11 +410,11 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
                     </>
                   )}
                 </div>
-                
+
                 <div className="p-2 border-t border-slate-100 bg-slate-50">
-                  <Link 
+                  <Link
                     href={`/${role}/notifications`}
-                    onClick={() => setDropdownOpen(false)} 
+                    onClick={() => setDropdownOpen(false)}
                     className="block w-full text-center py-2 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors"
                   >
                     View All Notifications
@@ -433,13 +426,13 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
 
           {/* Profile Dropdown Container */}
           <div ref={profileMenuRef} className="relative">
-            <div 
+            <div
               onClick={() => setProfileMenuOpen(!profileMenuOpen)}
               className="topbar-profile flex items-center gap-2 cursor-pointer bg-slate-50 border border-slate-200/90 rounded-xl px-2 py-1.5 sm:px-3 sm:py-1.5 hover:bg-slate-100 hover:border-slate-300 transition-all shadow-xs"
             >
               <div className="topbar-avatar flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#181852] text-white text-xs font-semibold overflow-hidden shadow-xs shrink-0">
                 {user?.avatarUrl ? (
-                  <img 
+                  <img
                     src={resolveFileUrl(user.avatarUrl)}
                     alt="Profile"
                     className="w-full h-full object-cover"

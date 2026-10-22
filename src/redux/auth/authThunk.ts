@@ -10,7 +10,7 @@ const extractAuthError = (error: unknown, defaultMessage: string): any => {
     }
     return err.response?.data?.message || err.message || defaultMessage;
 };
- 
+
 export const loginUser = createAsyncThunk(
     'auth/login',
     async (
@@ -27,7 +27,7 @@ export const loginUser = createAsyncThunk(
         }
     }
 );
- 
+
 export const loginWithGoogleUser = createAsyncThunk(
     'auth/loginWithGoogle',
     async (payload: { role?: string; isAdmin?: boolean } = {}, { rejectWithValue }) => {

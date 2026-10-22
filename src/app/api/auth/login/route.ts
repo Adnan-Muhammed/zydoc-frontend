@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
         if (!backendUrl) {
             return NextResponse.json({ success: false, message: 'Backend URL not configured' }, { status: 500 });
         }
- 
+
         // Server-to-server call — no CORS, no preflight, no cookie domain issues
         const { isAdmin, ...credentials } = body;
         const endpoint = isAdmin ? '/api/admin/auth/login' : '/api/auth/login';
@@ -43,34 +43,34 @@ export async function POST(req: NextRequest) {
 
         const response = NextResponse.json(data);
 
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
-// OLD CODE
-//         const setCookieHeader = backendRes.headers.get('set-cookie');
-//         if (setCookieHeader) {
-//             const cookieParts = setCookieHeader.split(/,(?=[^ ])/);
-//             for (const part of cookieParts) {
-//                 const [nameValue] = part.trim().split(';');
-//                 const eqIdx = nameValue.indexOf('=');
-//                 if (eqIdx === -1) continue;
-//                 const cookieName = nameValue.slice(0, eqIdx).trim();
-//                 const cookieValue = nameValue.slice(eqIdx + 1).trim();
-// 
-//                 response.cookies.set(cookieName, cookieValue, {
-//                     httpOnly: true,
-//                     secure: process.env.NODE_ENV === 'production',
-//                     sameSite: 'lax',
-//                     path: '/',
-//                     maxAge: cookieName === 'accessToken' ? 2 * 60 : 7 * 24 * 60 * 60,
-//                 });
-//             }
-//         }
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+        // OLD CODE
+        //         const setCookieHeader = backendRes.headers.get('set-cookie');
+        //         if (setCookieHeader) {
+        //             const cookieParts = setCookieHeader.split(/,(?=[^ ])/);
+        //             for (const part of cookieParts) {
+        //                 const [nameValue] = part.trim().split(';');
+        //                 const eqIdx = nameValue.indexOf('=');
+        //                 if (eqIdx === -1) continue;
+        //                 const cookieName = nameValue.slice(0, eqIdx).trim();
+        //                 const cookieValue = nameValue.slice(eqIdx + 1).trim();
+        // 
+        //                 response.cookies.set(cookieName, cookieValue, {
+        //                     httpOnly: true,
+        //                     secure: process.env.NODE_ENV === 'production',
+        //                     sameSite: 'lax',
+        //                     path: '/',
+        //                     maxAge: cookieName === 'accessToken' ? 2 * 60 : 7 * 24 * 60 * 60,
+        //                 });
+        //             }
+        //         }
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
 
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
-// NEW CODE
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+        // NEW CODE
         const setCookies = backendRes.headers.getSetCookie();
         for (const cookieStr of setCookies) {
             const [nameValue] = cookieStr.split(';');
@@ -89,8 +89,8 @@ export async function POST(req: NextRequest) {
                 maxAge: cookieName === 'accessToken' ? 15 * 60 : 7 * 24 * 60 * 60,
             });
         }
-//////////////////////////////////////////////////
-//////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+        //////////////////////////////////////////////////
 
         return response;
 

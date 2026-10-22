@@ -18,7 +18,7 @@ export async function GET() {
                 method: 'POST',
                 cache: 'no-store',
                 headers: { cookie: `refreshToken=${refreshToken}` },
-            } 
+            }
         );
 
         if (!refreshRes.ok) {

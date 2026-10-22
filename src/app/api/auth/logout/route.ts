@@ -11,19 +11,19 @@ export async function POST(req: NextRequest) {
         }
 
         const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL;
-        
+
         // Notify the backend to clear sessions and backend-specific database tokens
         if (backendUrl) {
             const cookieHeader = req.headers.get('cookie') || '';
             const endpoint = isAdmin ? '/api/admin/auth/logout' : '/api/auth/logout';
-            await fetch(`${backendUrl}${endpoint}`, { 
+            await fetch(`${backendUrl}${endpoint}`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     cookie: cookieHeader,
                 },
             }).catch(err => console.error('[logout proxy] Failed to reach backend:', err));
-        } 
+        }
 
         const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
 
@@ -44,4 +44,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 });
     }
 }
- 
