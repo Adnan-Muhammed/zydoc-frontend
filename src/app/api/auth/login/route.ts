@@ -18,14 +18,13 @@ export async function POST(req: NextRequest) {
         }
  
         // Server-to-server call — no CORS, no preflight, no cookie domain issues
-        const isAdmin = body.isAdmin;
-        // Don't forward isAdmin to the backend login if it expects strict schema, but it shouldn't hurt
+        const { isAdmin, ...credentials } = body;
         const endpoint = isAdmin ? '/api/admin/auth/login' : '/api/auth/login';
 
         const backendRes = await fetch(`${backendUrl}${endpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify(credentials),
             cache: 'no-store',
         });
 

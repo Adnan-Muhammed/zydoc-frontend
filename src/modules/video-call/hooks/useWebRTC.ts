@@ -238,12 +238,18 @@ export function useWebRTC({
       // 1. Forward ICE candidates to the other peer via the signaling server.
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) {
+          console.info("[webrtc] ICE candidate emitted", { appointmentId, role });
           socket.emit("webrtc_ice_candidate", { appointmentId, candidate });
         }
       };
 
       // 2. Attach the remote stream to the remote video element when tracks arrive.
       pc.ontrack = (event) => {
+        console.info("[webrtc] remote media track received", {
+          appointmentId,
+          role,
+          kind: event.track.kind,
+        });
         if (remoteVideoRef.current && event.streams[0]) {
           remoteVideoRef.current.srcObject = event.streams[0];
           setRemoteStream(event.streams[0]);
@@ -255,11 +261,27 @@ export function useWebRTC({
       // 3. Log connection state changes (useful for debugging).
       pc.onconnectionstatechange = () => {
         console.log(
-          `[useWebRTC] PeerConnection state: ${pc.connectionState}`
+          `[useWebRTC] PeerConnection state for appointment ${appointmentId} (${role}): ${pc.connectionState}`
         );
         if (pc.connectionState === "connected") {
           setReconnectionGrace(null);
         }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.info("[webrtc] ICE connection state", {
+          appointmentId,
+          role,
+          state: pc.iceConnectionState,
+        });
+      };
+
+      pc.onsignalingstatechange = () => {
+        console.info("[webrtc] signaling state", {
+          appointmentId,
+          role,
+          state: pc.signalingState,
+        });
       };
 
       return pc;
@@ -373,10 +395,17 @@ export function useWebRTC({
         setSocket(newSocket);
 
         newSocket.on("connect", () => {
-          console.log("[useWebRTC] Signaling socket connected:", newSocket.id);
+          console.info("[socket] signaling connected", {
+            appointmentId,
+            role,
+            socketId: newSocket.id,
+            transport: newSocket.io.engine?.transport?.name,
+          });
           newSocket.emit("register", { userId, role });
+          console.info("[socket] join_room emitted", { appointmentId, role, socketId: newSocket.id });
           newSocket.emit("join_room", { appointmentId, joinToken: currentJoinTokenRef.current });
           if (role?.toLowerCase() === "patient") {
+            console.info("[socket] join_waiting_room emitted", { appointmentId, role, socketId: newSocket.id });
             newSocket.emit("join_waiting_room", { appointmentId });
           }
         });
@@ -405,7 +434,11 @@ export function useWebRTC({
         });
 
         newSocket.on("connect_error", async (err: any) => {
-          console.warn("[useWebRTC] Socket connect_error:", err.message);
+          console.warn("[socket] signaling connect_error", {
+            appointmentId,
+            role,
+            message: err.message,
+          });
           if (
             err?.message?.includes("TOKEN_EXPIRED") ||
             err?.message?.includes("TOKEN_REPLAYED") ||
@@ -492,7 +525,7 @@ export function useWebRTC({
         );
 
         newSocket.on("peer_joined", async () => {
-          console.log("[useWebRTC] Peer joined. Creating offer…");
+          console.info("[webrtc-signal] peer_joined received; creating offer", { appointmentId, role, socketId: newSocket.id });
           setReconnectionGrace(null);
 
           const pc = createPeerConnection(newSocket);
@@ -508,12 +541,13 @@ export function useWebRTC({
           await pc.setLocalDescription(offer);
 
           newSocket.emit("webrtc_offer", { appointmentId, offer });
+          console.info("[webrtc-signal] offer emitted", { appointmentId, role, socketId: newSocket.id });
         });
 
         newSocket.on(
           "webrtc_offer",
           async ({ offer }: { offer: RTCSessionDescriptionInit }) => {
-            console.log("[useWebRTC] Received offer. Creating answer…");
+            console.info("[webrtc-signal] offer received; creating answer", { appointmentId, role, socketId: newSocket.id });
             setReconnectionGrace(null);
 
             const pc = createPeerConnection(newSocket);
@@ -530,13 +564,14 @@ export function useWebRTC({
             await pc.setLocalDescription(answer);
 
             newSocket.emit("webrtc_answer", { appointmentId, answer });
+            console.info("[webrtc-signal] answer emitted", { appointmentId, role, socketId: newSocket.id });
           }
         );
 
         newSocket.on(
           "webrtc_answer",
           async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
-            console.log("[useWebRTC] Received answer. Setting remote desc…");
+            console.info("[webrtc-signal] answer received", { appointmentId, role, socketId: newSocket.id });
             setReconnectionGrace(null);
             await peerConnectionRef.current?.setRemoteDescription(
               new RTCSessionDescription(answer)
@@ -547,6 +582,7 @@ export function useWebRTC({
         newSocket.on(
           "webrtc_ice_candidate",
           async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
+            console.info("[webrtc] ICE candidate received", { appointmentId, role });
             try {
               await peerConnectionRef.current?.addIceCandidate(
                 new RTCIceCandidate(candidate)
@@ -755,8 +791,8 @@ export function useWebRTC({
           peerConnectionRef.current = null;
         });
 
-        newSocket.on("disconnect", () => {
-          console.log("[useWebRTC] Signaling socket disconnected.");
+        newSocket.on("disconnect", (reason) => {
+          console.warn("[socket] signaling disconnected", { appointmentId, role, socketId: newSocket.id, reason });
         });
       } catch (err: any) {
         console.error("[useWebRTC] Initialization failed:", err);
