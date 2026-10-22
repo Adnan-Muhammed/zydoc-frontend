@@ -29,12 +29,19 @@ const verifyOtp = async (data: { email: string; otpCode: string }, isAdmin?: boo
 const resendOtp = async (data: { email: string }, isAdmin?: boolean) => {
     const url = isAdmin ? '/admin/auth/resend-otp' : '/auth/resend-otp';
     const res = await axiosInstance.post(url, data, { withCredentials: true });
-    return res.data;
+    return res.data; 
 };
 
 const logout = async (isAdmin?: boolean) => {
-    const url = isAdmin ? '/admin/auth/logout' : '/auth/logout';
-    await axiosInstance.post(url, {}, { withCredentials: true });
+    // Call Next.js route proxy directly so HTTP-only frontend cookies are deleted
+    await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isAdmin: !!isAdmin }),
+        credentials: 'include',
+    });
 };
 
 const getCurrentUser = async () => {

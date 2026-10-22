@@ -144,23 +144,22 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
   const pathname = usePathname();
   const isConsultation = pathname?.includes('/consultation/');
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setProfileMenuOpen(false);
-    dispatch(logoutUser())
-      .unwrap()
-      .catch((err: unknown) => {
-        console.error('Logout failed:', err);
-      })
-      .finally(() => {
-        // Clear lingering storage
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        sessionStorage.clear();
+    try {
+      await dispatch(logoutUser(role === 'admin')).unwrap();
+    } catch (err: unknown) {
+      console.error('Logout failed:', err);
+    } finally {
+      // Clear lingering storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.clear();
 
-        // Hard redirect to clear Next.js client router cache and prevent back-navigation to protected pages
-        const target = role === 'admin' ? '/admin/login' : '/';
-        window.location.href = target;
-      });
+      // Redirect to clear Next.js client router cache and prevent back-navigation to protected pages
+      const target = role === 'admin' ? '/admin/login' : '/';
+      window.location.href = target;
+    }
   };
 
   return (

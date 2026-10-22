@@ -171,27 +171,26 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
       ? getDoctorNav(isDoctorLocked)
       : PATIENT_NAV;
 
-  const handleLogout = () => {
-    dispatch(logoutUser())
-      .unwrap()
-      .catch((err: unknown) => {
-        console.error('Logout failed:', err);
-      })
-      .finally(() => {
-        // Clear lingering storage
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        sessionStorage.clear();
+  const handleLogout = async () => {
+    try {
+      await dispatch(logoutUser(role === 'admin')).unwrap();
+    } catch (err: unknown) {
+      console.error('Logout failed:', err);
+    } finally {
+      // Clear lingering storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.clear();
 
-        // Hard redirect to clear Next.js client router cache and prevent back-navigation to protected pages
-        const target = role === 'admin' ? '/admin/login' : '/';
-        window.location.href = target;
-      });
+      // Redirect to clear Next.js client router cache and prevent back-navigation to protected pages
+      const target = role === 'admin' ? '/admin/login' : '/';
+      window.location.href = target;
+    }
   };
 
   return (
     <>
-      {/* Mobile Backdrop Overlay */}
+      {/* Mobile Backdrop Overlay */} 
       {isOpen && (
         <div
           className="sidebar-overlay"

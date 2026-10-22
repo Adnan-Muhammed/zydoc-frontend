@@ -10,7 +10,7 @@ const extractAuthError = (error: unknown, defaultMessage: string): any => {
     }
     return err.response?.data?.message || err.message || defaultMessage;
 };
-
+ 
 export const loginUser = createAsyncThunk(
     'auth/login',
     async (

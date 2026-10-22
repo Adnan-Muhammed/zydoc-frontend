@@ -84,6 +84,7 @@ const authSlice = createSlice({
                 }
             })
             .addCase(logoutUser.fulfilled, () => initialState)
+            .addCase(logoutUser.rejected, () => initialState)
             // Global loading/error handling via matchers
             .addMatcher(
                 (action: { type: string }) => action.type.startsWith('auth/') && action.type.endsWith('/pending'),
