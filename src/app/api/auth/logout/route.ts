@@ -4,11 +4,15 @@ export async function POST(req: NextRequest) {
     try {
         const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL;
         
-        // Notify the backend to clear any backend-specific sessions if needed
+        // Notify the backend to clear any backend-specific sessions and cookies
         if (backendUrl) {
+            const cookieHeader = req.headers.get('cookie') || '';
             await fetch(`${backendUrl}/api/auth/logout`, { 
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    cookie: cookieHeader,
+                },
             }).catch(err => console.error('[logout proxy] Failed to reach backend:', err));
         } 
 

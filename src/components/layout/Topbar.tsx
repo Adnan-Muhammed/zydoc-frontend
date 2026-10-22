@@ -148,16 +148,18 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
     setProfileMenuOpen(false);
     dispatch(logoutUser())
       .unwrap()
-      .then(() => {
-        const target = role === 'admin' ? '/admin/login' : '/';
-        router.replace(target);
-        router.refresh();
-      })
       .catch((err: unknown) => {
         console.error('Logout failed:', err);
+      })
+      .finally(() => {
+        // Clear lingering storage
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        sessionStorage.clear();
+
+        // Hard redirect to clear Next.js client router cache and prevent back-navigation to protected pages
         const target = role === 'admin' ? '/admin/login' : '/';
-        router.replace(target);
-        router.refresh();
+        window.location.href = target;
       });
   };
 

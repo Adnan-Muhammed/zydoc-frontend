@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, ArrowRight, LayoutDashboard } from 'lucide-react'
+import { useSelector } from 'react-redux'
+import type { RootState } from '@/redux/store'
 
 export interface User {
   role?: string
@@ -27,27 +29,19 @@ export function Logo() {
 }
 
 export default function Navbar({ user: initialUser = null }: NavbarProps) {
-  const [user, setUser] = useState<User | null>(initialUser)
+  // Subscribe to Redux auth state
+  const reduxUser = useSelector((state: RootState) => state.auth.user)
+  const isAuthChecked = useSelector((state: RootState) => state.auth.isAuthChecked)
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated)
+
+  // Hybrid state: initialUser prevents SSR layout shift/flickering;
+  // Once Redux updates or finishes checking auth, Redux state takes precedence
+  const user = isAuthChecked
+    ? (isAuthenticated ? (reduxUser as User | null) : null)
+    : (reduxUser ? (reduxUser as User | null) : initialUser)
+
   const [menuOpen, setMenuOpen] = useState(false)
   const pathname = usePathname()
-
-  useEffect(() => {
-    setUser(initialUser)
-  }, [initialUser])
-
-  useEffect(() => {
-    // If no initial user, try to silently refresh session
-    if (!initialUser) {
-      fetch('/api/auth/refresh')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.user) {
-            setUser(data.user)
-          }
-        })
-        .catch(() => {})
-    }
-  }, [initialUser])
 
   // Close mobile drawer on route change
   useEffect(() => {
