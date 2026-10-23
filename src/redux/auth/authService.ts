@@ -5,10 +5,10 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../../lib/firebase/client';
 
 const login = async (credentials: { email: string; password: string }, isAdmin?: boolean) => {
-    // Use the same-origin Next.js proxy so auth cookies are set on the
+    // Use the same-origin Next.js proxy so auth cookies are set on the 
     // frontend domain and are available to middleware/server components.
-    // Use bare axios to avoid the API interceptor trying to refresh a login 401.
-    const res = await axios.post('/api/auth/login', {
+    // Use bare axios to avoid the API interceptor trying to refresh a login 401. 
+    const res = await axios.post('/api/auth/login', { 
         ...credentials,
         ...(isAdmin ? { isAdmin: true } : {}),
     }, { withCredentials: true });

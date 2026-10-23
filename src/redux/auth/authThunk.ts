@@ -7,9 +7,9 @@ const extractAuthError = (error: unknown, defaultMessage: string): any => {
 
     if (err.response?.data?.requiresVerification) {
         return err.response.data; // Return the whole object for unverified login recovery
-    }
+    } 
     return err.response?.data?.message || err.message || defaultMessage;
-};
+}; 
 
 export const loginUser = createAsyncThunk(
     'auth/login',

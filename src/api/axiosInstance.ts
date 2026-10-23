@@ -9,7 +9,7 @@ export const injectStore = (_store: Store) => {
     store = _store;
 };
 
-const axiosInstance: AxiosInstance = axios.create({
+const axiosInstance: AxiosInstance = axios.create({   
     baseURL: process.env.NEXT_PUBLIC_API_URL + "/api",
     withCredentials: true,
     headers: {

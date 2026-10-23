@@ -7,7 +7,7 @@ import { AuthState } from './authTypes';
 const initialState: AuthState = {
     user: null,
     accessToken: null,
-    requires2FA: false,
+    requires2FA: false, 
     emailForOTP: null,
     isAuthenticated: false,
     isLoading: false,

@@ -10,7 +10,7 @@ import {
   markAdminNotifRead,
   markAllAdminNotifsRead,
 } from '@/redux/features/admin/adminThunk';
-import { AdminNotification } from '@/redux/features/admin/adminTypes';
+import { AdminNotification } from '@/redux/features/admin/adminTypes';  
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { logoutUser } from '@/redux/auth/authThunk';

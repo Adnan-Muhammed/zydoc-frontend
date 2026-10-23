@@ -1,12 +1,19 @@
 // src/app/api/auth/login/route.ts
 //
 // WHY THIS EXISTS:
-// Same reason as /api/auth/verify-otp/route.ts:
-// On tunnel setups, the backend (different domain) sets cookies on its own domain.
-// This proxy calls the backend server-to-server and re-sets the cookies on the
-// frontend domain so Next.js middleware can see the accessToken and refreshToken.
+// The backend (api.carehealth.online) issues the tokens. This proxy calls the backend
+// server-to-server and re-sets the cookies on the frontend with the SAME attributes
+// (Domain=.carehealth.online, Path=/) used everywhere else, so exactly one cookie per
+// name exists and logout can reliably remove it.
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+    ACCESS_TOKEN_NAME,
+    REFRESH_TOKEN_NAME,
+    getAuthCookieOptions,
+    appendClearHostOnlyCookies,
+    COOKIE_DOMAIN,
+} from '@/lib/authCookies';
 
 export async function POST(req: NextRequest) {
     try {
@@ -42,35 +49,9 @@ export async function POST(req: NextRequest) {
         }
 
         const response = NextResponse.json(data);
+        response.headers.set('Cache-Control', 'no-store');
 
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
-        // OLD CODE
-        //         const setCookieHeader = backendRes.headers.get('set-cookie');
-        //         if (setCookieHeader) {
-        //             const cookieParts = setCookieHeader.split(/,(?=[^ ])/);
-        //             for (const part of cookieParts) {
-        //                 const [nameValue] = part.trim().split(';');
-        //                 const eqIdx = nameValue.indexOf('=');
-        //                 if (eqIdx === -1) continue;
-        //                 const cookieName = nameValue.slice(0, eqIdx).trim();
-        //                 const cookieValue = nameValue.slice(eqIdx + 1).trim();
-        // 
-        //                 response.cookies.set(cookieName, cookieValue, {
-        //                     httpOnly: true,
-        //                     secure: process.env.NODE_ENV === 'production',
-        //                     sameSite: 'lax',
-        //                     path: '/',
-        //                     maxAge: cookieName === 'accessToken' ? 2 * 60 : 7 * 24 * 60 * 60,
-        //                 });
-        //             }
-        //         }
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
-
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
-        // NEW CODE
+        // Re-set the backend's auth cookies on the frontend with unified attributes.
         const setCookies = backendRes.headers.getSetCookie();
         for (const cookieStr of setCookies) {
             const [nameValue] = cookieStr.split(';');
@@ -79,21 +60,18 @@ export async function POST(req: NextRequest) {
             const cookieName = nameValue.slice(0, eqIdx).trim();
             const cookieValue = nameValue.slice(eqIdx + 1).trim();
 
-            response.cookies.set(cookieName, cookieValue, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                path: '/',
-                // this line currently 2m but i want to be 15m
-                // and refresh token 7 days
-                maxAge: cookieName === 'accessToken' ? 15 * 60 : 7 * 24 * 60 * 60,
-            });
+            if (cookieName !== ACCESS_TOKEN_NAME && cookieName !== REFRESH_TOKEN_NAME) continue;
+
+            response.cookies.set(cookieName, cookieValue, getAuthCookieOptions(cookieName));
         }
-        //////////////////////////////////////////////////
-        //////////////////////////////////////////////////
+
+        // Remove any legacy host-only cookies (set by older versions) so they cannot
+        // shadow the new domain-scoped ones. Must come AFTER response.cookies.set().
+        if (COOKIE_DOMAIN) {
+            appendClearHostOnlyCookies(response.headers);
+        }
 
         return response;
-
     } catch (err) {
         console.error('[login proxy] Error:', err);
         return NextResponse.json({ success: false, message: 'Internal server error' }, { status: 500 });
