@@ -41,6 +41,7 @@ const authSlice = createSlice({
             .addCase(loginUser.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.user = action.payload.user;
+                state.accessToken = action.payload.accessToken ?? null;
                 state.isAuthenticated = true;
             })
             .addCase(loginWithGoogleUser.fulfilled, (state, action) => {
@@ -58,6 +59,7 @@ const authSlice = createSlice({
             .addCase(verifyOtp.fulfilled, (state, action) => {
                 state.isLoading = false;
                 state.user = action.payload.user;
+                state.accessToken = action.payload.accessToken ?? null;
                 state.isAuthenticated = true;
                 state.requires2FA = false;
                 state.emailForOTP = null;

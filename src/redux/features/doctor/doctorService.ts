@@ -6,7 +6,8 @@ import { BankDetails } from '@/types';
 
 export const updateProfileAPI = async (formData: FormData) => {
     const response = await axiosInstance.post('/doctor/profile-update', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        // Do NOT set Content-Type manually — let Axios/browser set it automatically
+        // so the multipart boundary string is preserved for Multer to parse correctly.
         withCredentials: true,
     });
     return response.data;

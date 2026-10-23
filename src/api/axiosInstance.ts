@@ -26,6 +26,11 @@ axiosInstance.interceptors.request.use(
                 config.headers['Authorization'] = `Bearer ${token}`;
             }
         }
+        // When sending FormData, delete Content-Type so Axios/browser sets multipart/form-data with the boundary
+        if (config.data instanceof FormData && config.headers) {
+            delete config.headers['Content-Type'];
+            delete config.headers['content-type'];
+        }
         return config;
     },
     (error) => Promise.reject(error)

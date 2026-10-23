@@ -4,7 +4,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAppSelector } from '@/redux/hooks';
+import { useAppSelector, useAppDispatch } from '@/redux/hooks';
+import { setCredentials } from '@/redux/auth/authSlice';
+import axiosInstance from '@/api/axiosInstance';
 import {
   User,
   MapPin,
@@ -24,6 +26,7 @@ import {
 
 export default function PatientProfileUpdatePage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const reduxUser = useAppSelector((state) => state.auth.user);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
@@ -106,48 +109,52 @@ export default function PatientProfileUpdatePage() {
     setError('');
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile-update`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          dateOfBirth: formData.dateOfBirth ? new Date(formData.dateOfBirth) : undefined,
-          gender: formData.gender,
-          phone: formData.phone,
-          bloodGroup: formData.bloodGroup,
-          emergencyContact: {
-            name: formData.emergencyContactName,
-            relationship: formData.emergencyContactRelationship,
-            phone: formData.emergencyContactPhone
-          },
-          medicalHistory: {
-            allergies: formData.allergies ? formData.allergies.split(',').map((s) => s.trim()).filter(Boolean) : [],
-            chronicConditions: formData.chronicConditions ? formData.chronicConditions.split(',').map((s) => s.trim()).filter(Boolean) : [],
-            currentMedications: formData.currentMedications ? formData.currentMedications.split(',').map((s) => s.trim()).filter(Boolean) : []
-          },
-          address: {
-            street: formData.street,
-            city: formData.city,
-            state: formData.state,
-            zipCode: formData.zipCode,
-            country: formData.country
-          }
-        })
+      // Use axiosInstance so the Redux-injected Bearer token interceptor fires.
+      // Send flat fields that UpdatePatientProfile.js expects directly.
+      const payload: Record<string, unknown> = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        emergencyContactName: formData.emergencyContactName,
+        emergencyContactRelationship: formData.emergencyContactRelationship,
+        emergencyContactPhone: formData.emergencyContactPhone,
+        allergies: formData.allergies,
+        chronicConditions: formData.chronicConditions,
+        currentMedications: formData.currentMedications,
+        street: formData.street,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        country: formData.country,
+      };
+
+      // Only include date when provided
+      if (formData.dateOfBirth) {
+        payload.dateOfBirth = new Date(formData.dateOfBirth).toISOString();
+      }
+
+      // Only include enum fields when a value is selected to prevent Mongoose
+      // validation errors on empty strings for optional dropdown fields.
+      if (formData.gender) payload.gender = formData.gender;
+      if (formData.bloodGroup) payload.bloodGroup = formData.bloodGroup;
+
+      const { data } = await axiosInstance.put('/patient/profile-update', payload, {
+        withCredentials: true,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to update profile');
+      // Sync the new access token into the Redux store so subsequent requests
+      // continue to use the updated token (isProfileCompleted: true).
+      if (data.accessToken && reduxUser) {
+        dispatch(setCredentials({ user: { ...reduxUser, isProfileCompleted: true }, accessToken: data.accessToken }));
+      }
 
       setSuccess(true);
       setTimeout(() => {
         router.push('/patient/profile');
       }, 1500);
     } catch (err: any) {
-      setError(err.message);
+      const msg = err.response?.data?.message || err.message || 'Failed to update profile';
+      setError(msg);
     } finally {
       setLoading(false);
     }

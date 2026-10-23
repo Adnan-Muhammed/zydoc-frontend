@@ -63,19 +63,23 @@ function useDraft() {
 
 // ─── Helper: Reconstruct File from base64 Data URL ─────────────────────────────
 
-function dataURLtoFile(dataurl: string, filename: string): File | null {
+function dataURLtoFile(dataurl: string, filename = 'doctor-avatar.jpg'): File | null {
     try {
+        if (!dataurl || typeof dataurl !== 'string') return null;
         const arr = dataurl.split(',');
+        if (arr.length < 2) return null;
         const mimeMatch = arr[0].match(/:(.*?);/);
         const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-        const bstr = atob(arr[1]);
+        const cleanBase64 = arr[1].replace(/[\s\r\n]+/g, '');
+        const bstr = atob(cleanBase64);
         let n = bstr.length;
         const u8arr = new Uint8Array(n);
         while (n--) {
             u8arr[n] = bstr.charCodeAt(n);
         }
         return new File([u8arr], filename, { type: mime });
-    } catch {
+    } catch (e) {
+        console.error('Failed to reconstruct File from data URL:', e);
         return null;
     }
 }
@@ -92,6 +96,7 @@ export default function CompleteDoctorProfileClient() {
     const { currentStep, workingHours } = draft;
 
     const [avatar, setAvatar] = useState<File | null>(null);
+    const avatarRef = useRef<File | null>(null);
     const [avatarPreview, setAvatarPreview] = useState<string | null>(() => draft.avatarUrl || null);
     const [avatarError, setAvatarError] = useState<string | null>(null);
     const [medicalCertificate, setMedicalCertificate] = useState<File | null>(null);
@@ -111,11 +116,12 @@ export default function CompleteDoctorProfileClient() {
 
     // Reconstruct avatar file from draft if saved as Data URL across page reloads
     useEffect(() => {
-        if (!avatar && draft.avatarUrl) {
-            if (draft.avatarUrl.startsWith('data:image/')) {
+        if (!avatar && !avatarRef.current && draft.avatarUrl) {
+            if (draft.avatarUrl.startsWith('data:')) {
                 const restored = dataURLtoFile(draft.avatarUrl, 'doctor-avatar.jpg');
                 if (restored) {
                     setAvatar(restored);
+                    avatarRef.current = restored;
                 }
             }
             if (!avatarPreview) {
@@ -141,6 +147,7 @@ export default function CompleteDoctorProfileClient() {
         }
 
         setAvatar(file);
+        avatarRef.current = file;
         setAvatarError(null);
         setServerErrors(null);
 
@@ -252,10 +259,30 @@ export default function CompleteDoctorProfileClient() {
         }
         
         // --- FILE INTEGRITY VALIDATION (In case of page reload restoring draft but losing files) ---
-        const hasAvatar = Boolean(avatar || avatarPreview || draft.avatarUrl || user?.avatarUrl);
+        let fileToUpload = avatar || avatarRef.current;
+        if (!fileToUpload) {
+            const dataUrl = (draft.avatarUrl?.startsWith('data:') ? draft.avatarUrl : null) || 
+                            (avatarPreview?.startsWith('data:') ? avatarPreview : null);
+            if (dataUrl) {
+                fileToUpload = dataURLtoFile(dataUrl, 'doctor-avatar.jpg');
+                if (fileToUpload) {
+                    setAvatar(fileToUpload);
+                    avatarRef.current = fileToUpload;
+                }
+            }
+        }
+
+        // @ts-ignore
+        const remoteAvatarUrl = draft.avatarUrl && !draft.avatarUrl.startsWith('data:')
+            ? draft.avatarUrl
+            // @ts-ignore
+            : (user?.avatarUrl || user?.doctorProfile?.avatarUrl || undefined);
+
+        const hasAvatar = Boolean(fileToUpload || remoteAvatarUrl);
         if (!hasAvatar) {
             alert('Your profile picture is missing. Please upload or capture an avatar in Step 1.');
             setAvatarError('Profile picture is mandatory. Please upload or capture an avatar.');
+            setServerErrors({ field: 'avatar', message: 'Profile picture is mandatory' });
             setDraft({ currentStep: 1 });
             return;
         }
@@ -290,7 +317,12 @@ export default function CompleteDoctorProfileClient() {
             const formData = new FormData();
 
             // Attach Binary Media Files
-            if (avatar) formData.append('avatar', avatar);
+            if (fileToUpload) {
+                formData.append('avatar', fileToUpload, fileToUpload.name || 'doctor-avatar.jpg');
+            }
+            if (remoteAvatarUrl) {
+                formData.append('avatarUrl', remoteAvatarUrl);
+            }
             if (medicalCertificate) formData.append('medicalCertificate', medicalCertificate);
             if (governmentId) formData.append('governmentId', governmentId);
             Object.entries(qualificationFiles).forEach(([id, file]) => {
@@ -308,7 +340,7 @@ export default function CompleteDoctorProfileClient() {
                 firstName: draft.firstName,
                 lastName: draft.lastName,
                 phone: draft.phone,
-                avatarUrl: draft.avatarUrl && !draft.avatarUrl.startsWith('data:') ? draft.avatarUrl : undefined,
+                avatarUrl: remoteAvatarUrl,
                 systemOfMedicine: draft.systemOfMedicine || 'Modern Medicine',
                 specialty: draft.specialty,
                 licenseNumber: draft.licenseNumber,
