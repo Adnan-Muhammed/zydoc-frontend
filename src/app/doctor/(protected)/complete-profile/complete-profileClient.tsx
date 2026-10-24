@@ -16,6 +16,7 @@ import StepCredentialsSection from './_components/StepCredentialsSection';
 import StepVerificationSection from './_components/StepVerificationSection';
 import StepScheduleSection from './_components/StepScheduleSection';
 import { validateFullSchedule } from '@/utils/scheduleValidator';
+import { inspectAndNormalizeFile } from '@/utils/fileSignatureHelper';
 
 // ─── Storage Key ──────────────────────────────────────────────────────────────
  
@@ -63,13 +64,20 @@ function useDraft() {
 
 // ─── Helper: Reconstruct File from base64 Data URL ─────────────────────────────
 
-function dataURLtoFile(dataurl: string, filename = 'doctor-avatar.jpg'): File | null {
+function dataURLtoFile(dataurl: string, defaultBase = 'doctor-avatar'): File | null {
     try {
         if (!dataurl || typeof dataurl !== 'string') return null;
         const arr = dataurl.split(',');
         if (arr.length < 2) return null;
         const mimeMatch = arr[0].match(/:(.*?);/);
         const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+        let ext = '.jpg';
+        if (mime === 'image/png') ext = '.png';
+        else if (mime === 'image/webp') ext = '.webp';
+        else if (mime === 'application/pdf') ext = '.pdf';
+
+        const filename = `${defaultBase}${ext}`;
         const cleanBase64 = arr[1].replace(/[\s\r\n]+/g, '');
         const bstr = atob(cleanBase64);
         let n = bstr.length;
@@ -104,6 +112,7 @@ export default function CompleteDoctorProfileClient() {
     const [qualificationFiles, setQualificationFiles] = useState<Record<string, File>>({});
     const [showRestoredBanner, setShowRestoredBanner] = useState(false);
     const [serverErrors, setServerErrors] = useState<{ field?: string; message?: string } | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const totalSteps = 4;
 
@@ -118,7 +127,7 @@ export default function CompleteDoctorProfileClient() {
     useEffect(() => {
         if (!avatar && !avatarRef.current && draft.avatarUrl) {
             if (draft.avatarUrl.startsWith('data:')) {
-                const restored = dataURLtoFile(draft.avatarUrl, 'doctor-avatar.jpg');
+                const restored = dataURLtoFile(draft.avatarUrl, 'doctor-avatar');
                 if (restored) {
                     setAvatar(restored);
                     avatarRef.current = restored;
@@ -132,22 +141,23 @@ export default function CompleteDoctorProfileClient() {
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
-    const handleAvatarFile = (file: File) => {
+    const handleAvatarFile = async (file: File) => {
         // Validation: Max file size (5MB)
         if (file.size > 5 * 1024 * 1024) {
             setAvatarError('Profile picture exceeds 5 MB. Please choose a smaller file.');
             return;
         }
 
-        // Validation: MIME types
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        if (!allowedTypes.includes(file.type)) {
-            setAvatarError('Invalid image format. Allowed formats: JPG, PNG, WebP.');
+        // Validate magic bytes and normalize extension
+        const inspected = await inspectAndNormalizeFile(file, ['JPEG', 'PNG', 'WEBP']);
+        if (inspected.error) {
+            setAvatarError(inspected.error);
             return;
         }
 
-        setAvatar(file);
-        avatarRef.current = file;
+        const validFile = inspected.file;
+        setAvatar(validFile);
+        avatarRef.current = validFile;
         setAvatarError(null);
         setServerErrors(null);
 
@@ -157,7 +167,7 @@ export default function CompleteDoctorProfileClient() {
             setAvatarPreview(previewUrl);
             setDraft({ avatarUrl: previewUrl });
         };
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(validFile);
     };
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,9 +177,52 @@ export default function CompleteDoctorProfileClient() {
         }
     };
 
+    const handleMedicalCertChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+            setServerErrors({ field: 'medicalCertificate', message: 'Medical Certificate exceeds 10 MB.' });
+            e.target.value = '';
+            return;
+        }
+
+        const inspected = await inspectAndNormalizeFile(file, ['PDF', 'JPEG', 'PNG']);
+        if (inspected.error) {
+            setServerErrors({ field: 'medicalCertificate', message: inspected.error });
+            e.target.value = '';
+            return;
+        }
+
+        setMedicalCertificate(inspected.file);
+        setServerErrors(null);
+    };
+
+    const handleGovIdChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+            setServerErrors({ field: 'governmentId', message: 'Government ID exceeds 10 MB.' });
+            e.target.value = '';
+            return;
+        }
+
+        const inspected = await inspectAndNormalizeFile(file, ['PDF', 'JPEG', 'PNG']);
+        if (inspected.error) {
+            setServerErrors({ field: 'governmentId', message: inspected.error });
+            e.target.value = '';
+            return;
+        }
+
+        setGovernmentId(inspected.file);
+        setServerErrors(null);
+    };
+
     const nextStep = (e: React.MouseEvent) => {
         e.preventDefault();
         setAvatarError(null);
+        setServerErrors(null);
 
         if (currentStep === 1) {
             const hasAvatar = Boolean(avatar || avatarPreview || draft.avatarUrl || user?.avatarUrl);
@@ -178,17 +231,17 @@ export default function CompleteDoctorProfileClient() {
                 return;
             }
             if (!draft.firstName || !draft.lastName || !draft.phone) {
-                alert('Please fill out all required personal information fields.');
+                setServerErrors({ field: 'phone', message: 'Please complete all required personal information (First Name, Last Name, Phone).' });
                 return;
             }
         }
         if (currentStep === 2) {
             if (!draft.systemOfMedicine || !draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
-                alert('Please complete all professional credential details.');
+                setServerErrors({ field: 'licenseNumber', message: 'Please complete all professional credential details (Specialty, License Number, Years of Experience).' });
                 return;
             }
             if (!draft.qualifications || draft.qualifications.length === 0) {
-                alert('Please add at least one qualification by filling the details and clicking "Add Qualification".');
+                setServerErrors({ field: 'qualifications', message: 'Please add at least one qualification by filling the details and clicking "Add Qualification".' });
                 return;
             }
         }
@@ -199,11 +252,11 @@ export default function CompleteDoctorProfileClient() {
             const existingGovId = user?.governmentIdUrl || user?.doctorProfile?.governmentIdUrl;
             
             if (!medicalCertificate && !existingMedicalCert) {
-                alert('Please upload your Medical Council Registration Certificate.');
+                setServerErrors({ field: 'medicalCertificate', message: 'Please upload your Medical Council Registration Certificate.' });
                 return;
             }
             if (!governmentId && !existingGovId) {
-                alert('Please upload your Government Issued Photo ID.');
+                setServerErrors({ field: 'governmentId', message: 'Please upload your Government Issued Photo ID.' });
                 return;
             }
         }
@@ -212,62 +265,101 @@ export default function CompleteDoctorProfileClient() {
 
     const prevStep = (e: React.MouseEvent) => {
         e.preventDefault();
+        setServerErrors(null);
         setDraft({ currentStep: Math.max(currentStep - 1, 1) });
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
+        setServerErrors(null);
+
+        console.group('🚀 [Complete Profile Submit Pipeline]');
+        console.log('[Step 1] Form submission initiated. Current Step:', currentStep);
+        console.log('[Step 1.1] Consultation settings in draft:', {
+            enableVideo: draft.enableVideo,
+            videoFee: draft.videoFee,
+            enablePhysical: draft.enablePhysical,
+            physicalFee: draft.physicalFee,
+            clinicName: draft.clinicName,
+            clinicAddress: draft.clinicAddress,
+        });
 
         // --- STEP 4 VALIDATION ---
         if (!draft.enableVideo && !draft.enablePhysical) {
-            alert('You must enable at least one consultation type (Telehealth or In-Person).');
+            const msg = 'You must enable at least one consultation type (Telehealth or In-Person).';
+            console.warn('[Validation Stopped]', msg);
+            setServerErrors({ field: 'consultationSettings', message: msg });
+            console.groupEnd();
             return;
         }
 
         if (draft.enableVideo) {
-            if (!draft.videoFee) {
-                alert('Please provide a Telehealth fee.');
+            if (!draft.videoFee || Number(draft.videoFee) < 0) {
+                const msg = 'Please provide a valid Telehealth fee.';
+                console.warn('[Validation Stopped]', msg);
+                setServerErrors({ field: 'videoFee', message: msg });
+                console.groupEnd();
                 return;
             }
-            const hasOnlineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => (draft.workingHours.online[day as keyof typeof draft.workingHours.online]?.length || 0) > 0);
+            const hasOnlineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                .some(day => (draft.workingHours?.online?.[day as keyof typeof draft.workingHours.online]?.length || 0) > 0);
             if (!hasOnlineDays) {
-                alert('Please configure at least one active availability shift for Telehealth consultation.');
+                const msg = 'Please configure at least one active availability shift for Telehealth consultation.';
+                console.warn('[Validation Stopped]', msg);
+                setServerErrors({ field: 'onlineSchedule', message: msg });
+                console.groupEnd();
                 return;
             }
         }
 
         if (draft.enablePhysical) {
-            if (!draft.physicalFee) {
-                alert('Please provide an In-Person fee.');
+            if (!draft.physicalFee || Number(draft.physicalFee) < 0) {
+                const msg = 'Please provide a valid In-Person fee.';
+                console.warn('[Validation Stopped]', msg);
+                setServerErrors({ field: 'physicalFee', message: msg });
+                console.groupEnd();
                 return;
             }
-            if (!draft.clinicName || !draft.clinicAddress) {
-                alert('Please provide your Clinic Title and Address for In-Person visits.');
+            if (!draft.clinicName?.trim() || !draft.clinicAddress?.trim()) {
+                const msg = 'Please provide your Clinic Title and Clinic Address for In-Person visits.';
+                console.warn('[Validation Stopped]', msg);
+                setServerErrors({ field: 'clinicDetails', message: msg });
+                console.groupEnd();
                 return;
             }
-            const hasOfflineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(day => (draft.workingHours.offline[day as keyof typeof draft.workingHours.offline]?.length || 0) > 0);
+            const hasOfflineDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                .some(day => (draft.workingHours?.offline?.[day as keyof typeof draft.workingHours.offline]?.length || 0) > 0);
             if (!hasOfflineDays) {
-                alert('Please configure at least one active availability shift for In-Person consultation.');
+                const msg = 'Please configure at least one active availability shift for In-Person consultation.';
+                console.warn('[Validation Stopped]', msg);
+                setServerErrors({ field: 'offlineSchedule', message: msg });
+                console.groupEnd();
                 return;
             }
         }
 
+        console.log('[Step 2] Validating weekly operational schedule...');
         const scheduleError = validateFullSchedule(draft.workingHours, Number(draft.slotDuration) || 15);
         if (scheduleError) {
-            alert(`Schedule Validation Error:\n${scheduleError}`);
+            const msg = `Schedule Validation: ${scheduleError}`;
+            console.warn('[Validation Stopped]', msg);
+            setServerErrors({ field: 'schedule', message: msg });
+            console.groupEnd();
             return;
         }
         
-        // --- FILE INTEGRITY VALIDATION (In case of page reload restoring draft but losing files) ---
+        // --- FILE INTEGRITY VALIDATION ---
+        console.log('[Step 3] Checking file availability & restored avatar...');
         let fileToUpload = avatar || avatarRef.current;
         if (!fileToUpload) {
             const dataUrl = (draft.avatarUrl?.startsWith('data:') ? draft.avatarUrl : null) || 
                             (avatarPreview?.startsWith('data:') ? avatarPreview : null);
             if (dataUrl) {
-                fileToUpload = dataURLtoFile(dataUrl, 'doctor-avatar.jpg');
+                fileToUpload = dataURLtoFile(dataUrl, 'doctor-avatar');
                 if (fileToUpload) {
                     setAvatar(fileToUpload);
                     avatarRef.current = fileToUpload;
+                    console.log('[Step 3.1] Reconstructed avatar file from Data URL:', fileToUpload.name, fileToUpload.type);
                 }
             }
         }
@@ -280,10 +372,12 @@ export default function CompleteDoctorProfileClient() {
 
         const hasAvatar = Boolean(fileToUpload || remoteAvatarUrl);
         if (!hasAvatar) {
-            alert('Your profile picture is missing. Please upload or capture an avatar in Step 1.');
+            const msg = 'Your profile picture is missing. Please upload or capture an avatar in Step 1.';
+            console.warn('[Validation Stopped]', msg);
             setAvatarError('Profile picture is mandatory. Please upload or capture an avatar.');
-            setServerErrors({ field: 'avatar', message: 'Profile picture is mandatory' });
+            setServerErrors({ field: 'avatar', message: msg });
             setDraft({ currentStep: 1 });
+            console.groupEnd();
             return;
         }
 
@@ -293,40 +387,58 @@ export default function CompleteDoctorProfileClient() {
         const existingGovId = user?.governmentIdUrl || user?.doctorProfile?.governmentIdUrl;
 
         if (!medicalCertificate && !existingMedicalCert) {
-            alert('Your Medical Council Registration Certificate file is missing (perhaps due to a page reload). Please re-upload it in Step 3.');
+            const msg = 'Medical Council Registration Certificate file is missing (files are not kept across browser refreshes). Please re-upload it in Step 3.';
+            console.warn('[Validation Stopped]', msg);
+            setServerErrors({ field: 'medicalCertificate', message: msg });
             setDraft({ currentStep: 3 });
+            console.groupEnd();
             return;
         }
 
         if (!governmentId && !existingGovId) {
-            alert('Your Government Issued Photo ID file is missing (perhaps due to a page reload). Please re-upload it in Step 3.');
+            const msg = 'Government Issued Photo ID file is missing (files are not kept across browser refreshes). Please re-upload it in Step 3.';
+            console.warn('[Validation Stopped]', msg);
+            setServerErrors({ field: 'governmentId', message: msg });
             setDraft({ currentStep: 3 });
+            console.groupEnd();
             return;
         }
 
         const missingQualFiles = draft.qualifications.some((q: any) => !q.certificateUrl && !qualificationFiles[q.id]);
         if (missingQualFiles) {
-            alert('Some qualifications are missing their certificate files (perhaps due to a page reload). Please re-upload them in Step 2 or remove the incomplete entries.');
+            const msg = 'Some qualifications are missing their certificate files (files are not kept across browser refreshes). Please re-upload them in Step 2 or remove incomplete entries.';
+            console.warn('[Validation Stopped]', msg);
+            setServerErrors({ field: 'qualifications', message: msg });
             setDraft({ currentStep: 2 });
+            console.groupEnd();
             return;
         }
-        
-        setServerErrors(null);
+
+        setIsSubmitting(true);
 
         try {
+            console.log('[Step 4] Assembling FormData multipart payload...');
             const formData = new FormData();
 
             // Attach Binary Media Files
             if (fileToUpload) {
                 formData.append('avatar', fileToUpload, fileToUpload.name || 'doctor-avatar.jpg');
+                console.log('[FormData] Attached avatar file:', fileToUpload.name);
             }
             if (remoteAvatarUrl) {
                 formData.append('avatarUrl', remoteAvatarUrl);
             }
-            if (medicalCertificate) formData.append('medicalCertificate', medicalCertificate);
-            if (governmentId) formData.append('governmentId', governmentId);
+            if (medicalCertificate) {
+                formData.append('medicalCertificate', medicalCertificate);
+                console.log('[FormData] Attached medicalCertificate:', medicalCertificate.name);
+            }
+            if (governmentId) {
+                formData.append('governmentId', governmentId);
+                console.log('[FormData] Attached governmentId:', governmentId.name);
+            }
             Object.entries(qualificationFiles).forEach(([id, file]) => {
                 formData.append('qualificationCertificates', file, `${id}___${file.name}`);
+                console.log(`[FormData] Attached qualificationCertificate for ID ${id}:`, file.name);
             });
 
             // Helper to strip internal UI client IDs from time block items
@@ -344,88 +456,116 @@ export default function CompleteDoctorProfileClient() {
                 systemOfMedicine: draft.systemOfMedicine || 'Modern Medicine',
                 specialty: draft.specialty,
                 licenseNumber: draft.licenseNumber,
-                yearsOfExperience: Number(draft.yearsOfExperience),
+                yearsOfExperience: Number(draft.yearsOfExperience) || 0,
                 slotDuration: Number(draft.slotDuration) || 15,
                 timezone: draft.timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'Asia/Kolkata') || 'Asia/Kolkata',
-                bio: draft.bio,
-                expertiseTags: draft.expertiseTags,
-                languages: draft.selectedLanguages,
-                qualifications: draft.qualifications,
+                bio: draft.bio || '',
+                expertiseTags: draft.expertiseTags || [],
+                languages: draft.selectedLanguages || [],
+                qualifications: draft.qualifications || [],
                 consultationSettings: {
-                    online: { enabled: draft.enableVideo, fee: Number(draft.videoFee) },
+                    online: { enabled: draft.enableVideo, fee: Number(draft.videoFee) || 0 },
                     offline: {
                         enabled: draft.enablePhysical,
-                        fee: Number(draft.physicalFee),
-                        clinicName: draft.clinicName,
-                        clinicAddress: draft.clinicAddress,
+                        fee: Number(draft.physicalFee) || 0,
+                        clinicName: draft.clinicName || '',
+                        clinicAddress: draft.clinicAddress || '',
                     },
                     // Legacy backwards compatibility aliases
-                    video: { enabled: draft.enableVideo, fee: Number(draft.videoFee) },
+                    video: { enabled: draft.enableVideo, fee: Number(draft.videoFee) || 0 },
                     physical: {
                         enabled: draft.enablePhysical,
-                        fee: Number(draft.physicalFee),
-                        clinicName: draft.clinicName,
-                        clinicAddress: draft.clinicAddress,
+                        fee: Number(draft.physicalFee) || 0,
+                        clinicName: draft.clinicName || '',
+                        clinicAddress: draft.clinicAddress || '',
                     },
                 },
                 workingHours: {
                     online: {
-                        monday: sanitizeBlocks(draft.workingHours.online.monday),
-                        tuesday: sanitizeBlocks(draft.workingHours.online.tuesday),
-                        wednesday: sanitizeBlocks(draft.workingHours.online.wednesday),
-                        thursday: sanitizeBlocks(draft.workingHours.online.thursday),
-                        friday: sanitizeBlocks(draft.workingHours.online.friday),
-                        saturday: sanitizeBlocks(draft.workingHours.online.saturday),
-                        sunday: sanitizeBlocks(draft.workingHours.online.sunday),
+                        monday: sanitizeBlocks(draft.workingHours?.online?.monday),
+                        tuesday: sanitizeBlocks(draft.workingHours?.online?.tuesday),
+                        wednesday: sanitizeBlocks(draft.workingHours?.online?.wednesday),
+                        thursday: sanitizeBlocks(draft.workingHours?.online?.thursday),
+                        friday: sanitizeBlocks(draft.workingHours?.online?.friday),
+                        saturday: sanitizeBlocks(draft.workingHours?.online?.saturday),
+                        sunday: sanitizeBlocks(draft.workingHours?.online?.sunday),
                     },
                     offline: {
-                        monday: sanitizeBlocks(draft.workingHours.offline.monday),
-                        tuesday: sanitizeBlocks(draft.workingHours.offline.tuesday),
-                        wednesday: sanitizeBlocks(draft.workingHours.offline.wednesday),
-                        thursday: sanitizeBlocks(draft.workingHours.offline.thursday),
-                        friday: sanitizeBlocks(draft.workingHours.offline.friday),
-                        saturday: sanitizeBlocks(draft.workingHours.offline.saturday),
-                        sunday: sanitizeBlocks(draft.workingHours.offline.sunday),
+                        monday: sanitizeBlocks(draft.workingHours?.offline?.monday),
+                        tuesday: sanitizeBlocks(draft.workingHours?.offline?.tuesday),
+                        wednesday: sanitizeBlocks(draft.workingHours?.offline?.wednesday),
+                        thursday: sanitizeBlocks(draft.workingHours?.offline?.thursday),
+                        friday: sanitizeBlocks(draft.workingHours?.offline?.friday),
+                        saturday: sanitizeBlocks(draft.workingHours?.offline?.saturday),
+                        sunday: sanitizeBlocks(draft.workingHours?.offline?.sunday),
                     }
                 },
             };
 
             formData.append('data', JSON.stringify(profileData));
 
-            // Dispatch Redux action thunk
+            console.log('[Step 5] Dispatching updateDoctorProfile thunk...');
             const resultAction = await dispatch(updateDoctorProfile(formData));
+            console.log('[Step 6] Thunk returned resultAction:', resultAction);
 
             if (updateDoctorProfile.fulfilled.match(resultAction)) {
-                // Safely extract the user payload to prevent undefined errors
+                console.log('✅ [Success] Profile updated successfully!');
                 const updatedUser = resultAction.payload?.user || resultAction.payload;
                 if (updatedUser) {
-                    // Rehydrate credentials safely. If accessToken is missing, authSlice shouldn't break.
                     dispatch(setCredentials({ user: updatedUser, accessToken: user?.accessToken }));
                 }
                 clearDraft();
-                // Perform full reload so the secure cookie is processed by Next.js middleware
                 window.location.href = '/doctor/dashboard';
             } else if (updateDoctorProfile.rejected.match(resultAction)) {
-                const errorPayload = resultAction.payload as { message: string; field: string | null } | undefined;
-                const errorMessage = errorPayload?.message || 'Something went wrong. Please try again.';
+                const errorPayload = resultAction.payload as { message?: string; field?: string | null } | undefined;
+                const errorMessage = errorPayload?.message || 'Something went wrong while submitting your profile. Please try again.';
                 const errorField = errorPayload?.field ?? null;
+                console.error('❌ [Rejected] Backend rejection:', errorPayload);
 
                 setServerErrors({
                     field: errorField ?? undefined,
                     message: errorMessage,
                 });
 
-                // Auto-navigate to the step containing the invalid field
-                if (errorField === 'phone' || errorField === 'avatar') {
-                    setDraft({ currentStep: 1 });
-                } else if (errorField === 'licenseNumber') {
-                    setDraft({ currentStep: 2 });
+                const getStepForField = (field?: string): number | null => {
+                    if (!field) return null;
+                    if (['avatar', 'firstName', 'lastName', 'phone', 'bio'].includes(field)) return 1;
+                    if (['systemOfMedicine', 'specialty', 'licenseNumber', 'yearsOfExperience', 'qualifications', 'qualificationCertificates'].includes(field)) return 2;
+                    if (['medicalCertificate', 'governmentId'].includes(field)) return 3;
+                    if (['videoFee', 'physicalFee', 'clinicName', 'clinicAddress', 'clinicDetails', 'onlineSchedule', 'offlineSchedule', 'consultationSettings', 'schedule', 'workingHours'].includes(field)) return 4;
+                    return null;
+                };
+
+                const targetStep = getStepForField(errorField || undefined);
+                if (targetStep) {
+                    setDraft({ currentStep: targetStep });
+                } else {
+                    const lower = errorMessage.toLowerCase();
+                    if (lower.includes('avatar') || lower.includes('profile picture') || lower.includes('photo')) {
+                        setDraft({ currentStep: 1 });
+                    } else if (lower.includes('qualification') || lower.includes('degree') || lower.includes('license')) {
+                        setDraft({ currentStep: 2 });
+                    } else if (lower.includes('medical') || lower.includes('government') || lower.includes('certificate') || lower.includes('id')) {
+                        setDraft({ currentStep: 3 });
+                    }
                 }
             }
-        } catch (error) {
-            console.error('Unexpected layout execution error:', error);
-            setServerErrors({ message: 'An unexpected application runtime failure occurred.' });
+        } catch (error: any) {
+            console.error('💥 [Fatal] Unexpected layout execution error:', error);
+            setServerErrors({ message: error?.message || 'An unexpected application runtime failure occurred.' });
+        } finally {
+            setIsSubmitting(false);
+            console.groupEnd();
         }
+    };
+
+    const getStepLabel = (field?: string): string => {
+        if (!field) return 'System Error';
+        if (['avatar', 'firstName', 'lastName', 'phone', 'bio'].includes(field)) return 'Step 1: Personal Identity';
+        if (['systemOfMedicine', 'specialty', 'licenseNumber', 'yearsOfExperience', 'qualifications', 'qualificationCertificates'].includes(field)) return 'Step 2: Medical Credentials';
+        if (['medicalCertificate', 'governmentId'].includes(field)) return 'Step 3: Verification Documents';
+        if (['videoFee', 'physicalFee', 'clinicName', 'clinicAddress', 'clinicDetails', 'onlineSchedule', 'offlineSchedule', 'consultationSettings', 'schedule', 'workingHours'].includes(field)) return 'Step 4: Availability & Fees';
+        return 'Notice';
     };
 
     return (
@@ -445,7 +585,32 @@ export default function CompleteDoctorProfileClient() {
                 {/* Section Header */}
                 <StepProgressHeader currentStep={currentStep} totalSteps={totalSteps} />
 
-                <form onSubmit={handleSave} className="p-4 sm:p-5 flex flex-col justify-between gap-5">
+                {/* Visible Server / Validation Error Banner */}
+                {serverErrors && (
+                    <div className="mx-4 sm:mx-5 mt-4 p-4 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-700 dark:text-red-300 text-sm font-medium flex items-start justify-between gap-3 animate-fade-in shadow-sm">
+                        <div className="flex items-start gap-3">
+                            <i className="fas fa-exclamation-circle text-red-500 mt-0.5 text-base flex-shrink-0"></i>
+                            <div>
+                                <p className="font-bold text-red-800 dark:text-red-200">
+                                    {getStepLabel(serverErrors.field)}
+                                </p>
+                                <p className="text-xs sm:text-sm mt-0.5 text-red-600 dark:text-red-300">
+                                    {serverErrors.message || 'Please check your information and try again.'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setServerErrors(null)}
+                            className="text-red-400 hover:text-red-600 dark:hover:text-red-200 text-xs font-bold px-2 py-1 transition"
+                            title="Dismiss error"
+                        >
+                            <i className="fas fa-times text-sm"></i>
+                        </button>
+                    </div>
+                )}
+
+                <form noValidate onSubmit={handleSave} className="p-4 sm:p-5 flex flex-col justify-between gap-5">
 
                     {/* ─── STEP 1: IDENTITY CONFIGURATION ─── */}
                     {currentStep === 1 && (
@@ -476,8 +641,9 @@ export default function CompleteDoctorProfileClient() {
                         <StepVerificationSection
                             medicalCertificate={medicalCertificate}
                             governmentId={governmentId}
-                            onMedicalCertificateChange={(e) => setMedicalCertificate(e.target.files?.[0] || null)}
-                            onGovernmentIdChange={(e) => setGovernmentId(e.target.files?.[0] || null)}
+                            onMedicalCertificateChange={handleMedicalCertChange}
+                            onGovernmentIdChange={handleGovIdChange}
+                            serverErrors={serverErrors}
                         />
                     )}
 
@@ -486,6 +652,7 @@ export default function CompleteDoctorProfileClient() {
                         <StepScheduleSection
                             draft={draft}
                             setDraft={setDraft}
+                            serverErrors={serverErrors}
                         />
                     )}
 
@@ -493,7 +660,7 @@ export default function CompleteDoctorProfileClient() {
                     <FormNavFooter
                         currentStep={currentStep}
                         totalSteps={totalSteps}
-                        isLoading={isLoading}
+                        isLoading={isSubmitting || isLoading}
                         onPrev={prevStep}
                         onNext={nextStep}
                     />

@@ -19,9 +19,10 @@ const DURATION_OPTIONS = [
 interface StepScheduleSectionProps {
     draft: Pick<DraftState, 'enableVideo' | 'videoFee' | 'enablePhysical' | 'physicalFee' | 'clinicName' | 'clinicAddress' | 'workingHours' | 'slotDuration' | 'timezone'>;
     setDraft: (updater: Partial<DraftState>) => void;
+    serverErrors?: { field?: string; message?: string } | null;
 }
 
-export default function StepScheduleSection({ draft, setDraft }: StepScheduleSectionProps) {
+export default function StepScheduleSection({ draft, setDraft, serverErrors }: StepScheduleSectionProps) {
     const { enableVideo, videoFee, enablePhysical, physicalFee, clinicName, clinicAddress, workingHours, slotDuration = 15, timezone } = draft;
 
     React.useEffect(() => {
@@ -239,15 +240,26 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                             <p className="text-sm text-slate-400 leading-relaxed mb-4">Enable virtual consultations via secure video calls.</p>
                         </div>
                         {enableVideo && (
-                            <Input
-                                label="Fee (INR) *"
-                                type="number"
-                                min="0"
-                                value={videoFee}
-                                onChange={(e) => setDraft({ videoFee: e.target.value })}
-                                className="dark:bg-[#151732] dark:border-[#24274d] text-sm sm:text-base py-3 font-bold"
-                                required
-                            />
+                            <div className="space-y-1">
+                                <Input
+                                    label="Fee (INR) *"
+                                    type="number"
+                                    min="0"
+                                    value={videoFee}
+                                    onChange={(e) => setDraft({ videoFee: e.target.value })}
+                                    className={`dark:bg-[#151732] text-sm sm:text-base py-3 font-bold transition ${
+                                        serverErrors?.field === 'videoFee'
+                                            ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'
+                                            : 'dark:border-[#24274d]'
+                                    }`}
+                                    required
+                                />
+                                {serverErrors?.field === 'videoFee' && (
+                                    <span className="text-[11px] text-red-500 font-bold flex items-center gap-1.5 mt-1 animate-fade-in">
+                                        <i className="fas fa-circle-xmark text-xs" /> {serverErrors.message}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -271,23 +283,40 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                         {enablePhysical && (
                             <div className="space-y-4 animate-fade-in border-t border-slate-100 dark:border-[#24274d] pt-4 w-full">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <Input
-                                        label="Fee (INR) *"
-                                        type="number"
-                                        min="0"
-                                        value={physicalFee}
-                                        onChange={(e) => setDraft({ physicalFee: e.target.value })}
-                                        className="dark:bg-[#151732] dark:border-[#24274d] text-sm sm:text-base py-3 font-bold"
-                                        required
-                                    />
-                                    <Input
-                                        label="Clinic Title *"
-                                        value={clinicName}
-                                        onChange={(e) => setDraft({ clinicName: e.target.value })}
-                                        placeholder="Metro Health Clinic"
-                                        className="dark:bg-[#151732] dark:border-[#24274d] text-sm sm:text-base py-3 font-bold placeholder:font-normal"
-                                        required
-                                    />
+                                    <div className="space-y-1">
+                                        <Input
+                                            label="Fee (INR) *"
+                                            type="number"
+                                            min="0"
+                                            value={physicalFee}
+                                            onChange={(e) => setDraft({ physicalFee: e.target.value })}
+                                            className={`dark:bg-[#151732] text-sm sm:text-base py-3 font-bold transition ${
+                                                serverErrors?.field === 'physicalFee'
+                                                    ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'
+                                                    : 'dark:border-[#24274d]'
+                                            }`}
+                                            required
+                                        />
+                                        {serverErrors?.field === 'physicalFee' && (
+                                            <span className="text-[11px] text-red-500 font-bold flex items-center gap-1.5 mt-1 animate-fade-in">
+                                                <i className="fas fa-circle-xmark text-xs" /> {serverErrors.message}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Input
+                                            label="Clinic Title *"
+                                            value={clinicName}
+                                            onChange={(e) => setDraft({ clinicName: e.target.value })}
+                                            placeholder="Metro Health Clinic"
+                                            className={`dark:bg-[#151732] text-sm sm:text-base py-3 font-bold placeholder:font-normal transition ${
+                                                serverErrors?.field === 'clinicDetails' || serverErrors?.field === 'clinicName'
+                                                    ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'
+                                                    : 'dark:border-[#24274d]'
+                                            }`}
+                                            required
+                                        />
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Clinic Address *</label>
@@ -296,9 +325,18 @@ export default function StepScheduleSection({ draft, setDraft }: StepScheduleSec
                                         value={clinicAddress}
                                         onChange={(e) => setDraft({ clinicAddress: e.target.value })}
                                         placeholder="City, State PIN Code"
-                                        className="w-full text-sm rounded-xl border border-slate-300 dark:border-[#24274d] bg-white dark:bg-[#151732] px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white transition placeholder:text-slate-400 shadow-sm font-bold placeholder:font-normal resize-none"
+                                        className={`w-full text-sm rounded-xl border bg-white dark:bg-[#151732] px-4 py-2.5 outline-none focus:ring-2 focus:ring-blue-500/20 dark:text-white transition placeholder:text-slate-400 shadow-sm font-bold placeholder:font-normal resize-none ${
+                                            serverErrors?.field === 'clinicDetails' || serverErrors?.field === 'clinicAddress'
+                                                ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'
+                                                : 'border-slate-300 dark:border-[#24274d]'
+                                        }`}
                                         required
                                     />
+                                    {(serverErrors?.field === 'clinicDetails' || serverErrors?.field === 'clinicAddress') && (
+                                        <span className="text-[11px] text-red-500 font-bold flex items-center gap-1.5 mt-1 animate-fade-in">
+                                            <i className="fas fa-circle-xmark text-xs" /> {serverErrors.message}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         )}

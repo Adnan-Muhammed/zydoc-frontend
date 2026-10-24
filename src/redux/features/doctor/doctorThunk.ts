@@ -9,10 +9,13 @@ export const updateDoctorProfile = createAsyncThunk(
         try {
             return await doctorService.updateProfileAPI(formData);
         } catch (error: unknown) {
-            const err = error as { response?: { data?: { message?: string; field?: string } } };
+            const err = error as { 
+                response?: { data?: { message?: string; field?: string } };
+                message?: string;
+            };
             const data = err.response?.data;
             return rejectWithValue({
-                message: data?.message || 'Failed to update profile',
+                message: data?.message || err.message || 'Failed to update profile',
                 field: data?.field || null,
             });
         }

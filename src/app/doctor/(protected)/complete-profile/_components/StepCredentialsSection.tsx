@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Input from '@/components/ui/Input';
 import { DraftState, Qualification } from './types';
 import { SYSTEMS_LIST, getSystemConfigById, deduceSystemOfMedicine } from '@/constants/systemsOfMedicine';
+import { inspectAndNormalizeFile } from '@/utils/fileSignatureHelper';
 
 const AVAILABLE_LANGUAGES = ['English', 'Malayalam', 'Hindi', 'Tamil', 'Spanish', 'French'];
 
@@ -73,17 +74,10 @@ export default function StepCredentialsSection({
                 : [...selectedLanguages, lang],
         });
 
-    const addQualification = () => {
+    const addQualification = async () => {
         if (!newDegree || !newInstitution || !newYear) return;
         if (!newCertificate) {
             alert('Please upload a certificate for this qualification.');
-            return;
-        }
-
-        const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp'];
-        const ext = '.' + (newCertificate.name.split('.').pop() || '').toLowerCase();
-        if (!allowedExts.includes(ext)) {
-            alert('Invalid file format. Allowed formats: PDF, JPG, PNG, WebP.');
             return;
         }
 
@@ -92,19 +86,24 @@ export default function StepCredentialsSection({
             return;
         }
 
+        const inspected = await inspectAndNormalizeFile(newCertificate, ['PDF', 'JPEG', 'PNG', 'WEBP']);
+        if (inspected.error) {
+            alert(inspected.error);
+            return;
+        }
+
+        const validCert = inspected.file;
         const id = Date.now().toString();
         const updatedQualifications = [
             ...qualifications,
-            { id, degree: newDegree, institution: newInstitution, year: newYear, certificateName: newCertificate?.name },
+            { id, degree: newDegree, institution: newInstitution, year: newYear, certificateName: validCert.name },
         ];
         const deducedSystem = deduceSystemOfMedicine(updatedQualifications, systemOfMedicine);
         setDraft({
             qualifications: updatedQualifications,
             systemOfMedicine: deducedSystem,
         });
-        if (newCertificate) {
-            setQualificationFiles((prev) => ({ ...prev, [id]: newCertificate! }));
-        }
+        setQualificationFiles((prev) => ({ ...prev, [id]: validCert }));
         setNewDegree('');
         setNewInstitution('');
         setNewYear('');
