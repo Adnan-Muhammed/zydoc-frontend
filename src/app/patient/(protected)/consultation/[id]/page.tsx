@@ -28,7 +28,7 @@ export default function PatientConsultationPage({ params }: ConsultationPageProp
   }, [dispatch, params.id]);
 
   useEffect(() => {
-    if (currentAppointment) {
+    if (currentAppointment && (currentAppointment._id === params.id || (currentAppointment as any).id === params.id)) {
       if (isTerminalStatus(currentAppointment.status)) {
         setIsBlockedReentry(true);
         router.replace('/patient/appointments');
@@ -44,7 +44,7 @@ export default function PatientConsultationPage({ params }: ConsultationPageProp
         return () => clearTimeout(timer);
       }
     }
-  }, [currentAppointment, router]);
+  }, [currentAppointment, params.id, router]);
 
   // Guard against direct browser history back-navigation re-entry
   useEffect(() => {
@@ -133,7 +133,7 @@ export default function PatientConsultationPage({ params }: ConsultationPageProp
   return (
     <VideoCallRoom
       appointmentId={params.id}
-      userId={user._id}
+      userId={user._id || (user as any).id}
       role={user.role}
     />
   );

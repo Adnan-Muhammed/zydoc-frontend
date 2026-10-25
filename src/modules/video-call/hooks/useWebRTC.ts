@@ -130,6 +130,7 @@ export function useWebRTC({
   const socketRef = useRef<Socket | null>(null);
   const currentJoinTokenRef = useRef<string | null>(null);
   const hasJoinedOnceRef = useRef<boolean>(Boolean(isRejoin));
+  const iceCandidatesQueueRef = useRef<RTCIceCandidateInit[]>([]);
 
   // ── State ───────────────────────────────────────────────────────────────
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -233,6 +234,7 @@ export function useWebRTC({
   /** Create a fresh RTCPeerConnection and wire up its callbacks. */
   const createPeerConnection = useCallback(
     (socket: Socket): RTCPeerConnection => {
+      iceCandidatesQueueRef.current = [];
       const pc = new RTCPeerConnection(ICE_SERVERS);
 
       // 1. Forward ICE candidates to the other peer via the signaling server.
@@ -381,7 +383,7 @@ export function useWebRTC({
 
         // ── Step 3: Connect dedicated signaling socket ─────────────────
         const newSocket = io(
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
+          process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001",
           {
             withCredentials: true,
             auth: {
@@ -560,6 +562,16 @@ export function useWebRTC({
               );
 
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            while (iceCandidatesQueueRef.current.length > 0) {
+              const queued = iceCandidatesQueueRef.current.shift();
+              if (queued) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(queued));
+                } catch (e) {
+                  console.warn("[useWebRTC] Error draining queued candidate:", e);
+                }
+              }
+            }
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
 
@@ -576,6 +588,18 @@ export function useWebRTC({
             await peerConnectionRef.current?.setRemoteDescription(
               new RTCSessionDescription(answer)
             );
+            if (peerConnectionRef.current) {
+              while (iceCandidatesQueueRef.current.length > 0) {
+                const queued = iceCandidatesQueueRef.current.shift();
+                if (queued) {
+                  try {
+                    await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(queued));
+                  } catch (e) {
+                    console.warn("[useWebRTC] Error draining queued candidate:", e);
+                  }
+                }
+              }
+            }
           }
         );
 
@@ -583,8 +607,13 @@ export function useWebRTC({
           "webrtc_ice_candidate",
           async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
             console.info("[webrtc] ICE candidate received", { appointmentId, role });
+            const pc = peerConnectionRef.current;
+            if (!pc || !pc.remoteDescription) {
+              iceCandidatesQueueRef.current.push(candidate);
+              return;
+            }
             try {
-              await peerConnectionRef.current?.addIceCandidate(
+              await pc.addIceCandidate(
                 new RTCIceCandidate(candidate)
               );
             } catch (err) {
