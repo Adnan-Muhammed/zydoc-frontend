@@ -1,6 +1,7 @@
 import { getDoctorById } from "@/lib/doctors";
 import { notFound } from "next/navigation";
 import { deduceSystemOfMedicine, extractPrimaryQualifications } from "@/constants/systemsOfMedicine";
+import { resolveFileUrl } from "@/utils/fileUrlHelper";
 import BookingForm from "./BookingForm";
 import Link from "next/link";
 import { 
@@ -56,7 +57,8 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
   const reviewCount = Number(d.reviewCount || d.totalReviews || 0);
   const languages: string[] = Array.isArray(d.languages) && d.languages.length > 0 ? d.languages : [];
   
-  const doctorImage = d.avatarUrl || d.profileImage || d.image || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
+  const resolvedAvatar = resolveFileUrl(d.avatarUrl || d.profileImage || d.image);
+  const doctorImage = resolvedAvatar || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
 
   return (
     <div className="min-h-screen bg-[#f8faff] text-slate-800 pb-16">
@@ -108,6 +110,7 @@ export default async function BookingPage({ params }: { params: Promise<{ id: st
               <div className="relative size-20 sm:size-24 rounded-2xl overflow-hidden bg-white/10 border-2 border-white/20 shadow-lg shrink-0">
                 <img
                   src={doctorImage}
+
                   alt={doctorName}
                   className="size-full object-cover object-center"
                 />

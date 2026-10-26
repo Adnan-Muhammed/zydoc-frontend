@@ -6,8 +6,8 @@ import Link from 'next/link';
 import axiosInstance from '@/api/axiosInstance';
 import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 import { useAppSelector } from '@/redux/hooks';
-import toast from 'react-hot-toast';
 import { deduceSystemOfMedicine, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Stethoscope,
   Calendar,
@@ -471,7 +471,7 @@ export default function MyDoctorsPage() {
                       }}
                     >
                       {doc.avatarUrl ? (
-                        <img src={doc.avatarUrl} alt={doctorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={resolveFileUrl(doc.avatarUrl)} alt={doctorName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <span>{doc.firstName?.[0] || 'DR'}</span>
                       )}
@@ -713,11 +713,11 @@ export default function MyDoctorsPage() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          overflow: 'hidden'
+                          overflow: 'hidden',
                         }}
                       >
                         {historyData.doctor?.avatarUrl ? (
-                          <img src={historyData.doctor.avatarUrl} alt={historyData.doctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <img src={resolveFileUrl(historyData.doctor.avatarUrl)} alt={historyData.doctor.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <span>{historyData.doctor?.firstName?.[0] || 'D'}</span>
                         )}

@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import RatingStars from "./RatingStars";
 import { reviewService } from "../services/reviewService";
+import { resolveFileUrl } from "@/utils/fileUrlHelper";
 
 interface ReviewModalProps {
   isOpen: boolean;
@@ -154,7 +155,7 @@ export default function ReviewModal({
               <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 overflow-hidden shrink-0 flex items-center justify-center text-indigo-600 font-bold text-lg shadow-sm">
                 {doctor.avatarUrl ? (
                   <img
-                    src={doctor.avatarUrl}
+                    src={resolveFileUrl(doctor.avatarUrl)}
                     alt={doctorName}
                     className="w-full h-full object-cover"
                   />

@@ -196,7 +196,7 @@ export default function AdminDoctorsClient() {
                 src={resolveFileUrl(profile.avatarUrl)}
                 alt={fullName}
                 className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-100 shadow-2xs shrink-0"
-              />
+              /> 
             ) : (
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-2xs shrink-0">
                 {initial}

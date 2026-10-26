@@ -50,9 +50,25 @@ export function resolveFileUrl(
     return '';
   }
 
-  const trimmed = filePathOrUrl.trim();
+  let trimmed = filePathOrUrl.trim();
   if (!trimmed) {
     return '';
+  }
+
+  // Active CloudFront distribution domain for public approved doctor assets
+  const activeCloudFront = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || 'd2j3r11t01prca.cloudfront.net';
+  const cleanCloudFront = activeCloudFront.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+
+  // 0a. Rewrite legacy or placeholder CloudFront distribution domain to active CDN
+  if (trimmed.includes('your-distribution-id.cloudfront.net')) {
+    trimmed = trimmed.replace('your-distribution-id.cloudfront.net', cleanCloudFront);
+  }
+
+  // 0b. Rewrite direct S3 public URLs to CloudFront (direct S3 access returns 403 due to CloudFront OAC)
+  const s3Match = trimmed.match(/^https?:\/\/[^/]+\.s3[.-][^/]+\.amazonaws\.com\/(.+)$/i) ||
+                  trimmed.match(/^https?:\/\/[^/]+\.s3\.amazonaws\.com\/(.+)$/i);
+  if (s3Match && s3Match[1]) {
+    return `https://${cleanCloudFront}/${s3Match[1]}`;
   }
 
   // 1. Allow valid absolute HTTP(S) URLs as-is
@@ -75,8 +91,14 @@ export function resolveFileUrl(
   // 4. Normalize backslashes (Windows legacy paths) to forward slashes
   const normalized = trimmed.replace(/\\/g, '/');
 
+  // 4a. If the path is a public S3 avatar key, resolve directly to CloudFront CDN
+  const cleanRelative = normalized.replace(/^\/+/, '');
+  if (cleanRelative.startsWith('avatars/')) {
+    return `https://${cleanCloudFront}/${cleanRelative}`;
+  }
+
   // 5. Ensure path starts with a single '/'
-  const cleanPath = '/' + normalized.replace(/^\/+/, '');
+  const cleanPath = '/' + cleanRelative;
 
   // 6. Resolve base URL (custom override or process.env.NEXT_PUBLIC_API_URL)
   const baseSource = customBaseUrl !== undefined ? customBaseUrl : process.env.NEXT_PUBLIC_API_URL;

@@ -453,7 +453,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                   alt={dName}
                   className="w-full h-full object-cover"
                 />
-              ) : (
+              ) : ( 
                 dName.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase()
               )}
             </div>

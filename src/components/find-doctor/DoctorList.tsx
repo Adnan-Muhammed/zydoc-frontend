@@ -5,6 +5,7 @@ import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import DoctorFilters from './DoctorFilters';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { getSystemConfigById, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
 import {
   SlidersHorizontal,
@@ -48,7 +49,8 @@ type Doctor = {
   physicalFee: number | null;
   clinicName: string;
   clinicAddress: string;
-  image: string;
+  image?: string;
+  avatarUrl?: string;
 };
 
 type Props = {
@@ -566,7 +568,7 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
                     <div className="doctor-avatar-wrapper">
                       <div className="doctor-avatar-frame">
                         <img
-                          src={doc.image}
+                          src={resolveFileUrl(doc.avatarUrl || doc.image)}
                           alt={doc.name}
                           className="size-full object-cover object-center"
                         />

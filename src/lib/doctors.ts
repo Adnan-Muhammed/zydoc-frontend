@@ -1,5 +1,6 @@
 // src/lib/doctors.ts
 import { deduceSystemOfMedicine, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 
 export async function getDoctors(searchParams?: any) {
   const params = new URLSearchParams();
@@ -54,16 +55,8 @@ export const getDoctorsList = async (searchParams?: any) => {
         const clinicAddress = doc.consultationSettings?.offline?.clinicAddress || doc.consultationSettings?.physical?.clinicAddress || "";
  
         const location = clinicAddress || (hasPhysical && clinicName ? clinicName : "Online / Remote");
-        let image = "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
-        if (doc.avatarUrl) {
-            if (doc.avatarUrl.startsWith('http://') || doc.avatarUrl.startsWith('https://')) {
-                image = doc.avatarUrl;
-            } else {
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                const cleanPath = doc.avatarUrl.startsWith('/') ? doc.avatarUrl : `/${doc.avatarUrl}`;
-                image = `${baseUrl}${cleanPath}`;
-            }
-        }
+        const resolvedAvatar = resolveFileUrl(doc.avatarUrl);
+        const image = resolvedAvatar || "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=300&fit=crop";
 
         const qualifications = doc.qualifications || [];
         const primaryDegree = extractPrimaryQualifications(qualifications);
@@ -86,7 +79,8 @@ export const getDoctorsList = async (searchParams?: any) => {
             physicalFee: physicalFee,
             clinicName: clinicName,
             clinicAddress: clinicAddress,
-            image: image
+            image: image,
+            avatarUrl: resolvedAvatar || image,
         }; 
     });
 

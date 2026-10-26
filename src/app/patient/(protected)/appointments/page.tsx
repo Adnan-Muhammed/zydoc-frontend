@@ -322,17 +322,8 @@ export default function PatientAppointmentsPage() {
 
         const statusConfig = getAppointmentStatusConfig(app.status, 'patient');
 
-        // Parse avatar correctly if needed 
-        let avatarUrl = "";
-        if (doctor.avatarUrl) {
-            if (doctor.avatarUrl.startsWith('http://') || doctor.avatarUrl.startsWith('https://')) {
-                avatarUrl = doctor.avatarUrl;
-            } else {
-                const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-                const cleanPath = doctor.avatarUrl.startsWith('/') ? doctor.avatarUrl : `/${doctor.avatarUrl}`;
-                avatarUrl = `${baseUrl}${cleanPath}`;
-            }
-        }
+        // Parse avatar correctly using resolveFileUrl
+        const avatarUrl = resolveFileUrl(doctor.avatarUrl);
 
         // Get initials for avatar fallback
         const initials = formattedName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -731,11 +722,7 @@ export default function PatientAppointmentsPage() {
                                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-indigo-100 text-indigo-600 font-bold flex items-center justify-center text-lg overflow-hidden shrink-0 shadow-sm border border-indigo-200/60">
                                     {selectedAppointment.doctorId?.avatarUrl ? (
                                         <img
-                                            src={
-                                                selectedAppointment.doctorId.avatarUrl.startsWith('http')
-                                                ? selectedAppointment.doctorId.avatarUrl
-                                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001'}${selectedAppointment.doctorId.avatarUrl.startsWith('/') ? '' : '/'}${selectedAppointment.doctorId.avatarUrl}`
-                                            } 
+                                            src={resolveFileUrl(selectedAppointment.doctorId.avatarUrl)} 
                                             alt="Doctor"
                                             className="w-full h-full object-cover"
                                         />

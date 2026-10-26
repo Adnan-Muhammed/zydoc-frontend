@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -124,17 +125,9 @@ export default function DoctorProfileView({
   const expertiseTags: string[] = d.expertiseTags ?? [];
   const languages: string[] = d.languages ?? [];
 
-  let avatarUrl =
+  const fallbackAvatar =
     'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=350&h=350';
-  if (d.avatarUrl) {
-    if (d.avatarUrl.startsWith('http://') || d.avatarUrl.startsWith('https://')) {
-      avatarUrl = d.avatarUrl;
-    } else { 
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5001';
-      const cleanPath = d.avatarUrl.startsWith('/') ? d.avatarUrl : `/${d.avatarUrl}`;
-      avatarUrl = `${baseUrl}${cleanPath}`;
-    }
-  }
+  const avatarUrl = resolveFileUrl(d.avatarUrl) || fallbackAvatar;
 
   const videoEnabled =
     d.consultationSettings?.online?.enabled ?? d.consultationSettings?.video?.enabled ?? false;

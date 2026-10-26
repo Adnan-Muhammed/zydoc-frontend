@@ -175,7 +175,7 @@ export default function AdminAppointmentsPage() {
             : `Dr. ${apt.doctor.name}`
           : 'Unknown Doctor';
 
-        return (
+        return ( 
           <div className="flex items-center gap-2.5">
             {apt.doctor?.avatarUrl ? (
               <img
