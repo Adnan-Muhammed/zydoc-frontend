@@ -53,14 +53,22 @@ export default function StepCredentialsSection({
     const [newYear, setNewYear] = useState('');
     const [newCertificate, setNewCertificate] = useState<File | null>(null);
 
+    const addExpertiseTag = () => {
+        if (!currentTag.trim()) return;
+        const newTags = currentTag
+            .split(',')
+            .map((t) => t.trim())
+            .filter((t) => t.length > 0 && !expertiseTags.includes(t));
+        if (newTags.length > 0) {
+            setDraft({ expertiseTags: [...expertiseTags, ...newTags] });
+        }
+        setCurrentTag('');
+    };
+
     const handleAddTag = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && currentTag.trim()) {
+        if (e.key === 'Enter') {
             e.preventDefault();
-            const tag = currentTag.trim();
-            if (!expertiseTags.includes(tag)) {
-                setDraft({ expertiseTags: [...expertiseTags, tag] });
-            }
-            setCurrentTag('');
+            addExpertiseTag();
         }
     };
 
@@ -244,16 +252,30 @@ export default function StepCredentialsSection({
                 {/* Expertise Tags */}
                 <div className="space-y-2">
                     <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
-                        Areas of Clinical Expertise (Press Enter to add)
+                        Areas of Clinical Expertise
                     </label>
-                    <input
-                        type="text"
-                        value={currentTag}
-                        onChange={(e) => setCurrentTag(e.target.value)}
-                        onKeyDown={handleAddTag}
-                        placeholder="e.g. Echocardiography, Preventative Care, Hypertension Management"
-                        className="w-full rounded-xl border border-slate-300 dark:border-[#24274d] bg-white dark:bg-[#151732] px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500/20 transition placeholder:text-slate-400 font-medium placeholder:font-normal shadow-sm"
-                    />
+                    <p className="text-xs text-slate-400 dark:text-slate-400">
+                        Type a clinical expertise and tap &quot;Add&quot; (or press Enter)
+                    </p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={currentTag}
+                            onChange={(e) => setCurrentTag(e.target.value)}
+                            onKeyDown={handleAddTag}
+                            placeholder="e.g. Echocardiography, Preventative Care, Hypertension"
+                            className="flex-1 rounded-xl border border-slate-300 dark:border-[#24274d] bg-white dark:bg-[#151732] px-4 py-3 text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-blue-500/20 transition placeholder:text-slate-400 font-medium placeholder:font-normal shadow-sm"
+                        />
+                        <button
+                            type="button"
+                            onClick={addExpertiseTag}
+                            disabled={!currentTag.trim()}
+                            className="px-5 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold rounded-xl transition shadow-sm shrink-0 flex items-center gap-1.5"
+                        >
+                            <i className="fas fa-plus text-xs" />
+                            <span>Add</span>
+                        </button>
+                    </div>
                     {expertiseTags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
                             {expertiseTags.map((tag) => (

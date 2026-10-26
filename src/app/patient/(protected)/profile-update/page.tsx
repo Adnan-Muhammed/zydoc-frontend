@@ -57,11 +57,11 @@ export default function PatientProfileUpdatePage() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile`, {
-          credentials: 'include'
+        const res = await axiosInstance.get('/patient/profile', {
+          withCredentials: true
         });
-        const data = await res.json(); 
-        if (res.ok && data.data) {
+        const data = res.data; 
+        if (data && data.data) {
           const pData = data.data.profile || {};
           const user = data.data.user || {};
 
@@ -142,15 +142,25 @@ export default function PatientProfileUpdatePage() {
         withCredentials: true,
       });
 
-      // Sync the new access token into the Redux store so subsequent requests
-      // continue to use the updated token (isProfileCompleted: true).
+      // 1. Sync the new access token into the Redux store
       if (data.accessToken && reduxUser) {
         dispatch(setCredentials({ user: { ...reduxUser, isProfileCompleted: true }, accessToken: data.accessToken }));
       }
 
+      // 2. Sync the updated access token cookie to the frontend domain so Next.js middleware reflects isProfileCompleted: true immediately
+      if (data.accessToken) {
+        await fetch('/api/auth/sync-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: data.accessToken }),
+        }).catch((syncErr) => {
+          console.error('[PatientProfileUpdate] Failed to sync cookie token:', syncErr);
+        });
+      }
+
       setSuccess(true);
       setTimeout(() => {
-        router.push('/patient/profile');
+        window.location.href = '/patient/profile';
       }, 1500);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to update profile';

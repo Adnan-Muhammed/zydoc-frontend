@@ -92,6 +92,54 @@ function dataURLtoFile(dataurl: string, defaultBase = 'doctor-avatar'): File | n
     }
 }
 
+// ─── Helper: Compress / Downscale Large Phone Camera Photos ──────────────────
+
+async function compressImageIfLarge(file: File, maxDimension = 1600, quality = 0.88): Promise<File> {
+    if (!file.type.startsWith('image/') || file.type.includes('svg')) {
+        return file;
+    }
+    if (file.size <= 2 * 1024 * 1024) {
+        return file;
+    }
+    return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            let { width, height } = img;
+            if (width > maxDimension || height > maxDimension) {
+                if (width > height) {
+                    height = Math.round((height * maxDimension) / width);
+                    width = maxDimension;
+                } else {
+                    width = Math.round((width * maxDimension) / height);
+                    height = maxDimension;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(file);
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) return resolve(file);
+                    const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+                    resolve(new File([blob], cleanName, { type: 'image/jpeg', lastModified: Date.now() }));
+                },
+                'image/jpeg',
+                quality
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        img.src = url;
+    });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CompleteDoctorProfileClient() {
@@ -142,14 +190,17 @@ export default function CompleteDoctorProfileClient() {
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const handleAvatarFile = async (file: File) => {
+        // Automatically optimize high-res mobile camera images
+        const optimizedFile = await compressImageIfLarge(file);
+
         // Validation: Max file size (5MB)
-        if (file.size > 5 * 1024 * 1024) {
+        if (optimizedFile.size > 5 * 1024 * 1024) {
             setAvatarError('Profile picture exceeds 5 MB. Please choose a smaller file.');
             return;
         }
 
         // Validate magic bytes and normalize extension
-        const inspected = await inspectAndNormalizeFile(file, ['JPEG', 'PNG', 'WEBP']);
+        const inspected = await inspectAndNormalizeFile(optimizedFile, ['JPEG', 'PNG', 'WEBP']);
         if (inspected.error) {
             setAvatarError(inspected.error);
             return;
@@ -510,9 +561,26 @@ export default function CompleteDoctorProfileClient() {
 
             if (updateDoctorProfile.fulfilled.match(resultAction)) {
                 console.log('✅ [Success] Profile updated successfully!');
-                const updatedUser = resultAction.payload?.user || resultAction.payload;
+                const payload = resultAction.payload as any;
+                const updatedUser = payload?.user || payload;
+                const newAccessToken = payload?.accessToken;
+
+                // Sync the new token with isProfileCompleted: true to the frontend cookie so middleware allows dashboard access
+                if (newAccessToken) {
+                    await fetch('/api/auth/sync-token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ accessToken: newAccessToken }),
+                    }).catch((syncErr) => {
+                        console.error('[DoctorCompleteProfile] Failed to sync token cookie:', syncErr);
+                    });
+                }
+
                 if (updatedUser) {
-                    dispatch(setCredentials({ user: updatedUser, accessToken: user?.accessToken }));
+                    dispatch(setCredentials({
+                        user: { ...updatedUser, isProfileCompleted: true },
+                        accessToken: newAccessToken || user?.accessToken || null
+                    }));
                 }
                 clearDraft();
                 window.location.href = '/doctor/dashboard';

@@ -19,6 +19,19 @@ const axiosInstance: AxiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
     (config) => {
+        // Resolve dynamic hostname for mobile devices connecting over Wi-Fi/LAN
+        if (typeof window !== 'undefined') {
+            const hostname = window.location.hostname;
+            if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                if (config.baseURL && config.baseURL.includes('localhost')) {
+                    config.baseURL = config.baseURL.replace('localhost', hostname);
+                }
+                if (config.url && config.url.includes('localhost')) {
+                    config.url = config.url.replace('localhost', hostname);
+                }
+            }
+        }
+
         if (store) {
             const state = store.getState() as { auth: { accessToken: string | null } };
             const token = state.auth.accessToken;
