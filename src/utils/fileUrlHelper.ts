@@ -56,12 +56,15 @@ export function resolveFileUrl(
   }
 
   // Active CloudFront distribution domain for public approved doctor assets
-  const activeCloudFront = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || 'd2j3r11t01prca.cloudfront.net';
-  const cleanCloudFront = activeCloudFront.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  let activeCloudFront = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN || 'd2j3r11t01prca.cloudfront.net';
+  let cleanCloudFront = activeCloudFront.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  if (!cleanCloudFront || cleanCloudFront.includes('your-distribution-id')) {
+    cleanCloudFront = 'd2j3r11t01prca.cloudfront.net';
+  }
 
   // 0a. Rewrite legacy or placeholder CloudFront distribution domain to active CDN
   if (trimmed.includes('your-distribution-id.cloudfront.net')) {
-    trimmed = trimmed.replace('your-distribution-id.cloudfront.net', cleanCloudFront);
+    trimmed = trimmed.replace(/your-distribution-id\.cloudfront\.net/g, cleanCloudFront);
   }
 
   // 0b. Rewrite direct S3 public URLs to CloudFront (direct S3 access returns 403 due to CloudFront OAC)
