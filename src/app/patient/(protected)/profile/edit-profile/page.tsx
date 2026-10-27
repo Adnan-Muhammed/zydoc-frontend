@@ -10,7 +10,7 @@ export default function EditPatientProfilePage() {
     const [pageLoading, setPageLoading] = useState(true);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
-
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     const [formData, setFormData] = useState({
         firstName: '',
@@ -73,23 +73,111 @@ export default function EditPatientProfilePage() {
         fetchProfile();
     }, []);
 
+    const validateForm = () => {
+        const newErrors: Record<string, string> = {};
+
+        // Personal Information
+        if (!formData.firstName.trim()) {
+            newErrors.firstName = 'First name is required';
+        }
+        if (!formData.dateOfBirth) {
+            newErrors.dateOfBirth = 'Date of birth is required';
+        } else {
+            const selectedDate = new Date(formData.dateOfBirth);
+            if (selectedDate > new Date()) {
+                newErrors.dateOfBirth = 'Date of birth cannot be in the future';
+            }
+        }
+        if (!formData.gender) {
+            newErrors.gender = 'Gender is required';
+        }
+        if (!formData.phone.trim()) {
+            newErrors.phone = 'Phone number is required';
+        } else {
+            const cleanPhone = formData.phone.replace(/[\s\-\(\)\+]/g, '');
+            if (cleanPhone.length < 10) {
+                newErrors.phone = 'Please enter a valid phone number (at least 10 digits)';
+            }
+        }
+        if (!formData.bloodGroup) {
+            newErrors.bloodGroup = 'Blood group is required';
+        }
+
+        // Residential Details
+        if (!formData.street.trim()) {
+            newErrors.street = 'Street address is required';
+        }
+        if (!formData.city.trim()) {
+            newErrors.city = 'City is required';
+        }
+        if (!formData.state.trim()) {
+            newErrors.state = 'State is required';
+        }
+        if (!formData.zipCode.trim()) {
+            newErrors.zipCode = 'ZIP / Postal code is required';
+        }
+        if (!formData.country.trim()) {
+            newErrors.country = 'Country is required';
+        }
+
+        return newErrors;
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (errors[name]) {
+            setErrors(prev => {
+                const next = { ...prev };
+                delete next[name];
+                return next;
+            });
+        }
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError('');
 
+        const validationErrors = validateForm();
+        if (Object.keys(validationErrors).length > 0) {
+            setErrors(validationErrors);
+            setError('Please fill in all required fields in Personal Information and Residential Details.');
+
+            const firstKey = Object.keys(validationErrors)[0];
+            const targetElement = document.querySelector(`[name="${firstKey}"]`);
+            if (targetElement) {
+                targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                (targetElement as HTMLElement).focus();
+            }
+            return;
+        }
+
+        setLoading(true);
+
         try {
+            const payload = {
+                ...formData,
+                firstName: formData.firstName.trim(),
+                lastName: formData.lastName.trim(),
+                phone: formData.phone.trim(),
+                street: formData.street.trim(),
+                city: formData.city.trim(),
+                state: formData.state.trim(),
+                zipCode: formData.zipCode.trim(),
+                country: formData.country.trim(),
+                emergencyContactName: formData.emergencyContactName.trim(),
+                emergencyContactRelationship: formData.emergencyContactRelationship.trim(),
+                emergencyContactPhone: formData.emergencyContactPhone.trim(),
+            };
+
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patient/profile`, {
                 method: 'PUT', 
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
@@ -104,6 +192,14 @@ export default function EditPatientProfilePage() {
             setError(err.message);
             setLoading(false);
         }
+    };
+
+    const getInputClasses = (fieldName: string, extraClasses = '') => {
+        const base = "w-full rounded-xl border bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 px-4 py-3 outline-none transition-all";
+        if (errors[fieldName]) {
+            return `${base} border-rose-500 bg-rose-50/30 dark:bg-rose-950/20 focus:ring-2 focus:ring-rose-500/40 focus:border-rose-500 ${extraClasses}`;
+        }
+        return `${base} border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 ${extraClasses}`;
     };
 
     const inputClasses = "w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 px-4 py-3 outline-none transition-all focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500";
@@ -147,7 +243,7 @@ export default function EditPatientProfilePage() {
                     </div>
                 )}
 
-                <form onSubmit={handleSave} className="space-y-6">
+                <form onSubmit={handleSave} noValidate className="space-y-6">
                     
                     {/* Section 1: Personal Information */}
                     <div className="bg-white dark:bg-slate-800 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -162,38 +258,111 @@ export default function EditPatientProfilePage() {
                         </div>
                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2 relative">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">First Name <span className="text-red-500">*</span></label>
-                                <input required name="firstName" value={formData.firstName} onChange={handleChange} type="text" placeholder="John" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    First Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="firstName"
+                                    value={formData.firstName}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="John"
+                                    className={getInputClasses('firstName')}
+                                />
+                                {errors.firstName && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.firstName}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Last Name <span className="text-red-500">*</span></label>
-                                <input required name="lastName" value={formData.lastName} onChange={handleChange} type="text" placeholder="Doe" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Last Name <span className="text-xs font-normal text-slate-400 dark:text-slate-500">(Optional)</span>
+                                </label>
+                                <input
+                                    name="lastName"
+                                    value={formData.lastName}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="Doe (optional)"
+                                    className={getInputClasses('lastName')}
+                                />
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Date of Birth</label>
-                                <input name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} type="date" className={`${inputClasses} appearance-none`} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Date of Birth <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="dateOfBirth"
+                                    value={formData.dateOfBirth}
+                                    onChange={handleChange}
+                                    type="date"
+                                    className={getInputClasses('dateOfBirth', 'appearance-none')}
+                                />
+                                {errors.dateOfBirth && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.dateOfBirth}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Gender</label>
-                                <select name="gender" value={formData.gender} onChange={handleChange} className={`${inputClasses} appearance-none`}>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Gender <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="gender"
+                                    value={formData.gender}
+                                    onChange={handleChange}
+                                    className={getInputClasses('gender', 'appearance-none')}
+                                >
                                     <option value="">Select Gender...</option>
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
                                     <option value="other">Other</option>
                                 </select>
+                                {errors.gender && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.gender}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2 relative">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Phone Number</label>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Phone Number <span className="text-red-500">*</span>
+                                </label>
                                 <div className="relative">
                                     <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
                                         <i className="fas fa-phone-alt"></i>
                                     </span>
-                                    <input name="phone" value={formData.phone} onChange={handleChange} type="tel" placeholder="+1 (555) 000-0000" className={`${inputClasses} pl-11`} />
+                                    <input
+                                        name="phone"
+                                        value={formData.phone}
+                                        onChange={handleChange}
+                                        type="tel"
+                                        placeholder="+1 (555) 000-0000"
+                                        className={getInputClasses('phone', 'pl-11')}
+                                    />
                                 </div>
+                                {errors.phone && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.phone}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Blood Group</label>
-                                <select name="bloodGroup" value={formData.bloodGroup} onChange={handleChange} className={`${inputClasses} appearance-none`}>
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Blood Group <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="bloodGroup"
+                                    value={formData.bloodGroup}
+                                    onChange={handleChange}
+                                    className={getInputClasses('bloodGroup', 'appearance-none')}
+                                >
                                     <option value="">Select Blood Group...</option>
                                     <option value="A+">A+</option>
                                     <option value="A-">A-</option>
@@ -204,6 +373,12 @@ export default function EditPatientProfilePage() {
                                     <option value="O+">O+</option>
                                     <option value="O-">O-</option>
                                 </select>
+                                {errors.bloodGroup && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.bloodGroup}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -253,24 +428,99 @@ export default function EditPatientProfilePage() {
                         </div>
                         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2 md:col-span-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Street Address</label>
-                                <input name="street" value={formData.street} onChange={handleChange} type="text" placeholder="123 Main St, Apt 4B" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Street Address <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="street"
+                                    value={formData.street}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="123 Main St, Apt 4B"
+                                    className={getInputClasses('street')}
+                                />
+                                {errors.street && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.street}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">City</label>
-                                <input name="city" value={formData.city} onChange={handleChange} type="text" placeholder="New York" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    City <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="city"
+                                    value={formData.city}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="New York"
+                                    className={getInputClasses('city')}
+                                />
+                                {errors.city && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.city}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">State / Province</label>
-                                <input name="state" value={formData.state} onChange={handleChange} type="text" placeholder="NY" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    State / Province <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="state"
+                                    value={formData.state}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="NY"
+                                    className={getInputClasses('state')}
+                                />
+                                {errors.state && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.state}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">ZIP / Postal Code</label>
-                                <input name="zipCode" value={formData.zipCode} onChange={handleChange} type="text" placeholder="10001" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    ZIP / Postal Code <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="zipCode"
+                                    value={formData.zipCode}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="10001"
+                                    className={getInputClasses('zipCode')}
+                                />
+                                {errors.zipCode && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.zipCode}
+                                    </span>
+                                )}
                             </div>
                             <div className="space-y-2">
-                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Country</label>
-                                <input name="country" value={formData.country} onChange={handleChange} type="text" placeholder="United States" className={inputClasses} />
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Country <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    name="country"
+                                    value={formData.country}
+                                    onChange={handleChange}
+                                    type="text"
+                                    placeholder="United States"
+                                    className={getInputClasses('country')}
+                                />
+                                {errors.country && (
+                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-500 mt-1">
+                                        <i className="fas fa-exclamation-circle text-xs"></i>
+                                        {errors.country}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>

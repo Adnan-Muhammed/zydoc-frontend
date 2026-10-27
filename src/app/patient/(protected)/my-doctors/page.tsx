@@ -8,6 +8,7 @@ import { generatePrescriptionPdf } from '@/utils/generatePrescriptionPdf';
 import { useAppSelector } from '@/redux/hooks';
 import { deduceSystemOfMedicine, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
 import { resolveFileUrl } from '@/utils/fileUrlHelper';
+import { toast } from 'react-hot-toast';
 import {
   Stethoscope,
   Calendar,

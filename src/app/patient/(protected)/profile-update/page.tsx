@@ -33,6 +33,7 @@ export default function PatientProfileUpdatePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -99,33 +100,106 @@ export default function PatientProfileUpdatePage() {
     fetchProfile();
   }, [reduxUser]);
 
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    // Personal Information validations
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Date of birth is required';
+    } else {
+      const selectedDate = new Date(formData.dateOfBirth);
+      if (selectedDate > new Date()) {
+        newErrors.dateOfBirth = 'Date of birth cannot be in the future';
+      }
+    }
+    if (!formData.gender) {
+      newErrors.gender = 'Gender is required';
+    }
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else {
+      const cleanPhone = formData.phone.replace(/[\s\-\(\)\+]/g, '');
+      if (cleanPhone.length < 10) {
+        newErrors.phone = 'Please enter a valid phone number (at least 10 digits)';
+      }
+    }
+    if (!formData.bloodGroup) {
+      newErrors.bloodGroup = 'Blood group is required';
+    }
+
+    // Residential Address validations
+    if (!formData.street.trim()) {
+      newErrors.street = 'Street address is required';
+    }
+    if (!formData.city.trim()) {
+      newErrors.city = 'City is required';
+    }
+    if (!formData.state.trim()) {
+      newErrors.state = 'State is required';
+    }
+    if (!formData.zipCode.trim()) {
+      newErrors.zipCode = 'Postal / ZIP code is required';
+    }
+    if (!formData.country.trim()) {
+      newErrors.country = 'Country is required';
+    }
+
+    return newErrors;
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      });
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      setError('Please fill in all required fields in Personal Information and Residential Address.');
+
+      const firstKey = Object.keys(validationErrors)[0];
+      const targetElement = document.querySelector(`[name="${firstKey}"]`);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (targetElement as HTMLElement).focus();
+      }
+      return;
+    }
+
+    setLoading(true);
 
     try {
       // Use axiosInstance so the Redux-injected Bearer token interceptor fires.
       // Send flat fields that UpdatePatientProfile.js expects directly.
       const payload: Record<string, unknown> = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        emergencyContactName: formData.emergencyContactName,
-        emergencyContactRelationship: formData.emergencyContactRelationship,
-        emergencyContactPhone: formData.emergencyContactPhone,
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        phone: formData.phone.trim(),
+        emergencyContactName: formData.emergencyContactName.trim(),
+        emergencyContactRelationship: formData.emergencyContactRelationship.trim(),
+        emergencyContactPhone: formData.emergencyContactPhone.trim(),
         allergies: formData.allergies,
         chronicConditions: formData.chronicConditions,
         currentMedications: formData.currentMedications,
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        country: formData.country,
+        street: formData.street.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        zipCode: formData.zipCode.trim(),
+        country: formData.country.trim(),
       };
 
       // Only include date when provided
@@ -181,7 +255,24 @@ export default function PatientProfileUpdatePage() {
     color: 'var(--pat-text)',
     background: '#fff',
     fontFamily: 'inherit',
-    transition: 'border-color 0.15s ease'
+    transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
+  };
+
+  const getInputStyle = (fieldName: string): React.CSSProperties => ({
+    ...inputStyle,
+    borderColor: errors[fieldName] ? 'var(--pat-rose)' : 'var(--pat-border)',
+    boxShadow: errors[fieldName] ? '0 0 0 1.5px rgba(244, 63, 94, 0.25)' : 'none',
+    backgroundColor: errors[fieldName] ? '#fff5f5' : '#fff'
+  });
+
+  const errorSpanStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    color: 'var(--pat-rose)',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    marginTop: 5
   };
 
   const labelStyle: React.CSSProperties = {
@@ -247,7 +338,7 @@ export default function PatientProfileUpdatePage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* Section 1: Personal Information */}
         <div className="pat-card">
           <div className="pat-card-header">
@@ -262,67 +353,97 @@ export default function PatientProfileUpdatePage() {
                 First Name <span style={{ color: 'var(--pat-rose)' }}>*</span>
               </label>
               <input
-                required
                 name="firstName"
                 value={formData.firstName}
                 onChange={handleChange}
                 type="text"
                 placeholder="First Name"
-                style={inputStyle}
+                style={getInputStyle('firstName')}
+              />
+              {errors.firstName && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.firstName}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <label style={labelStyle}>
+                Last Name <span style={{ fontSize: '0.72rem', color: 'var(--pat-text-soft)', textTransform: 'none', fontWeight: 500 }}>(Optional)</span>
+              </label>
+              <input
+                name="lastName"
+                value={formData.lastName}
+                onChange={handleChange}
+                type="text"
+                placeholder="Last Name (optional)"
+                style={getInputStyle('lastName')}
               />
             </div>
 
             <div>
               <label style={labelStyle}>
-                Last Name <span style={{ color: 'var(--pat-rose)' }}>*</span>
+                Date of Birth <span style={{ color: 'var(--pat-rose)' }}>*</span>
               </label>
-              <input
-                required
-                name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                type="text"
-                placeholder="Last Name"
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Date of Birth</label>
               <input
                 name="dateOfBirth"
                 value={formData.dateOfBirth}
                 onChange={handleChange}
                 type="date"
-                style={inputStyle}
+                style={getInputStyle('dateOfBirth')}
               />
+              {errors.dateOfBirth && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.dateOfBirth}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>Gender</label>
-              <select name="gender" value={formData.gender} onChange={handleChange} style={inputStyle}>
+              <label style={labelStyle}>
+                Gender <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
+              <select name="gender" value={formData.gender} onChange={handleChange} style={getInputStyle('gender')}>
                 <option value="">Select Gender...</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>
               </select>
+              {errors.gender && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.gender}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>Phone Number</label>
+              <label style={labelStyle}>
+                Phone Number <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
                 type="tel"
                 placeholder="+91 98765 43210"
-                style={inputStyle}
+                style={getInputStyle('phone')}
               />
+              {errors.phone && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.phone}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>Blood Group</label>
-              <select name="bloodGroup" value={formData.bloodGroup} onChange={handleChange} style={inputStyle}>
+              <label style={labelStyle}>
+                Blood Group <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
+              <select name="bloodGroup" value={formData.bloodGroup} onChange={handleChange} style={getInputStyle('bloodGroup')}>
                 <option value="">Select Blood Group...</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
@@ -333,6 +454,12 @@ export default function PatientProfileUpdatePage() {
                 <option value="O+">O+</option>
                 <option value="O-">O-</option>
               </select>
+              {errors.bloodGroup && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.bloodGroup}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -347,63 +474,103 @@ export default function PatientProfileUpdatePage() {
           </div>
           <div className="pat-card-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Street Address</label>
+              <label style={labelStyle}>
+                Street Address <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="street"
                 value={formData.street}
                 onChange={handleChange}
                 type="text"
                 placeholder="House No, Apartment, Street"
-                style={inputStyle}
+                style={getInputStyle('street')}
               />
+              {errors.street && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.street}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>City</label>
+              <label style={labelStyle}>
+                City <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
                 type="text"
                 placeholder="City"
-                style={inputStyle}
+                style={getInputStyle('city')}
               />
+              {errors.city && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.city}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>State / Province</label>
+              <label style={labelStyle}>
+                State / Province <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
                 type="text"
                 placeholder="State"
-                style={inputStyle}
+                style={getInputStyle('state')}
               />
+              {errors.state && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.state}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>Postal / ZIP Code</label>
+              <label style={labelStyle}>
+                Postal / ZIP Code <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="zipCode"
                 value={formData.zipCode}
                 onChange={handleChange}
                 type="text"
                 placeholder="673001"
-                style={inputStyle}
+                style={getInputStyle('zipCode')}
               />
+              {errors.zipCode && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.zipCode}
+                </span>
+              )}
             </div>
 
             <div>
-              <label style={labelStyle}>Country</label>
+              <label style={labelStyle}>
+                Country <span style={{ color: 'var(--pat-rose)' }}>*</span>
+              </label>
               <input
                 name="country"
                 value={formData.country}
                 onChange={handleChange}
                 type="text"
                 placeholder="India"
-                style={inputStyle}
+                style={getInputStyle('country')}
               />
+              {errors.country && (
+                <span style={errorSpanStyle}>
+                  <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                  {errors.country}
+                </span>
+              )}
             </div>
           </div>
         </div>
