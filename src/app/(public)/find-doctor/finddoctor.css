@@ -279,19 +279,31 @@
    ========================================================================== */
 .main-content-wrapper {
   max-width: 1360px;
+  width: 100%;
   margin: 0 auto;
   padding: 1.25rem 1.25rem 4rem;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 2rem;
   align-items: start;
+  box-sizing: border-box;
 }
 
 @media (max-width: 1024px) {
   .main-content-wrapper {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     padding: 0.75rem 1rem 3rem;
+    gap: 1rem;
+    overflow-x: clip;
+    width: 100%;
   }
+}
+
+.doctors-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -788,12 +800,242 @@
 /* ==========================================================================
    Doctor Cards Grid & Modern Card Styling
    ========================================================================== */
+/* ==========================================================================
+   Doctor Cards Grid & Modern Card Base Styling
+   ========================================================================== */
 .doctors-grid-modern {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
+.doctor-card-modern {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
+}
+
+.doctor-card-modern:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: #cbd5e1;
+}
+
+.doctor-card-body {
+  padding: 1.25rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.doctor-avatar-wrapper {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.doctor-avatar-frame {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #f1f5f9;
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
+}
+
+.doctor-verified-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: var(--accent-emerald);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
+.doctor-favorite-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+  z-index: 2;
+}
+
+.doctor-favorite-btn:hover {
+  background: #fff;
+  border-color: #fecdd3;
+  box-shadow: 0 4px 10px rgba(244, 63, 94, 0.15);
+  transform: scale(1.1);
+}
+
+.doctor-favorite-btn:active {
+  transform: scale(0.92);
+}
+
+.doctor-meta-block {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.specialty-tag-modern {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--primary-indigo);
+  background: #eef2fc;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+}
+
+.system-tag-modern {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.doctor-name-modern {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  line-height: 1.25;
+  margin-top: 0.2rem;
+}
+
+.meta-chips-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.meta-chip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.fees-row-modern {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.fee-pill-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.25rem 0.55rem;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Card Footer Actions */
+.doctor-card-footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  padding: 0.9rem 1.25rem;
+  background: #fafcff;
+  border-top: 1px solid #f1f5f9;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-view-modern {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.65rem 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.btn-view-modern:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: var(--text-dark);
+}
+
+.btn-book-modern {
+  background: var(--primary-navy);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.65rem 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(24, 25, 82, 0.2);
+  transition: all 0.15s ease;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.btn-book-modern:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 25, 82, 0.3);
+}
+
+/* ==========================================================================
+   Mobile Responsive Overrides for Doctor Cards & Utility Bar
+   ========================================================================== */
 @media (max-width: 640px) {
   /* Hero section mobile adjustments */
   .find-doctor-hero-banner {
@@ -870,21 +1112,24 @@
   .doctors-grid-modern {
     grid-template-columns: 1fr;
     gap: 1rem;
+    width: 100%;
   }
 
   .doctor-card-modern {
     border-radius: 18px;
+    width: 100%;
   }
 
   .doctor-card-body {
     padding: 1rem 0.85rem;
     gap: 0.75rem;
     position: relative;
+    width: 100%;
   }
 
   .doctor-avatar-wrapper {
-    width: 70px;
-    height: 70px;
+    width: 68px;
+    height: 68px;
   }
 
   .doctor-avatar-frame {
@@ -925,227 +1170,42 @@
   .doctor-card-footer {
     padding: 0.65rem 0.85rem;
     gap: 0.5rem;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
   }
 
   .btn-view-modern,
   .btn-book-modern {
-    padding: 0.6rem 0.5rem;
-    font-size: 0.78rem;
+    padding: 0.6rem 0.45rem;
+    font-size: 0.76rem;
     border-radius: 10px;
-    min-height: 42px;
+    min-height: 40px;
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 380px) {
+  .doctor-card-body {
+    padding: 0.85rem 0.65rem;
+    gap: 0.6rem;
+  }
+
   .doctor-avatar-wrapper {
-    width: 60px;
-    height: 60px;
+    width: 58px;
+    height: 58px;
   }
 
   .doctor-card-footer {
     grid-template-columns: 1fr;
+    gap: 0.45rem;
+    padding: 0.6rem 0.65rem;
   }
-}
 
-.doctor-card-modern {
-  background: #ffffff;
-  border-radius: 20px;
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow-soft);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  overflow: hidden;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s;
-}
-
-.doctor-card-modern:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-hover);
-  border-color: #cbd5e1;
-}
-
-.doctor-card-body {
-  padding: 1.25rem;
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-}
-
-.doctor-avatar-wrapper {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  flex-shrink: 0;
-}
-
-.doctor-avatar-frame {
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-  overflow: hidden;
-  background: #f1f5f9;
-  border: 2px solid #ffffff;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-}
-
-.doctor-verified-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background: var(--accent-emerald);
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 50%;
-  border: 2px solid #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
-}
-
-.doctor-favorite-btn {
-  position: absolute;
-  top: 0.85rem;
-  right: 0.85rem;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
-  z-index: 2;
-}
-
-.doctor-favorite-btn:hover {
-  background: #fff;
-  border-color: #fecdd3;
-  box-shadow: 0 4px 10px rgba(244, 63, 94, 0.15);
-  transform: scale(1.1);
-}
-
-.doctor-favorite-btn:active {
-  transform: scale(0.92);
-}
-
-.doctor-meta-block {
-  flex: 1;
-  min-width: 0;
-}
-
-.specialty-tag-modern {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--primary-indigo);
-  background: #eef2fc;
-  padding: 0.2rem 0.55rem;
-  border-radius: 6px;
-}
-
-.system-tag-modern {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
-}
-
-.doctor-name-modern {
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--text-dark);
-  line-height: 1.25;
-  margin-top: 0.2rem;
-}
-
-.meta-chips-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.meta-chip-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.74rem;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.fees-row-modern {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.fee-pill-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 0.25rem 0.55rem;
-  border-radius: 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-/* Card Footer Actions */
-.doctor-card-footer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.6rem;
-  padding: 0.9rem 1.25rem;
-  background: #fafcff;
-  border-top: 1px solid #f1f5f9;
-}
-
-.btn-view-modern {
-  background: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.65rem 0.8rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-view-modern:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: var(--text-dark);
-}
-
-.btn-book-modern {
-  background: var(--primary-navy);
-  color: #ffffff;
-  border: none;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0.65rem 0.8rem;
-  text-align: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(24, 25, 82, 0.2);
-  transition: all 0.15s ease;
-}
-
-.btn-book-modern:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(24, 25, 82, 0.3);
+  .btn-view-modern,
+  .btn-book-modern {
+    width: 100%;
+    padding: 0.55rem;
+    font-size: 0.74rem;
+  }
 }
 
 /* ==========================================================================

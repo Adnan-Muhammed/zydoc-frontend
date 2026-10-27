@@ -82,7 +82,7 @@ export default async function FindDoctorPage({
             <DoctorFilters />
           </div>
         </div>
-      </header>
+      </header> 
 
       {/* ── Main Layout: Sidebar Filters + Doctor Cards Grid ── */}
       <main className="main-content-wrapper">

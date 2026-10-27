@@ -214,7 +214,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
 
             {/* Notification Dropdown Popover */}
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+              <div className="fixed top-16 left-3 right-3 sm:absolute sm:top-full sm:left-auto sm:right-0 sm:mt-2 sm:w-96 max-w-[calc(100vw-1.5rem)] sm:max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-sm text-slate-800">
@@ -454,7 +454,7 @@ export default function Topbar({ onToggleSidebar, title, role }: TopbarProps) {
 
             {/* Profile Dropdown Popover */}
             {profileMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
+              <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/70">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-[#181852] text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 shadow-xs">

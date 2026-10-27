@@ -4,6 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useAppSelector } from '@/redux/hooks';
 import DoctorFilters from './DoctorFilters';
 import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import { getSystemConfigById, extractPrimaryQualifications } from '@/constants/systemsOfMedicine';
@@ -80,7 +81,7 @@ export const POPULAR_SPECIALTIES = [
   'Dermatology',
   'Pediatrics',
   'Orthopedics',
-  'Gynecology',
+  'Gynecology', 
   'Panchakarma', 
   'Classical Homeopathy',
   'General Dentistry',
@@ -91,6 +92,7 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
   const isDashboardMode = isDashboard ?? basePath.startsWith('/patient');
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
@@ -671,10 +673,17 @@ export default function DoctorList({ doctors, pagination, basePath, isDashboard 
                     <button
                       type="button"
                       className="btn-book-modern flex items-center justify-center gap-1.5"
-                      onClick={() => router.push(`/patient/find-doctor/book/${doc.id}`)}
+                      onClick={() => {
+                        const bookingPath = `/patient/find-doctor/book/${doc.id}`;
+                        if (isAuthenticated) {
+                          router.push(bookingPath);
+                        } else {
+                          router.push(`/login?callbackUrl=${encodeURIComponent(bookingPath)}`);
+                        }
+                      }}
                     >
-                      <CalendarCheck className="size-3.5" />
-                      <span>Book Appointment</span>
+                      <CalendarCheck className="size-3.5 shrink-0" />
+                      <span className="truncate">Book Appointment</span>
                     </button>
                   </div>
                 </article>

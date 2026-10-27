@@ -155,8 +155,181 @@ export default function PendingDoctorsTable({
         </div>
       )}
 
-      {/* Table Container */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Mobile Doctor Cards (Visible on screens < md) */}
+      <div className="block md:hidden space-y-3.5">
+        {/* Mobile Loading Skeleton */}
+        {isLoading && (
+          <div className="space-y-3">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs animate-pulse space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-slate-200 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="w-32 h-4 bg-slate-200 rounded" />
+                    <div className="w-44 h-3 bg-slate-100 rounded" />
+                  </div>
+                </div>
+                <div className="h-10 bg-slate-100 rounded-xl" />
+                <div className="flex gap-2">
+                  <div className="flex-1 h-10 bg-slate-200 rounded-xl" />
+                  <div className="flex-1 h-10 bg-slate-200 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Mobile Doctors List */}
+        {!isLoading && filteredDoctors.length > 0 && (
+          filteredDoctors.map((dr) => {
+            const p = dr.profile || {};
+            const fullName = p.firstName
+              ? `Dr. ${p.firstName} ${p.lastName || ''}`.trim()
+              : dr.email;
+            const initial = getInitials(fullName);
+            const hasMedCert = Boolean(p.medicalCertificateUrl);
+            const hasGovId = Boolean(p.governmentIdUrl);
+            const qualCount = p.qualifications?.length || 0;
+
+            const medApproved = p.medicalCertificateStatus === 'approved';
+            const govApproved = p.governmentIdStatus === 'approved';
+            const qualsApproved =
+              Array.isArray(p.qualifications) && p.qualifications.length > 0
+                ? p.qualifications.every((q: any) => q.certificateStatus === 'approved')
+                : true;
+            const allApproved = medApproved && govApproved && qualsApproved;
+
+            return (
+              <div
+                key={`mobile-${dr.userId}`}
+                className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3 hover:border-indigo-200 transition-colors"
+              >
+                {/* Doctor Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden shadow-xs">
+                      {p.avatarUrl ? (
+                        <img
+                          src={resolveFileUrl(p.avatarUrl)}
+                          alt={fullName}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        initial
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-sm truncate">
+                        {fullName}
+                      </h4>
+                      <p className="text-xs text-slate-500 truncate">{dr.email}</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        {p.specialty || 'General Practitioner'}
+                        {p.yearsOfExperience !== undefined ? ` • ${p.yearsOfExperience} yrs` : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium shrink-0 whitespace-nowrap">
+                    {formatDate(dr.createdAt)}
+                  </span>
+                </div>
+
+                {/* Details Summary */}
+                <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                      License
+                    </span>
+                    <span className="font-mono font-semibold text-slate-700 truncate block mt-0.5">
+                      {p.licenseNumber || 'Not set'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+                      Documents
+                    </span>
+                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                      <span
+                        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          hasMedCert ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-200 text-slate-400'
+                        }`}
+                      >
+                        Cert
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          hasGovId ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-slate-200 text-slate-400'
+                        }`}
+                      >
+                        ID
+                      </span>
+                      {qualCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {qualCount} Q
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Touch-Friendly Action Buttons */}
+                <div className="pt-1 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onViewDetails(dr)}
+                    className="w-full py-2.5 px-3 text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 border border-slate-200 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <i className="fas fa-eye text-slate-400"></i>
+                    <span>Review Application &amp; Docs</span>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => {
+                        if (!allApproved) {
+                          onViewDetails(dr);
+                        } else {
+                          onApprove(dr);
+                        }
+                      }}
+                      className="flex-1 py-2.5 px-4 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <i className="fas fa-check text-xs"></i>
+                      <span>Approve</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => onReject(dr)}
+                      className="py-2.5 px-4 text-xs font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 border border-rose-200 hover:border-rose-600 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      <i className="fas fa-xmark text-xs"></i>
+                      <span>Reject</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+
+        {/* Empty state for mobile */}
+        {!isLoading && filteredDoctors.length === 0 && (
+          <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mx-auto mb-2">
+              <i className="fas fa-clipboard-check"></i>
+            </div>
+            <h4 className="text-sm font-bold text-slate-900">No Pending Approvals</h4>
+            <p className="text-xs text-slate-500 mt-1">All doctor applications have been processed.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop & Tablet Table (Hidden on mobile < md) */}
+      <div className="hidden md:block bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>

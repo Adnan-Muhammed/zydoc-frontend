@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import toast from 'react-hot-toast';
+import toast from 'react-hot-toast'; 
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
   fetchPendingDoctors,
