@@ -47,7 +47,7 @@ export default function CallControls({
   return (
     <nav 
       aria-label="Call controls"
-      className="absolute bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2.5 sm:gap-4 bg-slate-950/85 backdrop-blur-2xl px-3.5 py-2 sm:px-6 sm:py-3 rounded-full border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.06)] z-40 transition-all"
+      className="absolute bottom-10 sm:bottom-7 left-1/2 -translate-x-1/2 flex items-center gap-2.5 sm:gap-4 bg-slate-950/85 backdrop-blur-2xl px-3.5 py-2 sm:px-6 sm:py-3 rounded-full border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.06)] z-40 transition-all max-w-[calc(100%-1.5rem)]"
     >
       {/* Audio / Mic Toggle Button */}
       <div className="relative group">
