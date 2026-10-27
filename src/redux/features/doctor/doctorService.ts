@@ -9,6 +9,8 @@ export const updateProfileAPI = async (formData: FormData) => {
         // Do NOT set Content-Type manually — let Axios/browser set it automatically
         // so the multipart boundary string is preserved for Multer to parse correctly.
         withCredentials: true,
+        timeout: 120000, // 120s timeout for mobile network document uploads
+        transformRequest: [(data) => data], // Ensure Axios does not serialize FormData
     });
     return response.data;
 };

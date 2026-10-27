@@ -11,8 +11,8 @@ import StatusToggleConfirmModal from '@/components/admin/common/StatusToggleConf
 
 interface DoctorDetailPageProps {
   params: { id: string };
-} 
- 
+}
+
 const DAYS = [
   { key: 'monday', label: 'Monday', short: 'Mon' },
   { key: 'tuesday', label: 'Tuesday', short: 'Tue' },
@@ -35,7 +35,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
   // Status toggle modal state (for Reactivation)
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(false);
- 
+
   // Suspension modal state
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [suspensionReasonInput, setSuspensionReasonInput] = useState('');
@@ -88,7 +88,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const getFullDocUrl = (url?: string) => resolveFileUrl(url); 
+  const getFullDocUrl = (url?: string) => resolveFileUrl(url);
 
   // Actions
   const handleApproveDoctor = async () => {
@@ -353,13 +353,12 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
               <span>{dName}</span>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                  vStatus === 'approved'
+                className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${vStatus === 'approved'
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     : vStatus === 'rejected'
-                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                    : 'bg-amber-100 text-amber-800 border border-amber-200'
-                }`}
+                      ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                      : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}
               >
                 {vStatus}
               </span>
@@ -453,7 +452,7 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                   alt={dName}
                   className="w-full h-full object-cover"
                 />
-              ) : ( 
+              ) : (
                 dName.replace(/^Dr\.\s*/i, '').charAt(0).toUpperCase()
               )}
             </div>
@@ -463,11 +462,10 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
 
             <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
-                  isActive
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${isActive
                     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                     : 'bg-rose-50 text-rose-700 border border-rose-200'
-                }`}
+                  }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                 {aStatus} Account
@@ -705,13 +703,12 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                     <div className="text-xs text-slate-500">
                       Status:{' '}
                       <span
-                        className={`font-bold uppercase ${
-                          doctor?.medicalCertificateStatus === 'approved'
+                        className={`font-bold uppercase ${doctor?.medicalCertificateStatus === 'approved'
                             ? 'text-emerald-600'
                             : doctor?.medicalCertificateStatus === 'rejected'
-                            ? 'text-rose-600'
-                            : 'text-amber-600'
-                        }`}
+                              ? 'text-rose-600'
+                              : 'text-amber-600'
+                          }`}
                       >
                         {doctor?.medicalCertificateStatus || 'Pending'}
                       </span>
@@ -778,13 +775,12 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                     <div className="text-xs text-slate-500">
                       Status:{' '}
                       <span
-                        className={`font-bold uppercase ${
-                          doctor?.governmentIdStatus === 'approved'
+                        className={`font-bold uppercase ${doctor?.governmentIdStatus === 'approved'
                             ? 'text-emerald-600'
                             : doctor?.governmentIdStatus === 'rejected'
-                            ? 'text-rose-600'
-                            : 'text-amber-600'
-                        }`}
+                              ? 'text-rose-600'
+                              : 'text-amber-600'
+                          }`}
                       >
                         {doctor?.governmentIdStatus || 'Pending'}
                       </span>
@@ -864,13 +860,12 @@ export default function DoctorDetailPage({ params }: DoctorDetailPageProps) {
                       {q.certificateStatus && (
                         <div className="mt-1">
                           <span
-                            className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${
-                              q.certificateStatus === 'approved'
+                            className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${q.certificateStatus === 'approved'
                                 ? 'bg-emerald-100 text-emerald-800'
                                 : q.certificateStatus === 'rejected'
-                                ? 'bg-rose-100 text-rose-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
                           >
                             {q.certificateStatus}
                           </span>

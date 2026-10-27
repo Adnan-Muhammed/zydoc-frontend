@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Input from '@/components/ui/Input';
 import { DraftState, Qualification } from './types';
 import { SYSTEMS_LIST, getSystemConfigById, deduceSystemOfMedicine } from '@/constants/systemsOfMedicine';
-import { inspectAndNormalizeFile } from '@/utils/fileSignatureHelper';
+import { inspectAndNormalizeFile, compressImageIfLarge } from '@/utils/fileSignatureHelper';
 
 const AVAILABLE_LANGUAGES = ['English', 'Malayalam', 'Hindi', 'Tamil', 'Spanish', 'French'];
 
@@ -89,12 +89,15 @@ export default function StepCredentialsSection({
             return;
         }
 
-        if (newCertificate.size > 10 * 1024 * 1024) {
+        // Automatically optimize high-res smartphone camera photos before validation
+        const optimizedCert = await compressImageIfLarge(newCertificate);
+
+        if (optimizedCert.size > 10 * 1024 * 1024) {
             alert('Certificate exceeds the 10MB limit.');
             return;
         }
 
-        const inspected = await inspectAndNormalizeFile(newCertificate, ['PDF', 'JPEG', 'PNG', 'WEBP']);
+        const inspected = await inspectAndNormalizeFile(optimizedCert, ['PDF', 'JPEG', 'PNG', 'WEBP']);
         if (inspected.error) {
             alert(inspected.error);
             return;

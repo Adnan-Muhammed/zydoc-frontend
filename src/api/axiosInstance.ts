@@ -39,10 +39,15 @@ axiosInstance.interceptors.request.use(
                 config.headers['Authorization'] = `Bearer ${token}`;
             }
         }
-        // When sending FormData, delete Content-Type so Axios/browser sets multipart/form-data with the boundary
+        // When sending FormData, remove Content-Type so Axios/browser sets multipart/form-data with the boundary
         if (config.data instanceof FormData && config.headers) {
+            if (typeof config.headers.delete === 'function') {
+                config.headers.delete('Content-Type');
+                config.headers.delete('content-type');
+            }
             delete config.headers['Content-Type'];
             delete config.headers['content-type'];
+            config.headers['Content-Type'] = undefined;
         }
         return config;
     },

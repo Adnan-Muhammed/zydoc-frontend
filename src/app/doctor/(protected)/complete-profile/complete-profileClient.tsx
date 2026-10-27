@@ -16,7 +16,7 @@ import StepCredentialsSection from './_components/StepCredentialsSection';
 import StepVerificationSection from './_components/StepVerificationSection';
 import StepScheduleSection from './_components/StepScheduleSection';
 import { validateFullSchedule } from '@/utils/scheduleValidator';
-import { inspectAndNormalizeFile } from '@/utils/fileSignatureHelper';
+import { inspectAndNormalizeFile, compressImageIfLarge } from '@/utils/fileSignatureHelper';
 
 // ─── Storage Key ──────────────────────────────────────────────────────────────
  
@@ -90,54 +90,6 @@ function dataURLtoFile(dataurl: string, defaultBase = 'doctor-avatar'): File | n
         console.error('Failed to reconstruct File from data URL:', e);
         return null;
     }
-}
-
-// ─── Helper: Compress / Downscale Large Phone Camera Photos ──────────────────
-
-async function compressImageIfLarge(file: File, maxDimension = 1600, quality = 0.88): Promise<File> {
-    if (!file.type.startsWith('image/') || file.type.includes('svg')) {
-        return file;
-    }
-    if (file.size <= 2 * 1024 * 1024) {
-        return file;
-    }
-    return new Promise((resolve) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = () => {
-            URL.revokeObjectURL(url);
-            let { width, height } = img;
-            if (width > maxDimension || height > maxDimension) {
-                if (width > height) {
-                    height = Math.round((height * maxDimension) / width);
-                    width = maxDimension;
-                } else {
-                    width = Math.round((width * maxDimension) / height);
-                    height = maxDimension;
-                }
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return resolve(file);
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob(
-                (blob) => {
-                    if (!blob) return resolve(file);
-                    const cleanName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
-                    resolve(new File([blob], cleanName, { type: 'image/jpeg', lastModified: Date.now() }));
-                },
-                'image/jpeg',
-                quality
-            );
-        };
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve(file);
-        };
-        img.src = url;
-    });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -232,13 +184,16 @@ export default function CompleteDoctorProfileClient() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
+        // Automatically optimize high-res smartphone camera photos before validation
+        const optimizedFile = await compressImageIfLarge(file);
+
+        if (optimizedFile.size > 10 * 1024 * 1024) {
             setServerErrors({ field: 'medicalCertificate', message: 'Medical Certificate exceeds 10 MB.' });
             e.target.value = '';
             return;
         }
 
-        const inspected = await inspectAndNormalizeFile(file, ['PDF', 'JPEG', 'PNG']);
+        const inspected = await inspectAndNormalizeFile(optimizedFile, ['PDF', 'JPEG', 'PNG', 'WEBP']);
         if (inspected.error) {
             setServerErrors({ field: 'medicalCertificate', message: inspected.error });
             e.target.value = '';
@@ -253,13 +208,16 @@ export default function CompleteDoctorProfileClient() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
+        // Automatically optimize high-res smartphone camera photos before validation
+        const optimizedFile = await compressImageIfLarge(file);
+
+        if (optimizedFile.size > 10 * 1024 * 1024) {
             setServerErrors({ field: 'governmentId', message: 'Government ID exceeds 10 MB.' });
             e.target.value = '';
             return;
         }
 
-        const inspected = await inspectAndNormalizeFile(file, ['PDF', 'JPEG', 'PNG']);
+        const inspected = await inspectAndNormalizeFile(optimizedFile, ['PDF', 'JPEG', 'PNG', 'WEBP']);
         if (inspected.error) {
             setServerErrors({ field: 'governmentId', message: inspected.error });
             e.target.value = '';
@@ -471,26 +429,30 @@ export default function CompleteDoctorProfileClient() {
             console.log('[Step 4] Assembling FormData multipart payload...');
             const formData = new FormData();
 
-            // Attach Binary Media Files
+            // Attach Binary Media Files with safety compression for high-res mobile devices
             if (fileToUpload) {
-                formData.append('avatar', fileToUpload, fileToUpload.name || 'doctor-avatar.jpg');
-                console.log('[FormData] Attached avatar file:', fileToUpload.name);
+                const finalAvatar = await compressImageIfLarge(fileToUpload);
+                formData.append('avatar', finalAvatar, finalAvatar.name || 'doctor-avatar.jpg');
+                console.log('[FormData] Attached avatar file:', finalAvatar.name, `${(finalAvatar.size / 1024).toFixed(1)} KB`);
             }
             if (remoteAvatarUrl) {
                 formData.append('avatarUrl', remoteAvatarUrl);
             }
             if (medicalCertificate) {
-                formData.append('medicalCertificate', medicalCertificate);
-                console.log('[FormData] Attached medicalCertificate:', medicalCertificate.name);
+                const finalMedCert = await compressImageIfLarge(medicalCertificate);
+                formData.append('medicalCertificate', finalMedCert, finalMedCert.name);
+                console.log('[FormData] Attached medicalCertificate:', finalMedCert.name, `${(finalMedCert.size / 1024).toFixed(1)} KB`);
             }
             if (governmentId) {
-                formData.append('governmentId', governmentId);
-                console.log('[FormData] Attached governmentId:', governmentId.name);
+                const finalGovId = await compressImageIfLarge(governmentId);
+                formData.append('governmentId', finalGovId, finalGovId.name);
+                console.log('[FormData] Attached governmentId:', finalGovId.name, `${(finalGovId.size / 1024).toFixed(1)} KB`);
             }
-            Object.entries(qualificationFiles).forEach(([id, file]) => {
-                formData.append('qualificationCertificates', file, `${id}___${file.name}`);
-                console.log(`[FormData] Attached qualificationCertificate for ID ${id}:`, file.name);
-            });
+            for (const [id, file] of Object.entries(qualificationFiles)) {
+                const finalQualCert = await compressImageIfLarge(file);
+                formData.append('qualificationCertificates', finalQualCert, `${id}___${finalQualCert.name}`);
+                console.log(`[FormData] Attached qualificationCertificate for ID ${id}:`, finalQualCert.name, `${(finalQualCert.size / 1024).toFixed(1)} KB`);
+            }
 
             // Helper to strip internal UI client IDs from time block items
             const sanitizeBlocks = (blocks: any[] = []) =>
