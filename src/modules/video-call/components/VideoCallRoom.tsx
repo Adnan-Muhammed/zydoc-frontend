@@ -18,6 +18,7 @@ import { useAppDispatch, useAppSelector } from "@/redux/hooks";
 import { cleanupConsultationState } from "@/redux/features/consultation/consultationSlice";
 import { fetchDoctorAppointments, fetchAppointmentById } from "@/redux/features/appointment/appointmentThunk";
 import { getAppointmentStartTimestamp, getAppointmentEndTimestamp } from "@/utils/appointmentStatus";
+import toast from "react-hot-toast";
 import { useWebRTC } from "../hooks/useWebRTC";
 import { useCallTimer } from "../hooks/useCallTimer";
 import { usePreventCallExit, rewindHistorySentinels } from "../hooks/usePreventCallExit";
@@ -518,8 +519,8 @@ export default function VideoCallRoom({
     };
 
     const handlePatientArrived = (payload: any) => {
-      // Check if this is for the NEXT patient (different appointmentId)
-      const isNextPatient = !payload?.appointmentId || payload.appointmentId !== appointmentId;
+      // Check if this is for the NEXT patient (strictly different appointmentId)
+      const isNextPatient = Boolean(payload?.appointmentId && payload.appointmentId !== appointmentId);
       if (isNextPatient) {
         console.log("[VideoCallRoom] Next patient arrived in waiting room:", payload);
         const nextPatientData = {
@@ -529,6 +530,37 @@ export default function VideoCallRoom({
           appointmentTime: payload?.appointmentTime,
         };
         setWaitingNextPatient(nextPatientData);
+      } else if (payload?.appointmentId && payload.appointmentId === appointmentId) {
+        // Current patient arrived / rejoined — do not set waitingNextPatient
+        console.log("[VideoCallRoom] Current patient arrived/rejoined:", payload);
+      }
+    };
+
+    const handlePeerReconnected = (payload: any) => {
+      console.log("[VideoCallRoom] peer_reconnected received:", payload);
+      if (normalizedRole === "patient") {
+        toast.success(`${doctorDisplayName || "Doctor"} is live.`, {
+          id: "doctor-reconnected-toast",
+          icon: "🩺",
+          duration: 4000,
+        });
+      } else if (normalizedRole === "doctor") {
+        toast.success(`Patient has rejoined the consultation.`, {
+          id: "patient-reconnected-toast",
+          icon: "👋",
+          duration: 4000,
+        });
+      }
+    };
+
+    const handlePeerJoined = () => {
+      console.log("[VideoCallRoom] peer_joined received");
+      if (normalizedRole === "patient") {
+        toast.success(`${doctorDisplayName || "Doctor"} is live.`, {
+          id: "doctor-live-toast",
+          icon: "🩺",
+          duration: 4000,
+        });
       }
     };
 
@@ -593,6 +625,8 @@ export default function VideoCallRoom({
 
     socket.on("urgent-slot-booked", handleUrgentSlot);
     socket.on("patient-arrived", handlePatientArrived);
+    socket.on("peer_reconnected", handlePeerReconnected);
+    socket.on("peer_joined", handlePeerJoined);
     socket.on("next_patient_joining_online", handleNextPatientOnline);
     socket.on("server_wrap_up_warning", handleWrapUpWarning);
     socket.on("extension_granted", handleExtensionGrantedEvent);
@@ -605,6 +639,8 @@ export default function VideoCallRoom({
     return () => {
       socket.off("urgent-slot-booked", handleUrgentSlot);
       socket.off("patient-arrived", handlePatientArrived);
+      socket.off("peer_reconnected", handlePeerReconnected);
+      socket.off("peer_joined", handlePeerJoined);
       socket.off("next_patient_joining_online", handleNextPatientOnline);
       socket.off("server_wrap_up_warning", handleWrapUpWarning);
       socket.off("extension_granted", handleExtensionGrantedEvent);
@@ -614,7 +650,7 @@ export default function VideoCallRoom({
       socket.off("doctor_absence_warning", handleDoctorAbsenceWarning);
       socket.off("doctor_missed", handleDoctorMissed);
     };
-  }, [socket, startWrapUpCountdown, phase, isExtended, appointmentId, handleExtensionGranted, handleExtensionDeadlineUpdated, normalizedRole, dispatch, cleanupMediaAndConnections]);
+  }, [socket, startWrapUpCountdown, phase, isExtended, appointmentId, handleExtensionGranted, handleExtensionDeadlineUpdated, normalizedRole, dispatch, cleanupMediaAndConnections, doctorDisplayName]);
 
   // ── Multi-Tab Fallback States ─────────────────────────────────────────────
   if (isDuplicateTab) {

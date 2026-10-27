@@ -29,9 +29,23 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
       const { appointmentId, patientName, patientType } = payload || {};
       const isBusy = pathname?.includes('/consultation/'); 
       const visitTypeStr = patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : '';
-      
+
+      // Check if this arrival is for the active ongoing consultation (Current patient Rejoin)
+      const currentConsultationId = pathname?.match(/\/consultation\/([^/?]+)/)?.[1];
+      const isCurrentAppointment = Boolean(currentConsultationId && appointmentId && currentConsultationId === appointmentId);
+
       if (isBusy) {
-        // Scenario B: Doctor is BUSY in another consultation (allowed 20-30s buffer to wrap up)
+        if (isCurrentAppointment) {
+          // Current patient in this active session has rejoined — do NOT show "Next patient"
+          toast.success(`${patientName || "Patient"} has rejoined the consultation.`, {
+            id: `patient-rejoined-${appointmentId}`,
+            icon: "👋",
+            duration: 4000,
+          });
+          return;
+        }
+
+        // Scenario B: Doctor is BUSY in another consultation and a DIFFERENT patient (next slot) arrived early
         toast(`Next patient ${patientName ? `${patientName} ` : ''}${visitTypeStr ? `(${visitTypeStr}) ` : ''}is waiting. You have a 20–30s buffer to wrap up and switch rooms.`, { 
           icon: "⏳",
           duration: 5000,
