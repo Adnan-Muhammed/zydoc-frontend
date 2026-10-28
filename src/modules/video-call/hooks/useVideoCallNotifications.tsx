@@ -35,9 +35,9 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
         const lastNotifiedAt = recentlyNotifiedArrivals.get(String(appointmentId));
         if (lastNotifiedAt && now - lastNotifiedAt < ARRIVAL_DEDUPE_WINDOW_MS) return;
         recentlyNotifiedArrivals.set(String(appointmentId), now);
-        for (const [id, timestamp] of recentlyNotifiedArrivals) {
+        recentlyNotifiedArrivals.forEach((timestamp, id) => {
           if (now - timestamp >= ARRIVAL_DEDUPE_WINDOW_MS) recentlyNotifiedArrivals.delete(id);
-        }
+        });
       }
       const isBusy = pathname?.includes('/consultation/'); 
       const visitTypeStr = patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : '';
@@ -104,6 +104,8 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
     };
   }, [userId, role, pathname, router]);
 }
+
+
 
 
 
