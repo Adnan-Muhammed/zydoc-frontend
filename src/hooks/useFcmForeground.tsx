@@ -17,6 +17,9 @@ interface UseFcmForegroundProps {
   role?: string | null;
 }
 
+// Module-level cache to deduplicate foreground messages across components (e.g. Topbar and FcmTokenManager)
+const seenForegroundNotificationIds = new Set<string>();
+
 /**
  * useFcmForeground
  * Listens for FCM push notifications when the application is open in the foreground.
@@ -42,9 +45,18 @@ export function useFcmForeground({ userId, role }: UseFcmForegroundProps) {
         unsubscribe = onMessage(messaging, (payload) => {
           console.log('[FCM] Foreground notification received:', payload);
 
+          const notifId = payload.data?.notificationId || payload.messageId || `${payload.notification?.title || ''}-${payload.data?.referenceId || ''}-${Date.now()}`;
+          if (seenForegroundNotificationIds.has(notifId)) {
+            console.log('[FCM] Duplicate foreground notification suppressed:', notifId);
+            return;
+          }
+          seenForegroundNotificationIds.add(notifId);
+          setTimeout(() => seenForegroundNotificationIds.delete(notifId), 15000);
+
           const title = payload.notification?.title || payload.data?.title || 'New Notification';
           const body = payload.notification?.body || payload.data?.body || payload.data?.message || '';
-          const notificationType = payload.data?.type || 'general';
+          const rawType = payload.data?.type || 'general';
+          const normalizedType = rawType.toLowerCase();
 
           // 1. Display Toast Notification
           toast.custom(
@@ -95,7 +107,7 @@ export function useFcmForeground({ userId, role }: UseFcmForegroundProps) {
             recipientModel: role?.toLowerCase() === 'doctor' ? 'Doctor' : 'User',
             title,
             message: body,
-            type: notificationType,
+            type: rawType,
             referenceId: payload.data?.referenceId || payload.data?.appointmentId,
             isRead: false,
             createdAt: new Date().toISOString(),
@@ -112,7 +124,7 @@ export function useFcmForeground({ userId, role }: UseFcmForegroundProps) {
           // If this is a booking-related notification for a doctor, refresh appointment slots
           if (
             role?.toLowerCase() === 'doctor' &&
-            (notificationType === 'booking' || notificationType === 'new_booking' || notificationType === 'appointment_update')
+            (normalizedType === 'booking' || normalizedType === 'new_booking' || normalizedType === 'appointment_update')
           ) {
             dispatch(fetchDoctorAppointments());
           }

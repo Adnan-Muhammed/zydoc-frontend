@@ -27,12 +27,20 @@
 //   This wrapper carries the "use client" directive, making it safe to import
 //   into any layout — server or client.
 
+import { useSelector } from "react-redux";
 import { useFcmToken } from "../hooks/useFcmToken";
+import { useFcmForeground } from "../hooks/useFcmForeground";
+import type { RootState } from "../redux/store";
 
 export function FcmTokenManager() {
-  // The hook internally checks: isAuthenticated + role === "doctor"
-  // so it is safe to render on any page that might be visited by non-doctors.
+  const { user } = useSelector((state: RootState) => state.auth);
+  const userId = (user as any)?.profileId || user?.id || (user as any)?._id;
+
+  // Silently register/sync FCM token with backend
   useFcmToken();
+
+  // Listen for FCM foreground messages across all doctor pages
+  useFcmForeground({ userId, role: user?.role });
 
   // Renders nothing — purely a side-effect component
   return null;

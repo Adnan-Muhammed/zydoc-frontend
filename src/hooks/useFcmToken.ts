@@ -51,26 +51,30 @@ export function useFcmToken() {
       return;
     }
 
-    if (hasRegistered.current || sessionStorage.getItem("fcm_registered") === "true") {
-      console.log("[useFcmToken] Already registered this session — skipping.");
-      return;
-    }
-
     const registerToken = async () => {
       try {
         console.log("[useFcmToken] Starting FCM token registration...");
         const token = await getFcmToken();
 
         if (!token) {
-          // getFcmToken() logs the reason internally
+          console.warn("[useFcmToken] No FCM token retrieved (permission denied, dismissed, or unsupported).");
+          return;
+        }
+
+        const currentDoctorId = (user as any)?.profileId || user?.id || (user as any)?._id;
+        const sessionKey = `fcm_token_synced_${currentDoctorId}`;
+
+        // Only skip if the exact token was already sent to backend in this browser session
+        if (sessionStorage.getItem(sessionKey) === token && hasRegistered.current) {
+          console.log("[useFcmToken] FCM token already synced with backend for this session.");
           return;
         }
 
         // Send the token to the backend — mounted at /api/doctor/ in server.js
         await axiosInstance.patch("/doctor/fcm-token", { fcmToken: token });
 
-        // Mark as registered for this browser session
         hasRegistered.current = true;
+        sessionStorage.setItem(sessionKey, token);
         sessionStorage.setItem("fcm_registered", "true");
         console.log("[useFcmToken] ✅ FCM token successfully registered with the backend.");
       } catch (error: unknown) {
