@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast'; // Adjust based on your actual toast li
 import { io, Socket } from 'socket.io-client';
 
 let globalNotificationSocket: Socket | null = null;
+const recentlyNotifiedArrivals = new Map<string, number>();
+const ARRIVAL_DEDUPE_WINDOW_MS = 30_000;
 
 export function useVideoCallNotifications(userId: string | undefined, role: string | undefined) {
   const pathname = usePathname();
@@ -27,6 +29,16 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
 
     const handlePatientArrived = (payload: any) => {
       const { appointmentId, patientName, patientType } = payload || {};
+      // Waiting-room and room-join events can refer to the same arrival.
+      if (appointmentId) {
+        const now = Date.now();
+        const lastNotifiedAt = recentlyNotifiedArrivals.get(String(appointmentId));
+        if (lastNotifiedAt && now - lastNotifiedAt < ARRIVAL_DEDUPE_WINDOW_MS) return;
+        recentlyNotifiedArrivals.set(String(appointmentId), now);
+        for (const [id, timestamp] of recentlyNotifiedArrivals) {
+          if (now - timestamp >= ARRIVAL_DEDUPE_WINDOW_MS) recentlyNotifiedArrivals.delete(id);
+        }
+      }
       const isBusy = pathname?.includes('/consultation/'); 
       const visitTypeStr = patientType === 'NEW' ? 'New Consultation' : patientType === 'FOLLOW_UP' ? 'Follow-up' : '';
 
@@ -92,3 +104,6 @@ export function useVideoCallNotifications(userId: string | undefined, role: stri
     };
   }, [userId, role, pathname, router]);
 }
+
+
+

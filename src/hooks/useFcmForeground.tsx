@@ -58,6 +58,10 @@ export function useFcmForeground({ userId, role }: UseFcmForegroundProps) {
           const rawType = payload.data?.type || 'general';
           const normalizedType = rawType.toLowerCase();
 
+          // The actionable Socket.io toast handles patient arrivals while the
+          // doctor is online. Avoid a second generic toast from foreground FCM.
+          if (normalizedType === 'patient_live' || normalizedType === 'patient_waiting') return;
+
           // 1. Display Toast Notification
           toast.custom(
             (t) => (
@@ -143,3 +147,4 @@ export function useFcmForeground({ userId, role }: UseFcmForegroundProps) {
     };
   }, [dispatch, userId, role]);
 }
+
