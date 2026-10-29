@@ -12,15 +12,18 @@ const firebaseApp = firebase.initializeApp(self.__FIREBASE_CONFIG__);
 const messaging = firebase.messaging(firebaseApp);
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || payload.data?.title || "Zydoc";
-  const body = payload.notification?.body || payload.data?.body || payload.data?.message || "You have a new notification.";
+  // FCM's SDK automatically displays payload.notification when no visible app
+  // window is open. Calling showNotification() here as well creates duplicates.
+  // Keep this callback for data-only messages, which still need an explicit UI.
+  if (payload.notification) return;
+
+  const title = payload.data?.title || "Zydoc";
+  const body = payload.data?.body || payload.data?.message || "You have a new notification.";
   const link = payload.data?.link || "/doctor/appointments";
 
-  // Foreground FCM messages are rendered by the page's onMessage listener.
-  // This handler only runs when no active window is displaying the app.
   return self.registration.showNotification(title, {
     body,
-    icon: payload.notification?.icon || "/favicon.ico",
+    icon: "/favicon.ico",
     badge: "/favicon.ico",
     data: { link },
     requireInteraction: false,

@@ -7,8 +7,9 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, useMemo } from 'react'; 
 import Link from 'next/link';
 import { fetchDoctorAppointments } from '@/redux/features/appointment/appointmentThunk';
-import { fetchDoctorDashboardStats } from '@/redux/features/doctor/doctorThunk';
+import { fetchDoctorDashboardStats, fetchDoctorProfile } from '@/redux/features/doctor/doctorThunk';
 import { getAppointmentStatusConfig, getAppointmentStartTimestamp, isAppointmentUpcomingOrActive } from '@/utils/appointmentStatus';
+import { resolveFileUrl } from '@/utils/fileUrlHelper';
 import {
   Users,
   CalendarCheck,
@@ -38,7 +39,7 @@ import './doctor-dashboard.css';
 export default function DoctorDashboardPage() {
   const router = useRouter();
   const { user, isLoading } = useAppSelector((state) => state.auth);
-  const { dashboardStats, isLoadingStats } = useAppSelector((state) => state.doctor);
+  const { profile: doctorProfile, dashboardStats, isLoadingStats } = useAppSelector((state) => state.doctor);
 
   const isPending =
     user?.verificationStatus === 'pending' ||
@@ -79,8 +80,11 @@ export default function DoctorDashboardPage() {
     if (user && isApproved) {
       dispatch(fetchDoctorAppointments());
       dispatch(fetchDoctorDashboardStats());
+      dispatch(fetchDoctorProfile());
     }
   }, [user, isApproved, dispatch]);
+
+  const doctorAvatarUrl = resolveFileUrl(doctorProfile?.avatarUrl || user?.avatarUrl);
 
   const getPatientName = (patientData: any) => {
     if (!patientData) return "Patient";
@@ -387,7 +391,17 @@ export default function DoctorDashboardPage() {
             <div className="flex items-center gap-4">
               <div className="relative">
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#101044] to-indigo-700 text-white font-bold text-xl sm:text-2xl flex items-center justify-center shadow-md shadow-indigo-900/10 uppercase">
-                  {user?.name ? user.name.slice(0, 2).toUpperCase() : 'DR'}
+                  <span aria-hidden="true">
+                    {user?.name ? user.name.slice(0, 2).toUpperCase() : 'DR'}
+                  </span>
+                  {doctorAvatarUrl && (
+                    <img
+                      src={doctorAvatarUrl}
+                      alt={`${user?.name || 'Doctor'} profile`}
+                      className="absolute inset-0 h-full w-full rounded-2xl object-cover"
+                      onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
                 </div>
                 <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
