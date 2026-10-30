@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 
-const hospitalImage =
-  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Gemini_Generated_Image_1wa7c11wa7c11wa7-I4nhiMepm1H7cYFZG24uNbGhLlI114.png'
+// const hospitalImage =
+//   'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Gemini_Generated_Image_1wa7c11wa7c11wa7-I4nhiMepm1H7cYFZG24uNbGhLlI114.png'
+
+const hospitalImage = "/hero_section_image.webp"
 
 export default function Hero() {
   return (

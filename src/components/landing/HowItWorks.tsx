@@ -1,11 +1,8 @@
 'use client'
 
-const searchDoctorsImage =
-  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_2_image-nALL898pIn3wN6C0CMBYMPvnx6A0Q1.png'
-const bookingImage =
-  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_1_image-ZYmBWpZw4QgxYakr9SCEycDP1CmRMn.png'
-const videoConsultationImage =
-  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/card_3_image-I3ICWoElozMt2umxPEikMC80OgAF6m.jpeg'
+const searchDoctorsImage = '/images/card_2_image.webp'
+const bookingImage = '/images/card_1_image.webp'
+const videoConsultationImage = '/images/card_3_image.webp'
 
 const steps = [
   {

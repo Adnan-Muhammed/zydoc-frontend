@@ -2,8 +2,7 @@
 
 import { Video, FileText, ShieldCheck, CalendarDays } from 'lucide-react'
 
-const mobileVideoImage =
-  'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/mobile_screen-videocall-FlJDu94r0mhBJ2sixXu5lIMKeHzSz4.png'
+const mobileVideoImage = '/images/mobile_screen-videocall.webp'
 
 const features = [
   {
