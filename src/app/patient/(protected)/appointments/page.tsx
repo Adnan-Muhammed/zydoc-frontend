@@ -1074,7 +1074,7 @@ export default function PatientAppointmentsPage() {
                                 <i className="fas fa-shield-check text-emerald-600 text-sm mt-0.5"></i>
                                 <div>
                                     <p className="font-bold mb-0.5">24-Hour Cancellation Rule Satisfied</p>
-                                    <p>Your appointment is scheduled more than 24 hours from now. Cancelling will immediately free your slot and credit 100% of the booking fee back to your Zydoc Wallet.</p>
+                                    <p>Your appointment is scheduled more than 24 hours from now. Cancelling will immediately free your slot and credit 100% of the booking fee back to your Zydocare Health Wallet.</p>
                                 </div>
                             </div>
 

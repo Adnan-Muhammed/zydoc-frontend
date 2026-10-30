@@ -3,6 +3,7 @@
 
 import type { Metadata } from "next";
 import { Shield, Users, CalendarCheck, Lock } from "lucide-react";
+import Image from "next/image";
 import AdminLoginForm from "@/components/forms/AdminLoginForm";
  
 
@@ -10,8 +11,8 @@ import AdminLoginForm from "@/components/forms/AdminLoginForm";
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const metadata: Metadata = {
-    title: "Admin Login – Zydoc",
-    description: "Secure administrator sign-in for the Zydoc healthcare platform.",
+    title: "Admin Login – Zydocare Health",
+    description: "Secure administrator sign-in for the Zydocare Health healthcare platform.",
 };
 
 const features = [
@@ -49,9 +50,12 @@ export default function AdminLoginPage() {
                 </div>
 
                 <div className="relative z-10 space-y-8">
-                    <h1 className="text-[clamp(3rem,5vw,4.5rem)] font-black leading-none tracking-tight text-white">
-                        Zydoc <span className="text-blue-400">Admin</span>
-                    </h1>
+                    <div className="flex items-center gap-4">
+                        <Image src="/project_logo.png" alt="" width={64} height={64} className="size-16 shrink-0 object-contain" />
+                        <h1 className="text-[clamp(3rem,5vw,4.5rem)] font-black leading-none tracking-tight text-white">
+                            Zydocare Health <span className="text-blue-400">Admin</span>
+                        </h1>
+                    </div>
                     <p className="max-w-md text-base leading-relaxed text-slate-400">
                         Securely manage doctors, patients, appointments, compliance, and
                         healthcare operations through your enterprise control center.

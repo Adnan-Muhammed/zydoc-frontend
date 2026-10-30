@@ -5,7 +5,7 @@ import { ShieldCheck, Lock, KeyRound } from 'lucide-react';
 import ChangePasswordForm from '@/components/forms/ChangePasswordForm';
 
 export const metadata: Metadata = {
-  title: 'Security Settings | Zydoc',
+  title: 'Security Settings | Zydocare Health',
   description: 'Manage your password and security settings.',
 };
 

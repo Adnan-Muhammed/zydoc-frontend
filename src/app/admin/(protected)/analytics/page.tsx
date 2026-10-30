@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import AnalyticsClient from './AnalyticsClient';
 
 export const metadata: Metadata = {
-    title: 'Healthcare Analytics & Platform Intelligence | Zydoc Admin',
+    title: 'Healthcare Analytics & Platform Intelligence | Zydocare Health Admin',
     description: 'Enterprise healthcare metrics, consultation trends, doctor utilization, and revenue breakdown.',
 };
 

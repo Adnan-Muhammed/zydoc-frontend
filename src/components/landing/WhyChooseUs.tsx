@@ -31,7 +31,7 @@ const features = [
     tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
     title: 'Board-Certified Specialists',
     description:
-      'Every doctor on ZyDoc is personally vetted with medical council license verification across Allopathy, Ayurveda, and other key disciplines.',
+      'Every doctor on Zydocare Health is personally vetted with medical council license verification across Allopathy, Ayurveda, and other key disciplines.',
     bulletPoints: ['Medical Council Verified', '1-on-1 Dedicated Attention', 'Multi-Specialty Expertise'],
     accentColor: 'from-emerald-500/10 to-teal-500/5',
     iconBg: 'bg-emerald-600 text-white shadow-emerald-200',
@@ -99,7 +99,7 @@ export default function WhyChooseUs() {
         <div className="mx-auto max-w-2xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/70 bg-indigo-50/70 px-3.5 py-1.5 text-xs font-semibold text-indigo-900 shadow-sm backdrop-blur-sm">
             <Sparkles className="size-3.5 text-indigo-600" />
-            <span>The ZyDoc Advantage</span>
+            <span>The Zydocare Health Advantage</span>
           </div>
 
           <h2 className="mt-4 text-3xl font-bold tracking-tight text-[#101044] sm:text-4xl lg:text-[2.6rem] lg:leading-[1.15]">

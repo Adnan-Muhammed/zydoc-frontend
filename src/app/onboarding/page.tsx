@@ -26,7 +26,7 @@ export default function OnboardingPage() {
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
                 <div className="text-center">
                     <h2 className="mt-6 text-3xl font-extrabold text-slate-900 dark:text-white">
-                        Welcome to Zydoc!
+                        Welcome to Zydocare Health!
                     </h2>
                     <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
                         To get started, please tell us how you'll be using the platform.

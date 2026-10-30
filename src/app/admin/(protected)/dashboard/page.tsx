@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import AdminDashboardClient from '@/components/admin/AdminDashboardClient';
 
 export const metadata: Metadata = {
-    title: 'Executive Dashboard | Zydoc Admin',
+    title: 'Executive Dashboard | Zydocare Health Admin',
     description: 'Enterprise overview of doctors, patients, appointments, revenue, and system operations.',
 };
 

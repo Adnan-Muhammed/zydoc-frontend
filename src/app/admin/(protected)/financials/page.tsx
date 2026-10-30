@@ -3,7 +3,7 @@ import React from 'react';
 import FinancialsClient from './FinancialsClient';
 
 export const metadata = {
-  title: 'Financial Ledger & Doctor Settlements | Zydoc Admin',
+  title: 'Financial Ledger & Doctor Settlements | Zydocare Health Admin',
   description: 'Track platform gross consultation revenues, admin commissions, doctor payouts, and settle disbursements.',
 };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 
 const AuthHeader = () => {
     return (
@@ -8,10 +9,8 @@ const AuthHeader = () => {
             <nav className="mx-auto flex h-[70px] max-w-[1400px] items-center justify-between px-8">
 
                 <Link href="/" className="flex items-center gap-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-                        <i className="fas fa-hospital-user"></i>
-                    </div>
-                    <span className="text-xl font-bold text-slate-800">Zydoc</span>
+                    <Image src="/project_logo.png" alt="" width={40} height={40} className="size-10 object-contain" />
+                    <span className="text-xl font-bold text-slate-800">Zydocare Health</span>
                 </Link>
  
                 <Link

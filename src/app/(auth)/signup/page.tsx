@@ -6,8 +6,8 @@ import UnifiedSignupForm from '@/components/forms/UnifiedSignupForm';
 import Badge from '@/components/ui/Badge';
 
 export const metadata: Metadata = {
-    title: "Create Account | Zydoc",
-    description: "Join Zydoc and connect with 1000+ verified doctors. Free to sign up. Book appointments, get prescriptions, and manage your healthcare online.",
+    title: "Create Account | Zydocare Health",
+    description: "Join Zydocare Health and connect with 1000+ verified doctors. Free to sign up. Book appointments, get prescriptions, and manage your healthcare online.",
 };
 
 export default function SignupPage() {
@@ -26,7 +26,7 @@ export default function SignupPage() {
                     </Badge>
                     <h1 className="text-4xl font-bold">Create your account</h1>
                     <p className="text-lg text-slate-600 dark:text-slate-400">
-                        Join thousands of patients using Zydoc to take control of their healthcare.
+                        Join thousands of patients using Zydocare Health to take control of their healthcare.
                     </p>
                     <ul className="space-y-2 text-slate-500 text-sm">
                         <li><i className="fas fa-check text-green-500 mr-2"></i>Free account, no credit card required</li>

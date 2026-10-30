@@ -1,7 +1,7 @@
 /**
  * src/types/index.ts
  *
- * Shared TypeScript types for the Zydoc frontend.
+ * Shared TypeScript types for the Zydocare Health frontend.
  * Import from here for cross-cutting types; feature-specific types
  * remain co-located with their feature (e.g., authTypes.ts, adminTypes.ts).
  */

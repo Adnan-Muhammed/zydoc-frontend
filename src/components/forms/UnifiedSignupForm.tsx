@@ -314,7 +314,7 @@ const UnifiedSignupForm: React.FC = () => {
     if (showRoleSelector) {
         return (
             <div className="space-y-6 animate-fade-in text-center p-4">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Welcome to Zydoc!</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Welcome to Zydocare Health!</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
                     To complete your account setup, please select how you'll be using the platform.
                 </p>

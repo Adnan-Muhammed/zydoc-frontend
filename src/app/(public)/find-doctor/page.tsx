@@ -12,7 +12,7 @@ import { getDoctorsList } from '@/lib/doctors';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
  
 export const metadata: Metadata = {
-  title: 'Find a Doctor Near You | Zydoc Healthcare',
+  title: 'Find a Doctor Near You | Zydocare Health',
   description: 
     'Search and book appointments with 1000+ verified doctors. Filter by specialty, system of medicine, experience, and fee. Online video consultation & in-person clinic visits available.',
   keywords: [
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     'specialist clinic visit',
   ],
   openGraph: {
-    title: 'Find a Doctor | Zydoc Healthcare',
+    title: 'Find a Doctor | Zydocare Health',
     description: 'Browse and book verified medical professionals across modern medicine and holistic care.',
     type: 'website',
   },

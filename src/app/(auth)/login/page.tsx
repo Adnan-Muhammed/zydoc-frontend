@@ -8,8 +8,8 @@ import UnifiedLoginForm from '@/components/forms/UnifiedLoginForm';
 import Badge from '@/components/ui/Badge';
 
 export const metadata: Metadata = {
-    title: "Login | Zydoc",
-    description: "Sign in to your Zydoc account to manage appointments, prescriptions, and your health profile.",
+    title: "Login | Zydocare Health",
+    description: "Sign in to your Zydocare Health account to manage appointments, prescriptions, and your health profile.",
 };
 
 export default function LoginPage() {
@@ -42,7 +42,7 @@ export default function LoginPage() {
                 <div className="bg-white dark:bg-slate-900 py-12 px-12 shadow-xl rounded-2xl">
                     <UnifiedLoginForm />
                     <div className="mt-6 text-center text-sm">
-                        <p className="mb-2 text-slate-600 dark:text-slate-400">New to Zydoc?</p>
+                        <p className="mb-2 text-slate-600 dark:text-slate-400">New to Zydocare Health?</p>
                         <Link href="/signup" className="text-blue-600 font-semibold hover:underline">
                             Create a free account
                         </Link>

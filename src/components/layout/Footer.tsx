@@ -2,6 +2,7 @@
 
 // components/layout/Footer.tsx
 import Link from 'next/link';
+import Image from 'next/image';
 
 const Footer = () => {
     return (
@@ -9,7 +10,7 @@ const Footer = () => {
             <div className="footer-content">
                 <div className="footer-grid">
                     <div className="footer-section">
-                        <Link href="/" className="logo"><i className="fas fa-hospital-user"></i> Zydoc</Link>
+                        <Link href="/" className="logo"><Image src="/project_logo.png" alt="" width={32} height={32} /> Zydocare Health</Link>
                         <p>Your trusted healthcare platform.</p>
                     </div>
                     <div className="footer-section">
@@ -35,7 +36,7 @@ const Footer = () => {
                         </ul>
                     </div>
                 </div>
-                <div className="footer-bottom"><p>© 2025 Zydoc. All rights reserved.</p></div>
+                <div className="footer-bottom"><p>© 2025 Zydocare Health. All rights reserved.</p></div>
             </div>
         </footer>
     )

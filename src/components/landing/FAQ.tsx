@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react'
 
 const faqs = [
   {
-    question: 'How do I find a doctor on Zydoc?',
+    question: 'How do I find a doctor on Zydocare Health?',
     answer:
       'You can search doctors by specialty, experience, ratings, and availability. Use filters to narrow down your options and find the perfect specialist for your needs.',
   },
@@ -53,7 +53,7 @@ export default function FAQ() {
             Frequently asked questions
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-[#70708a]">
-            Everything you need to know about getting trusted care through Zydoc.
+            Everything you need to know about getting trusted care through Zydocare Health.
           </p>
         </div>
 

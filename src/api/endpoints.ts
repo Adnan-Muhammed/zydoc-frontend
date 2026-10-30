@@ -1,7 +1,7 @@
 /**
  * src/api/endpoints.ts
  *
- * Centralised API endpoint constants for the Zydoc backend.
+ * Centralised API endpoint constants for the Zydocare Health backend.
  * Use these instead of inline strings to prevent typos and make
  * future URL changes a single-file update.
  *

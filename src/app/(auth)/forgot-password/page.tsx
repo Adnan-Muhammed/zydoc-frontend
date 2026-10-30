@@ -3,8 +3,8 @@ import ForgotPasswordForm from '@/components/forms/ForgotPasswordForm';
 import Badge from '@/components/ui/Badge';
 
 export const metadata: Metadata = {
-    title: "Forgot Password | Zydoc",
-    description: "Reset your Zydoc password to regain access to your account.",
+    title: "Forgot Password | Zydocare Health",
+    description: "Reset your Zydocare Health password to regain access to your account.",
 };
 
 export default function ForgotPasswordPage() {

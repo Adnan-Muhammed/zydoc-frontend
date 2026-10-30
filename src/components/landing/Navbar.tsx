@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Menu, X, ArrowRight, LayoutDashboard } from 'lucide-react'
 import { useSelector } from 'react-redux'
 import type { RootState } from '@/redux/store'
+import Image from 'next/image'
 
 export interface User {
   role?: string
@@ -19,11 +20,8 @@ interface NavbarProps {
 export function Logo() {
   return (
     <Link href="/" className="flex items-center gap-2 text-[20px] font-bold tracking-[-0.04em] text-[#181952]">
-      <span className="relative inline-flex size-6 items-center justify-center">
-        <span className="absolute h-2.5 w-5 -rotate-45 rounded-full bg-[#32b899]" />
-        <span className="absolute h-2.5 w-5 translate-y-2 rotate-45 rounded-full bg-[#313a9d]" />
-      </span>
-      Zydoc
+      <Image src="/project_logo.png" alt="" width={36} height={36} className="size-9 object-contain" />
+      Zydocare Health
     </Link>
   )
 }

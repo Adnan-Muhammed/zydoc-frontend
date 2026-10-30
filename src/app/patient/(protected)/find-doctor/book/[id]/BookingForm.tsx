@@ -361,7 +361,7 @@
 //                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
 //                 amount: orderAmount,
 //                 currency: orderCurrency,
-//                 name: "Zydoc Healthcare",
+//                 name: "Zydocare Health",
 //                 description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
 //                 order_id: orderId,
 //                 handler: async function (response: any) {
@@ -1507,7 +1507,7 @@ export default function BookingForm({ doctor }: { doctor: any }) {
                 key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
                 amount: orderAmount,
                 currency: orderCurrency,
-                name: "Zydoc Healthcare",
+                name: "Zydocare Health",
                 description: `Consultation with Dr. ${doctor.firstName || ''} ${doctor.lastName || ''}`.trim(),
                 order_id: orderId,
                 handler: async function (response: any) {

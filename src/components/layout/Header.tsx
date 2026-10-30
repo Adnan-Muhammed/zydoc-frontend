@@ -87,7 +87,7 @@
 //                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-500/30">
 //                             <i className="fas fa-hospital-user text-lg"></i>
 //                         </div>
-//                         <span className="text-xl font-bold tracking-tight text-slate-800">Zydoc</span>
+//                         <span className="text-xl font-bold tracking-tight text-slate-800">Zydocare Health</span>
 //                     </Link>
 
 //                     {/* DESKTOP NAV LINKS */}
@@ -230,6 +230,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
     Menu,
@@ -308,12 +309,8 @@ const Header = ({ user }: { user: User | null }) => {
                         onClick={() => setIsOpen(false)}
                         className="flex items-center gap-2.5 flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
                     >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-md">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                            </svg>
-                        </div>
-                        <span className="text-lg md:text-xl font-bold tracking-tight text-slate-900">Zydoc</span>
+                        <Image src="/project_logo.png" alt="" width={40} height={40} className="size-10 object-contain" />
+                        <span className="text-lg md:text-xl font-bold tracking-tight text-slate-900">Zydocare Health</span>
                     </Link>
 
                     {/* DESKTOP NAV LINKS */}

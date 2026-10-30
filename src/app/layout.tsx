@@ -35,12 +35,12 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Zydoc - Online Healthcare Consultations",
-  description: "Connect with verified doctors online. Book appointments, get prescriptions, and manage your health with Zydoc — trusted by 50,000+ patients.",
+  title: "Zydocare Health - Online Healthcare Consultations",
+  description: "Connect with verified doctors online. Book appointments, get prescriptions, and manage your health with Zydocare Health.",
   keywords: ["online doctor", "healthcare", "book appointment", "telemedicine", "find doctor"],
   openGraph: {
-    title: "Zydoc - Online Healthcare Consultations",
-    description: "Connect with verified doctors online. Trusted by 50,000+ patients.",
+    title: "Zydocare Health - Online Healthcare Consultations",
+    description: "Connect with verified doctors online with Zydocare Health.",
     type: "website",
   },
 };
@@ -53,6 +53,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${manrope.variable} ${jakarta.variable} ${geistMono.variable} ${geist.variable}`}>
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
       </head>
       <body className="antialiased">

@@ -4,7 +4,7 @@ import ChangePasswordForm from '@/components/forms/ChangePasswordForm';
 import { ShieldCheck, KeyRound, Lock, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export const metadata: Metadata = {
-    title: 'Security Settings | Doctor Dashboard | Zydoc',
+    title: 'Security Settings | Doctor Dashboard | Zydocare Health',
     description: 'Manage your password and security settings.',
 };
 
@@ -61,7 +61,7 @@ export default function DoctorSecurityPage() {
                         </li>
                         <li className="flex items-start gap-2.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-1.5 shrink-0"></span>
-                            <span>Always log out when accessing Zydoc from shared clinic workstations.</span>
+                            <span>Always log out when accessing Zydocare Health from shared clinic workstations.</span>
                         </li>
                     </ul>
                 </div>

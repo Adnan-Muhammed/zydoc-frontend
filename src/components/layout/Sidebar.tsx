@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import { logoutUser } from '@/redux/auth/authThunk';
 import { resolveFileUrl } from '@/utils/fileUrlHelper';
+import Image from 'next/image';
 import { 
   LayoutDashboard,
   UserCheck,
@@ -211,12 +212,10 @@ export default function Sidebar({ role, isOpen, onClose }: SidebarProps) {
         {/* Brand Header */}
         <div className="sidebar-logo-area">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="sidebar-logo-icon">
-              <Stethoscope className="size-5 text-white" />
-            </div>
+            <Image src="/project_logo.png" alt="" width={40} height={40} className="size-10 shrink-0 object-contain" />
             <div className="sidebar-brand-wrapper">
               <div className="sidebar-logo-text">
-                Zy<span>doc</span>
+                Zydocare Health
               </div>
               <span className="sidebar-portal-badge">
                 {role === 'admin' ? 'Admin Portal' : role === 'doctor' ? 'Doctor Portal' : 'Patient Portal'}

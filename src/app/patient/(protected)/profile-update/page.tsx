@@ -318,7 +318,7 @@ export default function PatientProfileUpdatePage() {
           <p>
             {isEditing
               ? 'Update your personal details, emergency contacts, and residential information.'
-              : 'Welcome to Zydoc! Complete your profile so doctors have essential context during consultations.'}
+              : 'Welcome to Zydocare Health! Complete your profile so doctors have essential context during consultations.'}
           </p>
         </div>
       </div>

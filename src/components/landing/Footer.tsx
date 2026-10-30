@@ -10,7 +10,7 @@ export default function Footer() {
         <Logo />
         <p className="mt-4 text-sm text-[#6c6d84]">Online &amp; Offline healthcare</p>
         <p className="mt-6 text-xs text-[#9a9bb5]">
-          © {new Date().getFullYear()} Zydoc Inc. All rights reserved.
+          © {new Date().getFullYear()} Zydocare Health Inc. All rights reserved.
         </p>
       </div>
 

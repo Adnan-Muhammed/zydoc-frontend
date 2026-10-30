@@ -17,7 +17,7 @@ messaging.onBackgroundMessage((payload) => {
   // Keep this callback for data-only messages, which still need an explicit UI.
   if (payload.notification) return;
 
-  const title = payload.data?.title || "Zydoc";
+  const title = payload.data?.title || "Zydocare Health";
   const body = payload.data?.body || payload.data?.message || "You have a new notification.";
   const link = payload.data?.link || "/doctor/appointments";
 
