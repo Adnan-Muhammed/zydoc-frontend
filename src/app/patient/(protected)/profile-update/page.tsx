@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useAppSelector, useAppDispatch } from '@/redux/hooks';
 import { setCredentials } from '@/redux/auth/authSlice';
 import axiosInstance from '@/api/axiosInstance';
+import { validatePatientProfile } from '@/utils/patientProfileValidator';
 import {
   User,
   MapPin,
@@ -100,55 +101,7 @@ export default function PatientProfileUpdatePage() {
     fetchProfile();
   }, [reduxUser]);
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-
-    // Personal Information validations
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-    if (!formData.dateOfBirth) {
-      newErrors.dateOfBirth = 'Date of birth is required';
-    } else {
-      const selectedDate = new Date(formData.dateOfBirth);
-      if (selectedDate > new Date()) {
-        newErrors.dateOfBirth = 'Date of birth cannot be in the future';
-      }
-    }
-    if (!formData.gender) {
-      newErrors.gender = 'Gender is required';
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else {
-      const cleanPhone = formData.phone.replace(/[\s\-\(\)\+]/g, '');
-      if (cleanPhone.length < 10) {
-        newErrors.phone = 'Please enter a valid phone number (at least 10 digits)';
-      }
-    }
-    if (!formData.bloodGroup) {
-      newErrors.bloodGroup = 'Blood group is required';
-    }
-
-    // Residential Address validations
-    if (!formData.street.trim()) {
-      newErrors.street = 'Street address is required';
-    }
-    if (!formData.city.trim()) {
-      newErrors.city = 'City is required';
-    }
-    if (!formData.state.trim()) {
-      newErrors.state = 'State is required';
-    }
-    if (!formData.zipCode.trim()) {
-      newErrors.zipCode = 'Postal / ZIP code is required';
-    }
-    if (!formData.country.trim()) {
-      newErrors.country = 'Country is required';
-    }
-
-    return newErrors;
-  };
+  const validateForm = () => validatePatientProfile(formData).errors;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -169,7 +122,7 @@ export default function PatientProfileUpdatePage() {
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      setError('Please fill in all required fields in Personal Information and Residential Address.');
+      setError(Object.values(validationErrors)[0]);
 
       const firstKey = Object.keys(validationErrors)[0];
       const targetElement = document.querySelector(`[name="${firstKey}"]`);
@@ -238,7 +191,12 @@ export default function PatientProfileUpdatePage() {
       }, 1500);
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Failed to update profile';
-      setError(msg);
+      if (err.response?.data?.errors) {
+        setErrors(err.response.data.errors);
+        setError(Object.values(err.response.data.errors)[0] || msg);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -338,7 +296,16 @@ export default function PatientProfileUpdatePage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <form
+        onSubmit={handleSave}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !(event.target instanceof HTMLTextAreaElement) && !(event.target instanceof HTMLButtonElement)) {
+            event.preventDefault();
+          }
+        }}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: 24 }}
+      >
         {/* Section 1: Personal Information */}
         <div className="pat-card">
           <div className="pat-card-header">

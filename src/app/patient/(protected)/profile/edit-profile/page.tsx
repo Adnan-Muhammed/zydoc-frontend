@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
+import { validatePatientProfile } from '@/utils/patientProfileValidator';
 
 export default function EditPatientProfilePage() {
     const router = useRouter();
@@ -73,55 +74,7 @@ export default function EditPatientProfilePage() {
         fetchProfile();
     }, []);
 
-    const validateForm = () => {
-        const newErrors: Record<string, string> = {};
-
-        // Personal Information
-        if (!formData.firstName.trim()) {
-            newErrors.firstName = 'First name is required';
-        }
-        if (!formData.dateOfBirth) {
-            newErrors.dateOfBirth = 'Date of birth is required';
-        } else {
-            const selectedDate = new Date(formData.dateOfBirth);
-            if (selectedDate > new Date()) {
-                newErrors.dateOfBirth = 'Date of birth cannot be in the future';
-            }
-        }
-        if (!formData.gender) {
-            newErrors.gender = 'Gender is required';
-        }
-        if (!formData.phone.trim()) {
-            newErrors.phone = 'Phone number is required';
-        } else {
-            const cleanPhone = formData.phone.replace(/[\s\-\(\)\+]/g, '');
-            if (cleanPhone.length < 10) {
-                newErrors.phone = 'Please enter a valid phone number (at least 10 digits)';
-            }
-        }
-        if (!formData.bloodGroup) {
-            newErrors.bloodGroup = 'Blood group is required';
-        }
-
-        // Residential Details
-        if (!formData.street.trim()) {
-            newErrors.street = 'Street address is required';
-        }
-        if (!formData.city.trim()) {
-            newErrors.city = 'City is required';
-        }
-        if (!formData.state.trim()) {
-            newErrors.state = 'State is required';
-        }
-        if (!formData.zipCode.trim()) {
-            newErrors.zipCode = 'ZIP / Postal code is required';
-        }
-        if (!formData.country.trim()) {
-            newErrors.country = 'Country is required';
-        }
-
-        return newErrors;
-    };
+    const validateForm = () => validatePatientProfile(formData).errors;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
@@ -142,7 +95,7 @@ export default function EditPatientProfilePage() {
         const validationErrors = validateForm();
         if (Object.keys(validationErrors).length > 0) {
             setErrors(validationErrors);
-            setError('Please fill in all required fields in Personal Information and Residential Details.');
+            setError(Object.values(validationErrors)[0]);
 
             const firstKey = Object.keys(validationErrors)[0];
             const targetElement = document.querySelector(`[name="${firstKey}"]`);
@@ -181,7 +134,10 @@ export default function EditPatientProfilePage() {
             });
 
             const data = await res.json();
-            if (!res.ok) throw new Error(data.message || 'Failed to update profile');
+            if (!res.ok) {
+                if (data.errors) setErrors(data.errors);
+                throw new Error((data.errors && Object.values(data.errors)[0]) || data.message || 'Failed to update profile');
+            }
 
             setLoading(false);
             setSuccess(true);
@@ -243,7 +199,16 @@ export default function EditPatientProfilePage() {
                     </div>
                 )}
 
-                <form onSubmit={handleSave} noValidate className="space-y-6">
+        <form
+            onSubmit={handleSave}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' && !(event.target instanceof HTMLTextAreaElement) && !(event.target instanceof HTMLButtonElement)) {
+                    event.preventDefault();
+                }
+            }}
+            noValidate
+            className="space-y-6"
+        >
                     
                     {/* Section 1: Personal Information */}
                     <div className="bg-white dark:bg-slate-800 shadow-sm rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
