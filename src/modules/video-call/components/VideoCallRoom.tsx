@@ -196,7 +196,7 @@ export default function VideoCallRoom({
   // Count while the doctor is present, even when the patient disconnects.
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (normalizedRole === "doctor" && isDoctorSocketConnected && consultationLockActive && localStream) {
+    if (normalizedRole === "doctor" && isDoctorSocketConnected && consultationLockActive) {
       interval = setInterval(() => {
         setContinuousOverlapSeconds((prev) => {
           if (prev >= MIN_CONSULTATION_DURATION_SECONDS) {
@@ -210,7 +210,7 @@ export default function VideoCallRoom({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [normalizedRole, isDoctorSocketConnected, consultationLockActive, localStream]);
+  }, [normalizedRole, isDoctorSocketConnected, consultationLockActive]);
 
   const hasConsultationStarted = Boolean(
     (currentAppointment as any)?.hasOverlapped ||

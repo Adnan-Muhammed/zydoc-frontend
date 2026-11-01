@@ -256,7 +256,6 @@ export function useWebRTC({
             protocol: candidate.protocol,
             address: candidate.address,
             port: candidate.port,
-            relayProtocol: candidate.relayProtocol,
           });
           socket.emit("webrtc_ice_candidate", { appointmentId, candidate });
         } else {
