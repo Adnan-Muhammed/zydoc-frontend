@@ -69,6 +69,9 @@ interface UseWebRTCReturn {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isRemoteReady: boolean;
+  webRtcConnectionState: RTCPeerConnectionState | "new";
+  webRtcIceConnectionState: RTCIceConnectionState | "new";
+  webRtcIceGatheringState: RTCIceGatheringState | "new";
   isCallEnded: boolean;
   /** Non-null when something goes wrong (permissions denied, etc.). */
   error: string | null;
@@ -136,6 +139,9 @@ export function useWebRTC({
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isRemoteReady, setIsRemoteReady] = useState(false);
+  const [webRtcConnectionState, setWebRtcConnectionState] = useState<RTCPeerConnectionState | "new">("new");
+  const [webRtcIceConnectionState, setWebRtcIceConnectionState] = useState<RTCIceConnectionState | "new">("new");
+  const [webRtcIceGatheringState, setWebRtcIceGatheringState] = useState<RTCIceGatheringState | "new">("new");
   const [isCallEnded, setIsCallEnded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,14 +241,39 @@ export function useWebRTC({
   const createPeerConnection = useCallback(
     (socket: Socket): RTCPeerConnection => {
       iceCandidatesQueueRef.current = [];
+      setWebRtcConnectionState("new");
+      setWebRtcIceConnectionState("new");
+      setWebRtcIceGatheringState("new");
       const pc = new RTCPeerConnection(ICE_SERVERS);
 
       // 1. Forward ICE candidates to the other peer via the signaling server.
       pc.onicecandidate = ({ candidate }) => {
         if (candidate) {
-          console.info("[webrtc] ICE candidate emitted", { appointmentId, role });
+          console.info("[webrtc] ICE candidate emitted", {
+            appointmentId,
+            role,
+            candidateType: candidate.type,
+            protocol: candidate.protocol,
+            address: candidate.address,
+            port: candidate.port,
+            relayProtocol: candidate.relayProtocol,
+          });
           socket.emit("webrtc_ice_candidate", { appointmentId, candidate });
+        } else {
+          console.info("[webrtc] ICE candidate gathering completed", { appointmentId, role });
         }
+      };
+
+      pc.onicecandidateerror = (event) => {
+        console.error("[webrtc] ICE candidate gathering error", {
+          appointmentId,
+          role,
+          url: event.url,
+          errorCode: event.errorCode,
+          errorText: event.errorText,
+          address: event.address,
+          port: event.port,
+        });
       };
 
       // 2. Attach the remote stream to the remote video element when tracks arrive.
@@ -262,19 +293,74 @@ export function useWebRTC({
 
       // 3. Log connection state changes (useful for debugging).
       pc.onconnectionstatechange = () => {
-        console.log(
-          `[useWebRTC] PeerConnection state for appointment ${appointmentId} (${role}): ${pc.connectionState}`
-        );
+        setWebRtcConnectionState(pc.connectionState);
+        console.info("[webrtc] peer connection state changed", {
+          appointmentId,
+          role,
+          connectionState: pc.connectionState,
+          iceConnectionState: pc.iceConnectionState,
+          iceGatheringState: pc.iceGatheringState,
+          signalingState: pc.signalingState,
+        });
         if (pc.connectionState === "connected") {
           setReconnectionGrace(null);
+        }
+        if (pc.connectionState === "failed") {
+          void pc.getStats().then((stats) => {
+            const report: Record<string, unknown>[] = [];
+            stats.forEach((entry) => {
+              if (["local-candidate", "remote-candidate", "candidate-pair"].includes(entry.type)) {
+                const candidate = entry as RTCStats & Record<string, any>;
+                report.push({
+                  id: candidate.id,
+                  type: candidate.type,
+                  state: candidate.state,
+                  nominated: candidate.nominated,
+                  selected: candidate.selected,
+                  localCandidateId: candidate.localCandidateId,
+                  remoteCandidateId: candidate.remoteCandidateId,
+                  candidateType: candidate.candidateType,
+                  protocol: candidate.protocol,
+                  address: candidate.address,
+                  port: candidate.port,
+                  bytesSent: candidate.bytesSent,
+                  bytesReceived: candidate.bytesReceived,
+                });
+              }
+            });
+            console.error("[webrtc] connection failed; ICE candidate diagnostics", {
+              appointmentId,
+              role,
+              connectionState: pc.connectionState,
+              iceConnectionState: pc.iceConnectionState,
+              iceGatheringState: pc.iceGatheringState,
+              signalingState: pc.signalingState,
+              candidates: report,
+            });
+          }).catch((statsError) => {
+            console.error("[webrtc] Failed to collect ICE diagnostics", { appointmentId, role, error: statsError });
+          });
         }
       };
 
       pc.oniceconnectionstatechange = () => {
+        setWebRtcIceConnectionState(pc.iceConnectionState);
         console.info("[webrtc] ICE connection state", {
           appointmentId,
           role,
           state: pc.iceConnectionState,
+          connectionState: pc.connectionState,
+          gatheringState: pc.iceGatheringState,
+        });
+      };
+
+      pc.onicegatheringstatechange = () => {
+        setWebRtcIceGatheringState(pc.iceGatheringState);
+        console.info("[webrtc] ICE gathering state", {
+          appointmentId,
+          role,
+          state: pc.iceGatheringState,
+          iceConnectionState: pc.iceConnectionState,
         });
       };
 
@@ -713,6 +799,9 @@ export function useWebRTC({
           }
           setRemoteStream(null);
           setIsRemoteReady(false);
+      setWebRtcConnectionState("new");
+      setWebRtcIceConnectionState("new");
+      setWebRtcIceGatheringState("new");
           peerConnectionRef.current?.close();
           peerConnectionRef.current = null;
 
@@ -1024,6 +1113,9 @@ export function useWebRTC({
     localStream,
     remoteStream,
     isRemoteReady,
+    webRtcConnectionState,
+    webRtcIceConnectionState,
+    webRtcIceGatheringState,
     isCallEnded,
     error,
     isAudioEnabled,

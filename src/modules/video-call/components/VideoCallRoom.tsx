@@ -95,6 +95,9 @@ export default function VideoCallRoom({
     remoteVideoRef,
     localStream,
     isRemoteReady,
+    webRtcConnectionState,
+    webRtcIceConnectionState,
+    webRtcIceGatheringState,
     isCallEnded,
     error,
     isAudioEnabled,
@@ -130,82 +133,47 @@ export default function VideoCallRoom({
     manualEndAllowedAt?: string;
   } | null>(null);
 
-  // Helper to compute overlap seconds from appointment attendance logs in DB
-  const getDbOverlapSeconds = useCallback((app: any): number => {
-    if (!app?.doctorAttendanceLogs || !app?.patientAttendanceLogs) return 0;
-    let total = 0;
-    const nowMs = Date.now();
-    for (const dLog of app.doctorAttendanceLogs) {
-      if (!dLog.joinedAt) continue;
-      const dJoin = new Date(dLog.joinedAt).getTime();
-      const dLeave = dLog.leftAt ? new Date(dLog.leftAt).getTime() : nowMs;
-      for (const pLog of app.patientAttendanceLogs) {
-        if (!pLog.joinedAt) continue;
-        const pJoin = new Date(pLog.joinedAt).getTime();
-        const pLeave = pLog.leftAt ? new Date(pLog.leftAt).getTime() : nowMs;
-        const start = Math.max(dJoin, pJoin);
-        const end = Math.min(dLeave, pLeave);
-        if (end > start) {
-          total += (end - start) / 1000;
-        }
-      }
-    }
-    return Math.round(total);
+  // The lock is based on the doctor's latest uninterrupted attendance interval,
+  // independent of whether the patient is still in the room.
+  const getDbDoctorPresenceSeconds = useCallback((app: any): number => {
+    const logs = app?.doctorAttendanceLogs || [];
+    const alreadyCompleted = logs.some((log: any) =>
+      log.joinedAt && log.leftAt &&
+      (new Date(log.leftAt).getTime() - new Date(log.joinedAt).getTime()) / 1000 >= MIN_CONSULTATION_DURATION_SECONDS
+    );
+    if (alreadyCompleted) return MIN_CONSULTATION_DURATION_SECONDS;
+    const latest = logs.slice(-1)[0];
+    if (!latest?.joinedAt) return 0;
+    const end = latest.leftAt ? new Date(latest.leftAt).getTime() : Date.now();
+    return Math.max(0, Math.floor((end - new Date(latest.joinedAt).getTime()) / 1000));
   }, []);
 
-  // Track doctor consultation time (3-Minute Rule)
-  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState<number>(() => {
-    if (typeof window === "undefined" || !appointmentId) return 0;
-    const isCompleted = localStorage.getItem(`doctor_3min_completed_${appointmentId}`) === "true";
-    if (isCompleted) return MIN_CONSULTATION_DURATION_SECONDS;
-    const saved = localStorage.getItem(`doctor_overlap_${appointmentId}`);
-    return saved ? parseInt(saved, 10) || 0 : 0;
-  });
+  const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState<number>(0);
 
   // Sync with DB attendance logs if available
   useEffect(() => {
     if (!currentAppointment || !appointmentId) return;
-    const dbOverlap = getDbOverlapSeconds(currentAppointment);
-    if (dbOverlap > 0) {
-      setContinuousOverlapSeconds((prev) => {
-        const best = Math.max(prev, dbOverlap);
-        if (typeof window !== "undefined") {
-          localStorage.setItem(`doctor_overlap_${appointmentId}`, best.toString());
-          if (best >= MIN_CONSULTATION_DURATION_SECONDS) {
-            localStorage.setItem(`doctor_3min_completed_${appointmentId}`, "true");
-          }
-        }
-        return best;
-      });
-    }
-  }, [currentAppointment, appointmentId, getDbOverlapSeconds]);
+    setContinuousOverlapSeconds(getDbDoctorPresenceSeconds(currentAppointment));
+  }, [currentAppointment, appointmentId, getDbDoctorPresenceSeconds]);
 
-  // Tick timer during live consultation; pause when doctor leaves or remote disconnects
+  // Count while the doctor is present, even when the patient disconnects.
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isRemoteReady) {
+    if (normalizedRole === "doctor" && timerConfig && localStream) {
       interval = setInterval(() => {
         setContinuousOverlapSeconds((prev) => {
           if (prev >= MIN_CONSULTATION_DURATION_SECONDS) {
             return prev;
           }
           const next = prev + 1;
-          if (typeof window !== "undefined" && appointmentId) {
-            localStorage.setItem(`doctor_overlap_${appointmentId}`, next.toString());
-            if (next >= MIN_CONSULTATION_DURATION_SECONDS) {
-              localStorage.setItem(`doctor_3min_completed_${appointmentId}`, "true");
-            }
-          }
           return next;
         });
       }, 1000);
     }
-    // When isRemoteReady is false (doctor or remote left), interval is cleared.
-    // Countdown pauses and does not reset to 0 or 3 minutes.
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isRemoteReady, appointmentId]);
+  }, [normalizedRole, timerConfig, localStream]);
 
   const hasConsultationStarted = Boolean(
     (currentAppointment as any)?.hasOverlapped ||
@@ -709,6 +677,25 @@ export default function VideoCallRoom({
           localVideoRef={localVideoRef}
           localStream={localStream}
         />
+
+        {/* Keep Socket signaling and WebRTC media status separate for diagnosis. */}
+        <div className="absolute top-4 left-4 z-30 rounded-xl border border-white/15 bg-slate-950/80 px-3 py-2 text-[11px] text-slate-200 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${socket?.connected ? "bg-emerald-400" : "bg-rose-400"}`} />
+            <span>Socket: {socket?.connected ? "Connected" : socket ? "Disconnected" : "Connecting"}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${webRtcConnectionState === "connected" ? "bg-emerald-400" : webRtcConnectionState === "failed" ? "bg-rose-400" : "bg-amber-400"}`} />
+            <span>
+              WebRTC: {webRtcConnectionState === "connected" && !isRemoteReady
+                ? "Connected · waiting for remote video"
+                : webRtcConnectionState}
+            </span>
+          </div>
+          <div className="mt-1 text-slate-400">
+            ICE: {webRtcIceConnectionState} · Gathering: {webRtcIceGatheringState}
+          </div>
+        </div>
 
         {/* Waiting overlay — shown until the remote peer connects */}
         {!isRemoteReady && !isCallEnded && (
