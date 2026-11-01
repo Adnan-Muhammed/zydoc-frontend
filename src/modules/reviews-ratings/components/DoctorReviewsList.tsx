@@ -54,16 +54,17 @@ export default function DoctorReviewsList({
   return (
     <div className="space-y-3.5">
       {reviews.map((rev) => {
+        const firstName = rev.patientId?.firstName || rev.patientId?.profileId?.firstName || "";
+        const lastName = rev.patientId?.lastName || rev.patientId?.profileId?.lastName || "";
         const patientName = rev.isAnonymous
           ? "Anonymous Patient"
-          : rev.patientId?.firstName
-          ? `${rev.patientId.firstName} ${rev.patientId.lastName || ""}`.trim()
+          : firstName
+          ? `${firstName} ${lastName}`.trim()
           : rev.patientId?.googleName || "Verified Patient";
 
         const initials = rev.isAnonymous
           ? "AP"
-          : (rev.patientId?.firstName?.[0] || "P") +
-            (rev.patientId?.lastName?.[0] || "");
+          : (firstName[0] || "P") + (lastName[0] || "");
 
         const formattedDate = new Date(rev.createdAt).toLocaleDateString("en-US", {
           month: "short",
