@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
 import { SYSTEMS_LIST, getSystemConfigById } from '@/constants/systemsOfMedicine';
+import { validateDoctorName, validateDoctorPhone } from '@/utils/doctorProfileValidator';
 
 export default function BasicInfoSection({ initialData }: { initialData: any }) {
     const extractData = (data: any) => ({
         firstName: data?.firstName || data?.user?.firstName || '',
         lastName: data?.lastName || data?.user?.lastName || '',
-        phone: data?.phone || data?.user?.phone || '',
+        phone: String(data?.phone || data?.user?.phone || '').replace(/\D/g, '').slice(0, 15),
         systemOfMedicine: data?.systemOfMedicine || data?.user?.systemOfMedicine || 'Modern Medicine',
         specialty: data?.specialty || data?.user?.specialty || '',
         licenseNumber: data?.licenseNumber || data?.user?.licenseNumber || '',
@@ -17,6 +18,7 @@ export default function BasicInfoSection({ initialData }: { initialData: any }) 
     });
 
     const [data, setData] = useState(extractData(initialData));
+    const [validationError, setValidationError] = useState('');
 
     useEffect(() => {
         setData(extractData(initialData));
@@ -24,9 +26,26 @@ export default function BasicInfoSection({ initialData }: { initialData: any }) 
     const [loading, setLoading] = useState(false);
  
     const handleSave = async () => {
+        const phoneDigits = data.phone.replace(/\D/g, '');
+        const specialty = data.specialty.trim();
+        const licenseNumber = data.licenseNumber.trim();
+        const experience = Number(data.yearsOfExperience);
+        const validationError = validateDoctorName(data.firstName, 'first name') ||
+            validateDoctorName(data.lastName, 'last name') ||
+            validateDoctorPhone(data.phone) ||
+            (!specialty || specialty.length > 100 || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(specialty) ? 'Enter a valid specialty.' : null) ||
+            (!licenseNumber || licenseNumber.length < 2 || licenseNumber.length > 50 || !/^[a-z\d/-]+$/i.test(licenseNumber) ? 'Enter a valid license or registration number.' : null) ||
+            (!/^\d{1,2}$/.test(String(data.yearsOfExperience)) || !Number.isInteger(experience) || experience > 80 ? 'Years of experience must be a whole number from 0 to 80.' : null) ||
+            (data.bio.length > 2000 ? 'Bio must be 2,000 characters or fewer.' : null) ||
+            (!SYSTEMS_LIST.some(system => system.id === data.systemOfMedicine) ? 'Select a valid system of medicine.' : null);
+        if (validationError) {
+            setValidationError(validationError);
+            return;
+        }
+        setValidationError('');
         setLoading(true);
         try {
-            const res = await axiosInstance.patch('/doctor/profile/basic-info', data);
+            const res = await axiosInstance.patch('/doctor/profile/basic-info', { ...data, phone: phoneDigits });
             
             if (res.data?.success) alert('Basic details updated successfully!');
             else alert(res.data?.message || 'Error saving details.');
@@ -71,11 +90,12 @@ export default function BasicInfoSection({ initialData }: { initialData: any }) 
                 <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone</label>
                     <input
-                        type="text" value={data.phone}
-                        onChange={e => setData({ ...data, phone: e.target.value })}
+                        type="tel" inputMode="numeric" maxLength={15} value={data.phone}
+                        onChange={e => setData({ ...data, phone: e.target.value.replace(/\D/g, '').slice(0, 15) })}
                         className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     />
                 </div>
+                {validationError && <p role="alert" className="sm:col-span-2 text-xs text-rose-600">{validationError}</p>}
                 <div className="sm:col-span-2 space-y-1.5 pt-1">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">System of Medicine</label>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">

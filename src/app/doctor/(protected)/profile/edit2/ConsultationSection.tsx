@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '@/api/axiosInstance';
 import { useRouter } from 'next/navigation';
+import { validateClinicAddress, validateClinicName, validateDoctorFee } from '@/utils/doctorProfileValidator';
 
 export default function ConsultationSection({ 
     initialData, 
@@ -36,6 +37,16 @@ export default function ConsultationSection({
     const [loading, setLoading] = useState(false);
 
     const handleSave = async () => {
+        const validationError =
+            (!video.enabled && !physical.enabled ? 'Enable at least one consultation type.' : null) ||
+            (video.enabled ? validateDoctorFee(video.fee, 'video fee') : null) ||
+            (physical.enabled ? validateDoctorFee(physical.fee, 'in-person fee') : null) ||
+            (physical.enabled ? validateClinicName(physical.clinicName) : null) ||
+            (physical.enabled ? validateClinicAddress(physical.clinicAddress) : null);
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
         setLoading(true); 
         try {
             const payload = {
@@ -122,7 +133,7 @@ export default function ConsultationSection({
                         <div className="space-y-1.5 pt-2 border-t border-slate-100">
                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Video Session Fee (₹)</label>
                             <input 
-                                type="number" 
+                                type="number" min={0} max={1000000} step="0.01" required
                                 value={video.fee} 
                                 onChange={e => setVideo({ ...video, fee: e.target.value })} 
                                 className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold focus:ring-2 focus:ring-indigo-500/20 transition-all" 
@@ -152,7 +163,7 @@ export default function ConsultationSection({
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Session Fee (₹)</label>
                                 <input 
-                                    type="number" 
+                                    type="number" min={0} max={1000000} step="0.01" required
                                     value={physical.fee} 
                                     onChange={e => setPhysical({ ...physical, fee: e.target.value })} 
                                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500/20 transition-all" 
@@ -161,7 +172,7 @@ export default function ConsultationSection({
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Name</label>
                                 <input 
-                                    type="text" 
+                                    type="text" maxLength={100} required
                                     value={physical.clinicName} 
                                     onChange={e => setPhysical({ ...physical, clinicName: e.target.value })} 
                                     placeholder="e.g. Neuro Care Hub" 
@@ -171,7 +182,7 @@ export default function ConsultationSection({
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Address</label>
                                 <input 
-                                    type="text" 
+                                    type="text" maxLength={200} required
                                     value={physical.clinicAddress} 
                                     onChange={e => setPhysical({ ...physical, clinicAddress: e.target.value })} 
                                     placeholder="Street, City, Pin" 

@@ -22,13 +22,27 @@ export default function PreferencesSection({ initialLanguages, initialTags }: { 
     };
  
     const addTag = () => {
-        if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-            setTags([...tags, tagInput.trim()]);
+        const tag = tagInput.trim().replace(/\s+/g, ' ');
+        if (!tag) return;
+        if (tag.length < 2 || tag.length > 50 || !new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s&()/-]+$`, 'u').test(tag) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(tag)) {
+            alert('Expertise tags must be 2–50 characters and contain a valid name.');
+            return;
+        }
+        if (!tags.includes(tag)) {
+            setTags(prev => [...prev, tag]);
             setTagInput('');
         }
     };
 
     const handleSave = async () => {
+        if (tags.some(tag => tag.trim().length < 2 || tag.trim().length > 50 || !new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s&()/-]+$`, 'u').test(tag.trim()) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(tag))) {
+            alert('Remove or correct invalid expertise tags before saving.');
+            return;
+        }
+        if (languages.some(language => !['English', 'Malayalam', 'Hindi', 'Tamil', 'Kannada', 'Arabic'].includes(language))) {
+            alert('Select languages from the available list.');
+            return;
+        }
         setLoading(true);
         try {
             const res = await axiosInstance.patch('/doctor/profile/preferences', { selectedLanguages: languages, expertiseTags: tags });

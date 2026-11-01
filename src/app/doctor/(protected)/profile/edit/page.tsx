@@ -7,6 +7,7 @@ import { fetchDoctorProfile, updateDoctorProfile } from '@/redux/features/doctor
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { validateClinicAddress, validateClinicName, validateDoctorName, validateDoctorPhone, validateDoctorFee } from '@/utils/doctorProfileValidator';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ export default function DoctorProfileEditPage() {
                     setFormData({
                         firstName: p.firstName || "",
                         lastName: p.lastName || "",
-                        phone: p.phone || "",
+                        phone: String(p.phone || "").replace(/\D/g, '').slice(0, 15),
                         bio: p.bio || "",
                         specialty: p.specialty || "",
                         licenseNumber: p.licenseNumber || p.registrationNumber || "",
@@ -133,7 +134,7 @@ export default function DoctorProfileEditPage() {
     // ─── Input Handlers ──────────────────────────────────────────────────────────
     const handleTextChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        setFormData(prev => ({ ...prev, [name]: name === 'phone' ? value.replace(/\D/g, '').slice(0, 15) : value }));
     };
 
     const handleCheckboxChange = (name: keyof FormData) => {
@@ -213,6 +214,12 @@ export default function DoctorProfileEditPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const filesArray = Array.from(e.target.files);
+            const invalidFile = filesArray.find(file => !(/^(application\/pdf|image\/(png|jpeg|webp))$/i.test(file.type)) || file.size > 10 * 1024 * 1024);
+            if (invalidFile) {
+                toast.error('Certificates must be PDF, PNG, JPG, or WebP files up to 10 MB.');
+                e.target.value = '';
+                return;
+            }
             // Append incoming files to current queue instead of overwriting
             setNewCertificates(prev => [...prev, ...filesArray]);
         }
@@ -229,6 +236,28 @@ export default function DoctorProfileEditPage() {
     // ─── Form Submission Logic ───────────────────────────────────────────────────
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const validationError =
+            validateDoctorName(formData.firstName, 'first name') ||
+            validateDoctorName(formData.lastName, 'last name') ||
+            validateDoctorPhone(formData.phone) ||
+            (!formData.specialty.trim() || formData.specialty.trim().length > 100 || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(formData.specialty) ? 'Enter a valid specialty.' : null) ||
+            (!/^[a-z\d/-]{2,50}$/i.test(formData.licenseNumber.trim()) ? 'Enter a valid license number.' : null) ||
+            (!/^\d{1,2}$/.test(formData.yearsOfExperience) || Number(formData.yearsOfExperience) > 80 ? 'Years of experience must be a whole number from 0 to 80.' : null) ||
+            (formData.bio.length > 2000 ? 'Bio must be 2,000 characters or fewer.' : null) ||
+            (!formData.enableVideo && !formData.enablePhysical ? 'Enable at least one consultation type.' : null) ||
+            (formData.enableVideo ? validateDoctorFee(formData.videoFee, 'video fee') : null) ||
+            (formData.enablePhysical ? validateDoctorFee(formData.physicalFee, 'in-person fee') : null) ||
+            (formData.enablePhysical ? validateClinicName(formData.clinicName) : null) ||
+            (formData.enablePhysical ? validateClinicAddress(formData.clinicAddress) : null) ||
+            (formData.qualifications.length === 0 ? 'Add at least one qualification.' : null) ||
+            (formData.qualifications.some(q => q.degree.trim().length < 2 || q.degree.trim().length > 100 || !new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s.'&(),/-]+$`, 'u').test(q.degree) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(q.degree) || q.institution.trim().length < 2 || q.institution.trim().length > 150 || !new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s.'&(),/-]+$`, 'u').test(q.institution) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(q.institution) || !/^\d{4}$/.test(q.year) || Number(q.year) < 1900 || Number(q.year) > new Date().getFullYear()) ? 'Complete each qualification with a valid degree, institution, and year.' : null) ||
+            (formData.expertiseTags.some(tag => tag.trim().length < 2 || tag.trim().length > 50 || !new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s&()/-]+$`, 'u').test(tag) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(tag)) ? 'Expertise tags must be valid 2–50 character names.' : null) ||
+            (formData.selectedLanguages.some(language => !AVAILABLE_LANGUAGES.includes(language)) ? 'Choose valid languages from the list.' : null);
+        if (validationError) {
+            toast.error(validationError);
+            return;
+        }
 
         // Building complete payload for dynamic backend updates/multipart forms
         const submissionPayload = new FormData();
@@ -305,14 +334,14 @@ export default function DoctorProfileEditPage() {
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Phone Vector</label>
                                 <input
-                                    type="text" name="phone" value={formData.phone} onChange={handleTextChange}
+                                    type="tel" inputMode="numeric" maxLength={15} name="phone" value={formData.phone} onChange={handleTextChange}
                                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800" required
                                 />
                             </div>
                             <div className="space-y-1">
                                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Years of Experience</label>
                                 <input
-                                    type="number" name="yearsOfExperience" value={formData.yearsOfExperience} onChange={handleTextChange}
+                                    type="number" min={0} max={80} step={1} name="yearsOfExperience" value={formData.yearsOfExperience} onChange={handleTextChange}
                                     className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-medium focus:outline-none focus:border-indigo-500 text-slate-800" required
                                 />
                             </div>
@@ -351,7 +380,7 @@ export default function DoctorProfileEditPage() {
                                     <div className="space-y-1">
                                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Video Session Fee (₹)</label>
                                         <input
-                                            type="number" name="videoFee" value={formData.videoFee} onChange={handleTextChange}
+                                            type="number" min={0} max={1000000} step="0.01" name="videoFee" value={formData.videoFee} onChange={handleTextChange}
                                             className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 text-slate-800 font-semibold"
                                         />
                                     </div>
@@ -375,21 +404,21 @@ export default function DoctorProfileEditPage() {
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Session Fee (₹)</label>
                                             <input
-                                                type="number" name="physicalFee" value={formData.physicalFee} onChange={handleTextChange}
+                                                type="number" min={0} max={1000000} step="0.01" name="physicalFee" value={formData.physicalFee} onChange={handleTextChange}
                                                 className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800 font-semibold"
                                             />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Name</label>
                                             <input
-                                                type="text" name="clinicName" value={formData.clinicName} onChange={handleTextChange} placeholder="e.g. Neuro Care Hub"
+                                                type="text" maxLength={100} name="clinicName" value={formData.clinicName} onChange={handleTextChange} placeholder="e.g. Neuro Care Hub"
                                                 className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800"
                                             />
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Clinic Address</label>
                                             <input
-                                                type="text" name="clinicAddress" value={formData.clinicAddress} onChange={handleTextChange} placeholder="Street, City, Pin"
+                                                type="text" maxLength={200} name="clinicAddress" value={formData.clinicAddress} onChange={handleTextChange} placeholder="Street, City, Pin"
                                                 className="w-full text-sm px-3 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 text-slate-800"
                                             />
                                         </div>
@@ -440,7 +469,7 @@ export default function DoctorProfileEditPage() {
                                     <div className="sm:col-span-2 space-y-1">
                                         <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Year</label>
                                         <input
-                                            type="number" value={q.year} onChange={(e) => handleQualificationChange(q.id, 'year', e.target.value)}
+                                            type="number" min={1900} max={new Date().getFullYear()} step={1} value={q.year} onChange={(e) => handleQualificationChange(q.id, 'year', e.target.value)}
                                             className="w-full text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-800 font-bold focus:outline-none bg-white" required
                                         />
                                     </div>

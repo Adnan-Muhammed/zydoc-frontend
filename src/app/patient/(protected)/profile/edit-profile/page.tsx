@@ -49,11 +49,11 @@ export default function EditPatientProfilePage() {
                         lastName: pData.lastName || user.name?.split(' ').slice(1).join(' ') || '',
                         dateOfBirth: pData.dateOfBirth ? new Date(pData.dateOfBirth).toISOString().split('T')[0] : '',
                         gender: pData.gender || '',
-                        phone: pData.phone || '',
+                        phone: (pData.phone || '').replace(/\D/g, '').slice(0, 15),
                         bloodGroup: pData.bloodGroup || '',
                         emergencyContactName: pData.emergencyContact?.name || '',
                         emergencyContactRelationship: pData.emergencyContact?.relationship || '',
-                        emergencyContactPhone: pData.emergencyContact?.phone || '',
+                        emergencyContactPhone: (pData.emergencyContact?.phone || '').replace(/\D/g, '').slice(0, 15),
                         allergies: pData.medicalHistory?.allergies?.join(', ') || '',
                         chronicConditions: pData.medicalHistory?.chronicConditions?.join(', ') || '',
                         currentMedications: pData.medicalHistory?.currentMedications?.join(', ') || '',
@@ -77,7 +77,10 @@ export default function EditPatientProfilePage() {
     const validateForm = () => validatePatientProfile(formData).errors;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
+        const { name } = e.target;
+        const value = name === 'phone' || name === 'emergencyContactPhone'
+            ? e.target.value.replace(/\D/g, '').slice(0, 15)
+            : e.target.value;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (errors[name]) {
             setErrors(prev => {
@@ -307,7 +310,9 @@ export default function EditPatientProfilePage() {
                                         value={formData.phone}
                                         onChange={handleChange}
                                         type="tel"
-                                        placeholder="+1 (555) 000-0000"
+                                        inputMode="numeric"
+                                        maxLength={15}
+                                        placeholder="10 to 15 digits"
                                         className={getInputClasses('phone', 'pl-11')}
                                     />
                                 </div>
@@ -374,7 +379,7 @@ export default function EditPatientProfilePage() {
                                     <span className="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">
                                         <i className="fas fa-phone-alt"></i>
                                     </span>
-                                    <input name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleChange} type="tel" placeholder="+1 (555) 000-0000" className={`${inputClasses} pl-11`} />
+                                    <input name="emergencyContactPhone" value={formData.emergencyContactPhone} onChange={handleChange} type="tel" inputMode="numeric" maxLength={15} placeholder="Phone number" className={`${inputClasses} pl-11`} />
                                 </div>
                             </div>
                         </div>

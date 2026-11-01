@@ -16,7 +16,13 @@ export default function CertificatesSection({ initialData }: { initialData: any[
 
     const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) { 
-            setStaged([...staged, ...Array.from(e.target.files)]);
+            const files = Array.from(e.target.files);
+            if (files.some(file => !(/^(application\/pdf|image\/(png|jpeg|webp))$/i.test(file.type)) || file.size > 10 * 1024 * 1024)) {
+                alert('Certificates must be PDF, PNG, JPG, or WebP files up to 10 MB.');
+                e.target.value = '';
+                return;
+            }
+            setStaged(prev => [...prev, ...files]);
         }
     };
 
@@ -73,7 +79,7 @@ export default function CertificatesSection({ initialData }: { initialData: any[
                     multiple 
                     onChange={handleFileSelection} 
                     className="hidden" 
-                    accept=".pdf,image/*" 
+                    accept=".pdf,.png,.jpg,.jpeg,.webp" 
                 />
                 
                 <div 

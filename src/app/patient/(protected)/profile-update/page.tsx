@@ -76,11 +76,11 @@ export default function PatientProfileUpdatePage() {
             lastName: pData.lastName || user.name?.split(' ').slice(1).join(' ') || reduxUser?.name?.split(' ').slice(1).join(' ') || '',
             dateOfBirth: pData.dateOfBirth ? new Date(pData.dateOfBirth).toISOString().split('T')[0] : '',
             gender: pData.gender || '',
-            phone: pData.phone || '',
+            phone: (pData.phone || '').replace(/\D/g, '').slice(0, 15),
             bloodGroup: pData.bloodGroup || '',
             emergencyContactName: pData.emergencyContact?.name || '',
             emergencyContactRelationship: pData.emergencyContact?.relationship || '',
-            emergencyContactPhone: pData.emergencyContact?.phone || '',
+            emergencyContactPhone: (pData.emergencyContact?.phone || '').replace(/\D/g, '').slice(0, 15),
             allergies: pData.medicalHistory?.allergies?.join(', ') || '',
             chronicConditions: pData.medicalHistory?.chronicConditions?.join(', ') || '',
             currentMedications: pData.medicalHistory?.currentMedications?.join(', ') || '',
@@ -104,7 +104,10 @@ export default function PatientProfileUpdatePage() {
   const validateForm = () => validatePatientProfile(formData).errors;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    const value = name === 'phone' || name === 'emergencyContactPhone'
+      ? e.target.value.replace(/\D/g, '').slice(0, 15)
+      : e.target.value;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
       setErrors((prev) => {
@@ -395,7 +398,9 @@ export default function PatientProfileUpdatePage() {
                 value={formData.phone}
                 onChange={handleChange}
                 type="tel"
-                placeholder="+91 98765 43210"
+                inputMode="numeric"
+                maxLength={15}
+                placeholder="10 to 15 digits"
                 style={getInputStyle('phone')}
               />
               {errors.phone && (
@@ -582,7 +587,9 @@ export default function PatientProfileUpdatePage() {
                 value={formData.emergencyContactPhone}
                 onChange={handleChange}
                 type="tel"
-                placeholder="+91 98765 43210"
+                inputMode="numeric"
+                maxLength={15}
+                placeholder="10 to 15 digits"
                 style={inputStyle}
               />
             </div>

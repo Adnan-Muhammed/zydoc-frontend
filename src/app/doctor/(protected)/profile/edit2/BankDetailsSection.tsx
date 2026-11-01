@@ -48,9 +48,17 @@ export default function BankDetailsSection({ initialData }: { initialData: any }
             setValidationError('Please enter the account holder name.');
             return;
         }
+        if (!new RegExp(String.raw`^[\p{L}\p{M} .’'-]{2,100}$`, 'u').test(bankForm.accountHolderName.trim()) || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(bankForm.accountHolderName)) {
+            setValidationError('Enter a valid account holder name.');
+            return;
+        }
 
         if (!bankForm.accountNumber.trim()) {
             setValidationError('Please enter the bank account number.');
+            return;
+        }
+        if (!/^\d{6,18}$/.test(bankForm.accountNumber.trim())) {
+            setValidationError('Account number must contain 6 to 18 digits.');
             return;
         }
 
@@ -63,9 +71,17 @@ export default function BankDetailsSection({ initialData }: { initialData: any }
             setValidationError('Please enter a valid IFSC code.');
             return;
         }
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankForm.ifscCode.trim().toUpperCase())) {
+            setValidationError('Enter a valid 11-character IFSC code.');
+            return;
+        }
 
         if (!bankForm.bankName.trim()) {
             setValidationError('Please enter the bank name.');
+            return;
+        }
+        if (bankForm.bankName.trim().length < 2 || bankForm.bankName.trim().length > 100 || !new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(bankForm.bankName) || !new RegExp(String.raw`^[\p{L}\p{M}\d .&'()-]+$`, 'u').test(bankForm.bankName.trim())) {
+            setValidationError('Enter a valid bank name.');
             return;
         }
 
@@ -178,7 +194,9 @@ export default function BankDetailsSection({ initialData }: { initialData: any }
                     <input
                         type="password"
                         value={bankForm.accountNumber}
-                        onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                        inputMode="numeric"
+                        maxLength={18}
+                        onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 18) })}
                         placeholder="Enter account number"
                         className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl font-mono font-medium focus:outline-none focus:border-indigo-500 text-slate-800 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                     />
@@ -192,7 +210,9 @@ export default function BankDetailsSection({ initialData }: { initialData: any }
                     <input
                         type="text"
                         value={confirmAccountNumber}
-                        onChange={(e) => setConfirmAccountNumber(e.target.value)}
+                        inputMode="numeric"
+                        maxLength={18}
+                        onChange={(e) => setConfirmAccountNumber(e.target.value.replace(/\D/g, '').slice(0, 18))}
                         placeholder="Re-enter account number"
                         className={`w-full text-sm px-3 py-2 border rounded-xl font-mono font-medium focus:outline-none focus:ring-2 transition-all ${
                             confirmAccountNumber && confirmAccountNumber !== bankForm.accountNumber

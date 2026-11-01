@@ -542,6 +542,10 @@ export default function ScheduleClient() {
             setSlotActionFeedback({ type: 'error', message: 'Patient Name is required.' });
             return;
         }
+        if (manualPhone && !/^\d{10,15}$/.test(manualPhone)) {
+            setSlotActionFeedback({ type: 'error', message: 'Enter 10 to 15 digits only for the phone number.' });
+            return;
+        }
         setIsBookingManual(true);
         setSlotActionFeedback(null);
         try {
@@ -2144,9 +2148,11 @@ export default function ScheduleClient() {
                                                 </label>
                                                 <input
                                                     type="tel"
+                                                    inputMode="numeric"
+                                                    maxLength={15}
                                                     value={manualPhone}
-                                                    onChange={(e) => setManualPhone(e.target.value)}
-                                                    placeholder="+91 9876543210"
+                                                    onChange={(e) => setManualPhone(e.target.value.replace(/\D/g, '').slice(0, 15))}
+                                                    placeholder="10 to 15 digits"
                                                     className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition placeholder:text-slate-400"
                                                 />
                                             </div>

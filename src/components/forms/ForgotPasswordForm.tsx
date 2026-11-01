@@ -43,6 +43,10 @@ export default function ForgotPasswordForm() {
             setError('Please enter your email address');
             return;
         }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            setError('Enter a valid email address.');
+            return;
+        }
 
         setIsRequesting(true);
         try {
@@ -67,8 +71,8 @@ export default function ForgotPasswordForm() {
         setError(null);
         setSuccess(null);
         
-        if (!otp) {
-            setError('Please enter the OTP');
+        if (!/^\d{6}$/.test(otp)) {
+            setError('Enter the 6-digit code sent to your email.');
             return;
         }
 
@@ -92,6 +96,11 @@ export default function ForgotPasswordForm() {
         
         if (!newPassword || !confirmPassword) {
             setError('Please enter and confirm your new password');
+            return;
+        }
+
+        if (newPassword.length < 8 || newPassword.length > 128) {
+            setError('Password must be between 8 and 128 characters.');
             return;
         }
         
@@ -193,8 +202,10 @@ export default function ForgotPasswordForm() {
                         type="text"
                         name="otp"
                         value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
+                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         placeholder="123456"
+                        inputMode="numeric"
+                        pattern="[0-9]{6}"
                         maxLength={6}
                         required
                     />
@@ -229,6 +240,8 @@ export default function ForgotPasswordForm() {
                             name="newPassword"
                             value={newPassword}
                             onChange={(e) => setNewPassword(e.target.value)}
+                            minLength={8}
+                            maxLength={128}
                             required
                         />
                         <button
@@ -247,6 +260,8 @@ export default function ForgotPasswordForm() {
                         name="confirmPassword"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
+                        minLength={8}
+                        maxLength={128}
                         required
                     />
 

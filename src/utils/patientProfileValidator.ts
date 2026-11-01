@@ -17,18 +17,18 @@ const postalCodePattern = new RegExp(String.raw`^[\p{L}\p{N}][\p{L}\p{N} -]*[\p{
 const countryPattern = new RegExp(String.raw`^[\p{L}\p{M}\s.'’()-]+$`, 'u');
 const relationshipPattern = new RegExp(String.raw`^[\p{L}\p{M}\s.'’()-]+$`, 'u');
 const hasLetter = (value: string) => hasLetterPattern.test(value);
+const letterCount = (value: string) => Array.from(value.matchAll(new RegExp(String.raw`\p{L}`, 'gu'))).length;
 const validName = (value: string) =>
   value.length <= 50 && hasLetter(value) && namePattern.test(value);
 const validPhone = (value: string) => {
-  const digits = value.replace(/\D/g, '');
-  return /^\+?[0-9][0-9\s().-]*$/.test(value) && digits.length >= 10 && digits.length <= 15;
+  return /^\d{10,15}$/.test(value);
 };
 const validAddressText = (value: string) =>
   value.length >= 5 && value.length <= 200 &&
-  hasLetterOrNumberPattern.test(value) && !/^0+$/.test(value.replace(/\s/g, '')) &&
+  letterCount(value) >= 2 && hasLetterOrNumberPattern.test(value) && !/^0+$/.test(value.replace(/\s/g, '')) &&
   addressPattern.test(value);
 const validLocality = (value: string) =>
-  value.length >= 2 && value.length <= 100 && hasLetter(value) &&
+  value.length >= 2 && value.length <= 100 && letterCount(value) >= 2 && hasLetter(value) &&
   localityPattern.test(value);
 const validPostalCode = (value: string) => {
   const compact = value.replace(/[\s-]/g, '');
@@ -81,7 +81,7 @@ export function validatePatientProfile(values: Record<string, unknown>): Patient
   }
 
   if (!normalized.phone) errors.phone = 'Phone number is required.';
-  else if (!validPhone(normalized.phone)) errors.phone = 'Enter a valid phone number with 10 to 15 digits.';
+  else if (!validPhone(normalized.phone)) errors.phone = 'Enter 10 to 15 digits only for the phone number.';
 
   if (!['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(normalized.bloodGroup)) {
     errors.bloodGroup = 'Select a valid blood group.';
@@ -114,7 +114,7 @@ export function validatePatientProfile(values: Record<string, unknown>): Patient
   if (emergencyRelationship && (emergencyRelationship.length > 50 || !hasLetter(emergencyRelationship) || !relationshipPattern.test(emergencyRelationship))) {
     errors.emergencyContactRelationship = 'Enter a valid relationship.';
   }
-  if (emergencyPhone && !validPhone(emergencyPhone)) errors.emergencyContactPhone = 'Enter a valid contact phone number.';
+  if (emergencyPhone && !validPhone(emergencyPhone)) errors.emergencyContactPhone = 'Enter 10 to 15 digits only for the contact phone number.';
 
   for (const field of ['allergies', 'chronicConditions', 'currentMedications']) {
     const value = get(field);

@@ -243,6 +243,11 @@ export default function CompleteDoctorProfileClient() {
                 setServerErrors({ field: 'phone', message: 'Please complete all required personal information (First Name, Last Name, Phone).' });
                 return;
             }
+            const phoneDigits = draft.phone.replace(/\D/g, '');
+            if (!/^\d{10,15}$/.test(draft.phone)) {
+                setServerErrors({ field: 'phone', message: 'Enter a phone number with 10 to 15 digits.' });
+                return;
+            }
         }
         if (currentStep === 2) {
             if (!draft.systemOfMedicine || !draft.specialty || !draft.licenseNumber || !draft.yearsOfExperience) {
@@ -333,6 +338,19 @@ export default function CompleteDoctorProfileClient() {
                 const msg = 'Please provide your Clinic Title and Clinic Address for In-Person visits.';
                 console.warn('[Validation Stopped]', msg);
                 setServerErrors({ field: 'clinicDetails', message: msg });
+                console.groupEnd();
+                return;
+            }
+            const clinicAddress = draft.clinicAddress.trim();
+            const addressHasLetters = new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(clinicAddress);
+            const addressHasContent = new RegExp(String.raw`[\p{L}\p{M}\p{N}]`, 'u').test(clinicAddress);
+            const validClinicAddress = clinicAddress.length >= 5 && clinicAddress.length <= 200 &&
+                addressHasLetters && addressHasContent &&
+                !/^0+$/.test(clinicAddress.replace(/[\s,.-]/g, '')) &&
+                new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s#.,'’&()/-]+$`, 'u').test(clinicAddress);
+            if (!validClinicAddress) {
+                const msg = 'Enter a valid clinic address with a place or street name.';
+                setServerErrors({ field: 'clinicAddress', message: msg });
                 console.groupEnd();
                 return;
             }

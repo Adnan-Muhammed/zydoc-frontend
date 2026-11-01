@@ -26,6 +26,18 @@ export default function QualificationsSection({ initialData }: { initialData: an
     };
 
     const handleSave = async () => {
+        const validQualification = list.every((q: any) => {
+            const degree = String(q.degree || '').trim();
+            const institution = String(q.institution || '').trim();
+            const year = Number(q.year);
+            return degree.length >= 2 && degree.length <= 100 && new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s.'&(),/-]+$`, 'u').test(degree) && new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(degree) && institution.length >= 2 && institution.length <= 150 && new RegExp(String.raw`^[\p{L}\p{M}\p{N}\s.'&(),/-]+$`, 'u').test(institution) && new RegExp(String.raw`[\p{L}\p{M}]`, 'u').test(institution) &&
+                /^\d{4}$/.test(String(q.year)) && year >= 1900 && year <= new Date().getFullYear() &&
+                Boolean(q.file || q.certificateUrl);
+        });
+        if (!validQualification) {
+            alert('Each qualification needs a degree, institution, valid year, and certificate file.');
+            return;
+        }
         setLoading(true);
         try {
             const formData = new FormData();

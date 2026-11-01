@@ -198,8 +198,10 @@ export default function StepIdentitySection({
                             label="Contact Phone *"
                             type="tel"
                             value={phone}
-                            onChange={(e) => setDraft({ phone: e.target.value })}
-                            placeholder="+91 98765 43210"
+                            inputMode="numeric"
+                            maxLength={15}
+                            onChange={(e) => setDraft({ phone: e.target.value.replace(/\D/g, '').slice(0, 15) })}
+                            placeholder="10 to 15 digits"
                             className={`dark:bg-[#151732] text-sm py-2.5 transition ${
                                 serverErrors?.field === 'phone'
                                     ? 'border-red-500 dark:border-red-500 ring-2 ring-red-500/10'

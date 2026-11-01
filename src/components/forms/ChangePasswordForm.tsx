@@ -32,6 +32,11 @@ export default function ChangePasswordForm() {
             return;
         }
 
+        if (newPassword.length < 8 || newPassword.length > 128) {
+            setError('Password must be between 8 and 128 characters.');
+            return;
+        }
+
         if (newPassword !== confirmPassword) {
             setError('New passwords do not match');
             return;
@@ -105,6 +110,8 @@ export default function ChangePasswordForm() {
                     name="newPassword"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={8}
+                    maxLength={128}
                     required
                 />
                 <button
@@ -123,6 +130,8 @@ export default function ChangePasswordForm() {
                 name="confirmPassword"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={8}
+                maxLength={128}
                 required
             />
 
