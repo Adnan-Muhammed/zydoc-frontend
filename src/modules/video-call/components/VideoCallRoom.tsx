@@ -124,6 +124,12 @@ export default function VideoCallRoom({
       : `/patient/appointments?appointmentId=${appointmentId}&reviewModal=true`;
 
   const { doctorAppointments, currentAppointment } = useAppSelector((state) => state.appointment);
+  const consultationLockActive = Boolean(
+    timerConfig ||
+    (currentAppointment as any)?.hasOverlapped ||
+    (currentAppointment as any)?.sessionStartedAt ||
+    ((currentAppointment as any)?.doctorJoinedAt && (currentAppointment as any)?.patientJoinedAt)
+  );
 
   // Manual End Call Lock modal state (§8)
   const [manualLockModalData, setManualLockModalData] = useState<{
@@ -149,17 +155,48 @@ export default function VideoCallRoom({
   }, []);
 
   const [continuousOverlapSeconds, setContinuousOverlapSeconds] = useState<number>(0);
+  const [isDoctorSocketConnected, setIsDoctorSocketConnected] = useState(false);
+  const doctorPresenceResetAtRef = useRef(0);
+
+  // A patient peer disconnect must not pause this lock. Only the doctor's own
+  // signaling disconnect ends their current uninterrupted presence interval.
+  useEffect(() => {
+    if (normalizedRole !== "doctor" || !socket) return;
+    const onConnect = () => setIsDoctorSocketConnected(true);
+    const onDisconnect = () => {
+      setIsDoctorSocketConnected(false);
+      doctorPresenceResetAtRef.current = Date.now();
+      setContinuousOverlapSeconds((elapsed) =>
+        elapsed >= MIN_CONSULTATION_DURATION_SECONDS ? elapsed : 0
+      );
+    };
+    setIsDoctorSocketConnected(socket.connected);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+    };
+  }, [normalizedRole, socket]);
 
   // Sync with DB attendance logs if available
   useEffect(() => {
     if (!currentAppointment || !appointmentId) return;
+    const latestDoctorLog = (currentAppointment as any)?.doctorAttendanceLogs?.slice(-1)[0];
+    if (
+      doctorPresenceResetAtRef.current &&
+      (!latestDoctorLog?.joinedAt || new Date(latestDoctorLog.joinedAt).getTime() <= doctorPresenceResetAtRef.current)
+    ) {
+      return;
+    }
+    doctorPresenceResetAtRef.current = 0;
     setContinuousOverlapSeconds(getDbDoctorPresenceSeconds(currentAppointment));
   }, [currentAppointment, appointmentId, getDbDoctorPresenceSeconds]);
 
   // Count while the doctor is present, even when the patient disconnects.
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (normalizedRole === "doctor" && timerConfig && localStream) {
+    if (normalizedRole === "doctor" && isDoctorSocketConnected && consultationLockActive && localStream) {
       interval = setInterval(() => {
         setContinuousOverlapSeconds((prev) => {
           if (prev >= MIN_CONSULTATION_DURATION_SECONDS) {
@@ -173,7 +210,7 @@ export default function VideoCallRoom({
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [normalizedRole, timerConfig, localStream]);
+  }, [normalizedRole, isDoctorSocketConnected, consultationLockActive, localStream]);
 
   const hasConsultationStarted = Boolean(
     (currentAppointment as any)?.hasOverlapped ||
@@ -201,7 +238,7 @@ export default function VideoCallRoom({
   const canExit = useCallback(() => {
     if (
       normalizedRole === "doctor" &&
-      timerConfig &&
+      consultationLockActive &&
       (hasConsultationStarted || isRemoteReady) &&
       continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
     ) {
@@ -211,7 +248,7 @@ export default function VideoCallRoom({
       return false;
     }
     return true;
-  }, [normalizedRole, timerConfig, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds]);
+  }, [normalizedRole, consultationLockActive, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds]);
 
   const onExitBlocked = useCallback(() => {
     if (
@@ -235,7 +272,7 @@ export default function VideoCallRoom({
       );
       setTimeout(() => setPatientLockWarning(null), 5000);
     }
-  }, [normalizedRole, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds, timerConfig?.manualEndAllowedAt]);
+  }, [normalizedRole, consultationLockActive, hasConsultationStarted, isRemoteReady, continuousOverlapSeconds, patientRoomElapsedSeconds, timerConfig?.manualEndAllowedAt]);
 
   const handleConfirmExit = useCallback(async () => {
     const res = await endCall();
@@ -807,7 +844,7 @@ export default function VideoCallRoom({
           onToggleVideo={toggleVideo}
           isDoctor={normalizedRole === "doctor"}
           elapsedSeconds={continuousOverlapSeconds}
-          minDurationSeconds={timerConfig ? MIN_CONSULTATION_DURATION_SECONDS : 0}
+          minDurationSeconds={consultationLockActive ? MIN_CONSULTATION_DURATION_SECONDS : 0}
           isPatient={normalizedRole === "patient"}
           patientRoomElapsedSeconds={patientRoomElapsedSeconds}
           minPatientWaitSeconds={60}
@@ -817,7 +854,7 @@ export default function VideoCallRoom({
             // Guard: doctor cannot open End Call modal if consultation has started or active until 3 continuous minutes elapse
             if (
               normalizedRole === "doctor" &&
-              timerConfig &&
+              consultationLockActive &&
               (hasConsultationStarted || isRemoteReady) &&
               continuousOverlapSeconds < MIN_CONSULTATION_DURATION_SECONDS
             ) {
